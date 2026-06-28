@@ -442,7 +442,12 @@ export default function ProfilePage() {
                 {listings.map((listing) => (
                   <div key={listing.id} className="relative">
                     <ListingCard listing={listing} />
-
+<Link
+  href={`/listing/${listing.id}/edit`}
+  className="mt-3 inline-flex items-center justify-center rounded-2xl bg-[#0057ff] px-4 py-3 text-sm font-black text-white"
+>
+  Редактировать
+</Link>
                     <button
                       type="button"
                       onClick={() => handleDeleteListing(listing.id)}

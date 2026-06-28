@@ -1,0 +1,16 @@
+В package.json НЕ надо удалять dependencies.
+
+Открой package.json и замени только блок "scripts" на этот:
+
+"scripts": {
+  "dev": "next dev",
+  "build": "next build",
+  "start": "node server.js",
+  "lint": "next lint"
+}
+
+Если в package.json нет lint или он ругается — ничего страшного.
+Главное, чтобы start был такой:
+
+"start": "node server.js"
+

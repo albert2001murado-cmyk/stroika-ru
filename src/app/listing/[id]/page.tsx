@@ -6,6 +6,7 @@ import type { Listing, Review, UserProfile } from "@/types";
 import {
   Banknote,
   CreditCard,
+  Loader2,
   MapPin,
   MessageCircle,
   Phone,
@@ -24,6 +25,7 @@ import {
   setDoc,
   where,
 } from "firebase/firestore";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
@@ -51,6 +53,10 @@ function paymentIcon(listing: Listing) {
   return <Banknote size={20} />;
 }
 
+function getChatId(listingId: string, ownerId: string, clientId: string) {
+  return `${listingId}_${[ownerId, clientId].sort().join("_")}`;
+}
+
 export default function ListingPage() {
   const params = useParams();
   const router = useRouter();
@@ -59,12 +65,15 @@ export default function ListingPage() {
   const { user, profile } = useAuth();
 
   const [listing, setListing] = useState<Listing | null>(null);
+  const [authorProfile, setAuthorProfile] = useState<UserProfile | null>(null);
   const [authorAvatar, setAuthorAvatar] = useState("");
   const [reviews, setReviews] = useState<Review[]>([]);
   const [rating, setRating] = useState(5);
   const [reviewText, setReviewText] = useState("");
   const [loading, setLoading] = useState(true);
   const [activeMediaUrl, setActiveMediaUrl] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+  const [chatError, setChatError] = useState("");
 
   useEffect(() => {
     async function loadListing() {
@@ -85,12 +94,17 @@ export default function ListingPage() {
           setActiveMediaUrl(data.videoUrls[0]);
         }
 
-        if (!data.authorAvatarUrl && data.authorId) {
+        if (data.authorId) {
           const userSnap = await getDoc(doc(db, "users", data.authorId));
 
           if (userSnap.exists()) {
-            const authorProfile = userSnap.data() as UserProfile;
-            setAuthorAvatar(authorProfile.avatarUrl || "");
+            const userData = {
+              uid: userSnap.id,
+              ...userSnap.data(),
+            } as UserProfile;
+
+            setAuthorProfile(userData);
+            setAuthorAvatar(userData.avatarUrl || data.authorAvatarUrl || "");
           }
         }
       }
@@ -132,6 +146,13 @@ export default function ListingPage() {
   const allMedia = useMemo(() => {
     if (!listing) return [];
 
+    if (listing.media?.length) {
+      return listing.media.map((item) => ({
+        type: item.type,
+        url: item.url,
+      }));
+    }
+
     const images =
       listing.imageUrls?.map((url) => ({
         type: "image" as const,
@@ -151,6 +172,8 @@ export default function ListingPage() {
     allMedia.find((item) => item.url === activeMediaUrl) || allMedia[0];
 
   async function handleStartChat() {
+    setChatError("");
+
     if (!user) {
       router.push("/auth");
       return;
@@ -163,26 +186,61 @@ export default function ListingPage() {
       return;
     }
 
-    const chatId = [listing.id, listing.authorId, user.uid].sort().join("_");
-    const chatRef = doc(db, "chats", chatId);
+    setChatLoading(true);
 
-    await setDoc(
-      chatRef,
-      {
-        listingId: listing.id,
-        listingTitle: listing.title,
-        participantIds: [listing.authorId, user.uid],
-        ownerId: listing.authorId,
-        ownerName: listing.authorName,
-        clientId: user.uid,
-        clientName: profile?.displayName || user.displayName || user.email,
-        updatedAt: serverTimestamp(),
-        createdAt: serverTimestamp(),
-      },
-      { merge: true }
-    );
+    try {
+      const chatId = getChatId(listing.id, listing.authorId, user.uid);
+      const chatRef = doc(db, "chats", chatId);
 
-    router.push(`/messages/${chatId}`);
+      const currentUserName =
+        profile?.displayName || user.displayName || user.email || "Пользователь";
+
+      const currentAvatar = profile?.avatarUrl || user.photoURL || "";
+
+      const ownerName =
+        authorProfile?.displayName || listing.authorName || "Исполнитель";
+
+      const ownerAvatar = authorProfile?.avatarUrl || authorAvatar || "";
+
+      await setDoc(
+        chatRef,
+        {
+          listingId: listing.id,
+          listingTitle: listing.title,
+          listingImageUrl: listing.imageUrls?.[0] || listing.media?.find((item) => item.type === "image")?.url || "",
+          participantIds: [listing.authorId, user.uid],
+          participants: {
+            [listing.authorId]: {
+              uid: listing.authorId,
+              displayName: ownerName,
+              avatarUrl: ownerAvatar,
+            },
+            [user.uid]: {
+              uid: user.uid,
+              displayName: currentUserName,
+              avatarUrl: currentAvatar,
+            },
+          },
+          ownerId: listing.authorId,
+          clientId: user.uid,
+          lastMessageText: "Чат создан",
+          updatedAt: serverTimestamp(),
+          createdAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+
+      router.push(`/messages/${chatId}`);
+    } catch (err) {
+      console.error(err);
+      setChatError(
+        err instanceof Error
+          ? err.message
+          : "Не получилось открыть чат. Проверь правила Firestore."
+      );
+    } finally {
+      setChatLoading(false);
+    }
   }
 
   async function handleReview(e: FormEvent) {
@@ -248,14 +306,14 @@ export default function ListingPage() {
                     {activeMedia?.type === "video" ? (
                       <video
                         src={activeMedia.url}
-                        className="h-[420px] w-full object-cover"
+                        className="max-h-[620px] max-w-full object-contain"
                         controls
                       />
                     ) : (
                       <img
                         src={activeMedia?.url}
                         alt={listing.title}
-                        className="h-[620px] w-full object-contain"
+                        className="max-h-[620px] max-w-full object-contain"
                       />
                     )}
                   </div>
@@ -328,7 +386,11 @@ export default function ListingPage() {
 
                 <div>
                   <p className="text-sm font-bold text-gray-500">Исполнитель</p>
-                  <div className="mt-2 flex items-center gap-3">
+
+                  <Link
+                    href={`/user/${listing.authorId}`}
+                    className="mt-2 flex w-fit items-center gap-3 rounded-2xl transition hover:bg-blue-50"
+                  >
                     <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-blue-50 text-[#0057ff]">
                       {authorAvatar ? (
                         <img
@@ -342,9 +404,9 @@ export default function ListingPage() {
                     </div>
 
                     <p className="font-black text-gray-950">
-                      {listing.authorName}
+                      {authorProfile?.displayName || listing.authorName}
                     </p>
-                  </div>
+                  </Link>
                 </div>
 
                 <div>
@@ -413,7 +475,10 @@ export default function ListingPage() {
           </section>
 
           <aside className="h-fit rounded-[34px] bg-white p-6 shadow-sm lg:sticky lg:top-24">
-            <div className="flex items-center gap-4">
+            <Link
+              href={`/user/${listing.authorId}`}
+              className="flex items-center gap-4 rounded-3xl transition hover:bg-blue-50"
+            >
               <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-full bg-blue-50 text-[#0057ff] ring-4 ring-blue-50">
                 {authorAvatar ? (
                   <img
@@ -428,7 +493,7 @@ export default function ListingPage() {
 
               <div>
                 <h2 className="text-2xl font-black text-gray-950">
-                  {listing.authorName}
+                  {authorProfile?.displayName || listing.authorName}
                 </h2>
 
                 <p className="mt-1 text-gray-500">
@@ -439,7 +504,7 @@ export default function ListingPage() {
                     : "Физлицо"}
                 </p>
               </div>
-            </div>
+            </Link>
 
             <div className="mt-6 rounded-3xl bg-[#f5f7fb] p-5">
               <p className="text-sm font-bold text-gray-500">Рейтинг</p>
@@ -463,14 +528,34 @@ export default function ListingPage() {
               <p className="mt-2 font-bold">{paymentText(listing)}</p>
             </div>
 
+            {user?.uid === listing.authorId && (
+              <Link
+                href={`/listing/${listing.id}/edit`}
+                className="mt-5 inline-flex w-full items-center justify-center rounded-2xl bg-[#0057ff] px-5 py-4 text-lg font-black text-white transition hover:-translate-y-0.5 hover:shadow-xl hover:shadow-blue-600/25"
+              >
+                Редактировать объявление
+              </Link>
+            )}
+
             <button
               type="button"
               onClick={handleStartChat}
-              className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#0057ff] px-5 py-4 text-lg font-black text-white transition hover:-translate-y-0.5 hover:shadow-xl hover:shadow-blue-600/25"
+              disabled={chatLoading}
+              className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#0057ff] px-5 py-4 text-lg font-black text-white transition hover:-translate-y-0.5 hover:shadow-xl hover:shadow-blue-600/25 disabled:opacity-70"
             >
-              <MessageCircle size={21} />
-              Написать
+              {chatLoading ? (
+                <Loader2 className="animate-spin" size={21} />
+              ) : (
+                <MessageCircle size={21} />
+              )}
+              {user?.uid === listing.authorId ? "Мои сообщения" : "Написать"}
             </button>
+
+            {chatError && (
+              <p className="mt-3 rounded-2xl bg-red-50 p-3 text-sm font-black text-red-600">
+                {chatError}
+              </p>
+            )}
 
             <a
               href={`tel:${listing.phone}`}
