@@ -1,0 +1,123 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f5f7fb;
+  --foreground: #111827;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+.input {
+  width: 100%;
+  min-height: 56px;
+  border-radius: 18px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  padding: 14px 18px;
+  color: #111827;
+  font-weight: 700;
+  outline: none;
+  transition: 0.2s ease;
+}
+
+.input::placeholder {
+  color: #9ca3af;
+}
+
+.input:focus {
+  border-color: #0057ff;
+  box-shadow: 0 0 0 4px rgba(0, 87, 255, 0.12);
+}
+
+.input:disabled {
+  color: #6b7280;
+  background: #f9fafb;
+  opacity: 1;
+}
+
+select.input {
+  color: #111827 !important;
+  background-color: #ffffff !important;
+  font-weight: 700;
+}
+
+select.input option {
+  color: #111827;
+  background-color: #ffffff;
+  font-weight: 700;
+}
+
+select.input:disabled {
+  color: #6b7280 !important;
+  background-color: #f9fafb !important;
+  opacity: 1;
+}
+
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 54px;
+  border-radius: 18px;
+  background: #0057ff;
+  padding: 14px 22px;
+  color: #ffffff;
+  font-weight: 900;
+  transition: 0.2s ease;
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 18px 35px rgba(0, 87, 255, 0.24);
+}
+
+.btn-yellow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 54px;
+  border-radius: 18px;
+  background: #ffd233;
+  padding: 14px 22px;
+  color: #003b95;
+  font-weight: 900;
+  transition: 0.2s ease;
+}
+
+.btn-yellow:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 18px 35px rgba(255, 210, 51, 0.28);
+}
+
+.soft-shadow {
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.12);
+}
+
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
