@@ -96,6 +96,8 @@ export default function ChatPage() {
       return;
     }
 
+    const currentUser = user;
+
     async function loadChat() {
       try {
         const chatRef = doc(db, "chats", chatId);
@@ -112,7 +114,7 @@ export default function ChatPage() {
           ...snap.data(),
         } as Chat;
 
-        if (!data.participantIds.includes(user.uid)) {
+        if (!data.participantIds.includes(currentUser.uid)) {
           setError("У тебя нет доступа к этому чату.");
           setPageLoading(false);
           return;
@@ -241,7 +243,9 @@ export default function ChatPage() {
         uploadedImage = await uploadImage(imageFile);
       }
 
-      const senderName = profile?.displayName || user.displayName || user.email || "Пользователь";
+      const senderName =
+        profile?.displayName || user.displayName || user.email || "Пользователь";
+
       const senderAvatarUrl = profile?.avatarUrl || user.photoURL || "";
 
       const messageType =
@@ -359,7 +363,9 @@ export default function ChatPage() {
               return (
                 <div
                   key={message.id}
-                  className={`flex gap-3 ${isMine ? "justify-end" : "justify-start"}`}
+                  className={`flex gap-3 ${
+                    isMine ? "justify-end" : "justify-start"
+                  }`}
                 >
                   {!isMine && (
                     <Link
@@ -441,7 +447,10 @@ export default function ChatPage() {
           </div>
         )}
 
-        <form onSubmit={handleSend} className="flex gap-3 border-t border-gray-100 p-4">
+        <form
+          onSubmit={handleSend}
+          className="flex gap-3 border-t border-gray-100 p-4"
+        >
           <label className="flex h-12 w-12 shrink-0 cursor-pointer items-center justify-center rounded-2xl bg-blue-50 text-[#0057ff]">
             <ImagePlus size={23} />
             <input
@@ -470,7 +479,11 @@ export default function ChatPage() {
             disabled={sending || (!text.trim() && !imageFile)}
             className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#0057ff] text-white disabled:opacity-50"
           >
-            {sending ? <Loader2 className="animate-spin" size={22} /> : <Send size={22} />}
+            {sending ? (
+              <Loader2 className="animate-spin" size={22} />
+            ) : (
+              <Send size={22} />
+            )}
           </button>
         </form>
       </div>
