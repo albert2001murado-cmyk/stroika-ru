@@ -3,6 +3,7 @@
 import { useAuth } from "@/components/AuthProvider";
 import { categories } from "@/data/categories";
 import { db } from "@/lib/firebase";
+import { getApiUrl } from "@/lib/getApiUrl";
 import type { Listing, ListingMedia, PaymentMethod } from "@/types";
 import {
   Banknote,
@@ -193,7 +194,7 @@ export default function EditListingPage() {
     const formData = new FormData();
     formData.append("file", item.file);
 
-    const response = await fetch("/api/upload", {
+    const response = await fetch(getApiUrl("/api/upload"), {
       method: "POST",
       body: formData,
     });
