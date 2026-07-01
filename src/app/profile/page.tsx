@@ -1,6 +1,6 @@
 "use client";
 
-import { ListingCard } from "@/components/ListingCard";
+import  ListingCard  from "@/components/ListingCard";
 import { useAuth } from "@/components/AuthProvider";
 import { db } from "@/lib/firebase";
 import type { AccountType, Listing } from "@/types";

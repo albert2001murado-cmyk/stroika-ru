@@ -1,6 +1,6 @@
 "use client";
 
-import { ListingCard } from "@/components/ListingCard";
+import  ListingCard  from "@/components/ListingCard";
 import { categories } from "@/data/categories";
 import { db } from "@/lib/firebase";
 import type { Listing } from "@/types";
@@ -89,7 +89,7 @@ export default function HomePage() {
             <div>
               <div className="inline-flex items-center gap-2 rounded-full bg-white/15 px-4 py-2 text-sm font-black text-[#ffd233] backdrop-blur">
                 <Hammer size={18} />
-                Доска строительных услуг
+                Сервис строительных услуг
               </div>
 
               <h1 className="mt-6 max-w-3xl text-5xl font-black leading-[1.05] tracking-tight md:text-7xl">

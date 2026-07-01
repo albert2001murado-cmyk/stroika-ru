@@ -1,101 +1,104 @@
 "use client";
 
-import Link from "next/link";
+import { useAuth } from "@/components/AuthProvider";
 import {
-  HardHat,
+  BriefcaseBusiness,
+  Heart,
   LogOut,
   MessageCircle,
   Plus,
   UserRound,
 } from "lucide-react";
-import { useAuth } from "./AuthProvider";
+import Link from "next/link";
 
-export function Header() {
+function Header() {
   const { user, profile, logout } = useAuth();
-  const avatarUrl = profile?.avatarUrl || user?.photoURL || "";
-  const userName = profile?.displayName || user?.displayName || user?.email;
 
   return (
-    <header className="sticky top-0 z-50 bg-[#0057ff] text-white shadow-lg shadow-blue-900/15">
-      <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4">
-        <Link href="/" className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#ffd233] text-[#003b95] shadow-md">
-            <HardHat size={25} />
+    <header className="sticky top-0 z-50 bg-[#0057ff] shadow-lg shadow-blue-900/10">
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-4">
+        <Link href="/" className="flex items-center gap-3 text-white">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#ffd233] text-[#003b95]">
+            <BriefcaseBusiness size={24} />
           </div>
 
           <div>
-            <div className="text-3xl font-black tracking-tight text-[#ffd233]">
+            <p className="text-3xl font-black leading-none text-[#ffd233]">
               Стройка.ру
-            </div>
-            <div className="-mt-1 hidden text-xs font-bold text-blue-100 sm:block">
+            </p>
+
+            <p className="text-xs font-bold text-blue-100">
               строительные услуги рядом
-            </div>
+            </p>
           </div>
         </Link>
 
         <nav className="flex items-center gap-3">
           <Link
             href="/post/new"
-            className="flex items-center gap-2 rounded-2xl bg-[#ffd233] px-4 py-3 text-sm font-black text-[#003b95] transition hover:-translate-y-0.5 hover:shadow-xl hover:shadow-yellow-300/30"
+            className="hidden items-center gap-2 rounded-2xl bg-[#ffd233] px-5 py-3 font-black text-[#003b95] transition hover:-translate-y-0.5 hover:shadow-xl hover:shadow-yellow-300/30 sm:flex"
           >
             <Plus size={18} />
-            <span className="hidden sm:inline">Разместить</span>
+            Разместить
           </Link>
+
+          {user && (
+            <>
+              <Link
+                href="/favorites"
+                className="flex items-center gap-2 rounded-2xl bg-white/10 px-4 py-3 font-black text-white transition hover:bg-white/20"
+              >
+                <Heart size={19} className="fill-red-500 text-red-500" />
+                <span className="hidden md:inline">Избранное</span>
+              </Link>
+
+              <Link
+                href="/messages"
+                className="flex items-center gap-2 rounded-2xl bg-white/10 px-4 py-3 font-black text-white transition hover:bg-white/20"
+              >
+                <MessageCircle size={19} />
+                <span className="hidden md:inline">Сообщения</span>
+              </Link>
+            </>
+          )}
 
           {user ? (
             <>
               <Link
-                href="/messages"
-                className="flex items-center gap-2 rounded-2xl border border-white/25 px-4 py-3 text-sm font-bold transition hover:bg-white/15"
-              >
-                <MessageCircle size={18} />
-                <span className="hidden sm:inline">Сообщения</span>
-              </Link>
-
-              <Link
                 href="/profile"
-                className="flex items-center gap-3 rounded-2xl border border-white/20 bg-white/10 px-3 py-2 transition hover:bg-white/15"
+                className="flex items-center gap-3 rounded-2xl bg-white/10 px-3 py-2 font-black text-white transition hover:bg-white/20"
               >
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white text-[#0057ff] ring-2 ring-white/35">
-                  {avatarUrl ? (
+                <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-white/15">
+                  {profile?.avatarUrl ? (
                     <img
-                      src={avatarUrl}
-                      alt="Фото профиля"
+                      src={profile.avatarUrl}
+                      alt={profile.displayName || "Профиль"}
                       className="h-full w-full object-cover"
                     />
                   ) : (
-                    <UserRound size={22} />
+                    <UserRound size={20} />
                   )}
                 </div>
 
-                <div className="hidden text-left sm:block">
-                  <p className="max-w-[150px] truncate text-sm font-black">
-                    {userName}
-                  </p>
-                  <p className="text-xs text-blue-100">
-                    {profile?.accountType === "ip"
-                      ? "ИП"
-                      : profile?.accountType === "ooo"
-                      ? "ООО"
-                      : "Физлицо"}
-                  </p>
-                </div>
+                <span className="hidden lg:block">
+                  {profile?.displayName || user.displayName || "Профиль"}
+                </span>
               </Link>
 
               <button
+                type="button"
                 onClick={logout}
-                className="flex items-center gap-2 rounded-2xl border border-white/25 px-4 py-3 text-sm font-bold transition hover:bg-white/15"
+                className="hidden items-center gap-2 rounded-2xl bg-white/10 px-4 py-3 font-black text-white transition hover:bg-white/20 md:flex"
               >
-                <LogOut size={17} />
-                <span className="hidden sm:inline">Выйти</span>
+                <LogOut size={18} />
+                Выйти
               </button>
             </>
           ) : (
             <Link
               href="/auth"
-              className="flex items-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-black text-[#0057ff] transition hover:-translate-y-0.5 hover:shadow-xl"
+              className="rounded-2xl bg-white px-5 py-3 font-black text-[#0057ff] transition hover:-translate-y-0.5 hover:shadow-xl"
             >
-              <UserRound size={18} />
               Войти
             </Link>
           )}
@@ -104,3 +107,6 @@ export function Header() {
     </header>
   );
 }
+
+export { Header };
+export default Header;

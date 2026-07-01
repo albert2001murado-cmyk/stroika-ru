@@ -23,7 +23,7 @@ export default function AuthPage() {
   const [companyName, setCompanyName] = useState("");
   const [city, setCity] = useState("");
   const [phone, setPhone] = useState("");
-  const [email, setEmail] = useState("vexorium.official@mail.ru");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
