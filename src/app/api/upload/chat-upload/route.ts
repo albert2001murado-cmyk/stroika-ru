@@ -21,6 +21,10 @@ const s3 = new S3Client({
   },
 });
 
+function jsonError(message: string, status = 500) {
+  return NextResponse.json({ error: message }, { status });
+}
+
 function getFileExtension(file: File) {
   const fromName = file.name.split(".").pop();
 
@@ -33,15 +37,29 @@ function getFileExtension(file: File) {
   return fromType || "jpg";
 }
 
+export async function GET() {
+  return NextResponse.json({
+    ok: true,
+    route: "/api/chat-upload",
+    message: "API загрузки фото в чат работает. Для загрузки отправь POST multipart/form-data с полем file.",
+  });
+}
+
 export async function POST(request: NextRequest) {
   try {
     if (!bucket || !accessKeyId || !secretAccessKey) {
-      return NextResponse.json(
-        {
-          error:
-            "Не настроены переменные Yandex Object Storage на сервере: YANDEX_S3_BUCKET, YANDEX_S3_ACCESS_KEY_ID или YANDEX_S3_SECRET_ACCESS_KEY.",
-        },
-        { status: 500 }
+      return jsonError(
+        "Не настроены переменные Yandex Object Storage: YANDEX_S3_BUCKET, YANDEX_S3_ACCESS_KEY_ID или YANDEX_S3_SECRET_ACCESS_KEY.",
+        500
+      );
+    }
+
+    const contentType = request.headers.get("content-type") || "";
+
+    if (!contentType.includes("multipart/form-data")) {
+      return jsonError(
+        "Нужно отправить фото через multipart/form-data с полем file.",
+        400
       );
     }
 
@@ -49,27 +67,22 @@ export async function POST(request: NextRequest) {
     const file = formData.get("file");
 
     if (!(file instanceof File)) {
-      return NextResponse.json({ error: "Файл не найден." }, { status: 400 });
+      return jsonError("Файл не найден. Поле должно называться file.", 400);
     }
 
     if (!file.type.startsWith("image/")) {
-      return NextResponse.json(
-        { error: "В чат можно загружать только изображения." },
-        { status: 400 }
-      );
+      return jsonError("В чат можно загружать только изображения.", 400);
     }
 
     const maxSize = 10 * 1024 * 1024;
 
     if (file.size > maxSize) {
-      return NextResponse.json(
-        { error: "Фото слишком большое. Максимум 10 МБ." },
-        { status: 400 }
-      );
+      return jsonError("Фото слишком большое. Максимум 10 МБ.", 400);
     }
 
     const extension = getFileExtension(file);
     const key = `chats/images/${randomUUID()}.${extension}`;
+
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
@@ -78,7 +91,8 @@ export async function POST(request: NextRequest) {
         Bucket: bucket,
         Key: key,
         Body: buffer,
-        ContentType: file.type,
+        ContentType: file.type || "image/jpeg",
+        ContentLength: file.size,
       })
     );
 
@@ -94,9 +108,11 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Chat upload error:", error);
 
-    return NextResponse.json(
-      { error: "Не получилось загрузить фото в чат." },
-      { status: 500 }
+    return jsonError(
+      error instanceof Error
+        ? `Не получилось загрузить фото в чат: ${error.message}`
+        : "Не получилось загрузить фото в чат.",
+      500
     );
   }
 }

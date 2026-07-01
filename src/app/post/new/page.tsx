@@ -4,7 +4,6 @@ import { useAuth } from "@/components/AuthProvider";
 import { categories } from "@/data/categories";
 import { db } from "@/lib/firebase";
 import type { ListingMedia, PaymentMethod } from "@/types";
-import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import {
   Banknote,
   Camera,
@@ -15,11 +14,12 @@ import {
   Loader2,
   MapPin,
   Phone,
-  Plus,
+  Send,
   Trash2,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { ChangeEvent, FormEvent, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
 type LocalMediaFile = {
   id: string;
@@ -37,20 +37,20 @@ export default function NewPostPage() {
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [category, setCategory] = useState(categories[0].name);
-  const [subcategory, setSubcategory] = useState(categories[0].subcategories[0]);
-  const [city, setCity] = useState(profile?.city || "");
-  const [phone, setPhone] = useState(profile?.phone || "");
+  const [category, setCategory] = useState(categories[0]?.name || "");
+  const [subcategory, setSubcategory] = useState(
+    categories[0]?.subcategories?.[0] || ""
+  );
+  const [city, setCity] = useState("");
+  const [phone, setPhone] = useState("");
   const [priceFrom, setPriceFrom] = useState("");
-
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([
     "cash",
   ]);
-
   const [mediaFiles, setMediaFiles] = useState<LocalMediaFile[]>([]);
   const [error, setError] = useState("");
-  const [sending, setSending] = useState(false);
   const [uploadText, setUploadText] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   const selectedCategory = useMemo(() => {
     return categories.find((item) => item.name === category);
@@ -74,6 +74,11 @@ export default function NewPostPage() {
     const files = Array.from(e.target.files || []);
     setError("");
 
+    if (!files.length) {
+      e.target.value = "";
+      return;
+    }
+
     const nextFiles: LocalMediaFile[] = [];
 
     for (const file of files) {
@@ -82,6 +87,16 @@ export default function NewPostPage() {
 
       if (!isImage && !isVideo) {
         setError("Можно загружать только фото и видео.");
+        continue;
+      }
+
+      if (isImage && file.size > 10 * 1024 * 1024) {
+        setError("Одно фото не должно быть больше 10 МБ.");
+        continue;
+      }
+
+      if (isVideo && file.size > 80 * 1024 * 1024) {
+        setError("Одно видео не должно быть больше 80 МБ.");
         continue;
       }
 
@@ -135,13 +150,14 @@ export default function NewPostPage() {
     });
 
     const text = await response.text();
+
     let data;
 
     try {
       data = text ? JSON.parse(text) : null;
     } catch {
       throw new Error(
-        "API /api/upload не вернул JSON. Проверь файл src/app/api/upload/route.ts"
+        "API /api/upload не вернул JSON. Значит route.ts не на месте или сервер не пересобран."
       );
     }
 
@@ -152,12 +168,11 @@ export default function NewPostPage() {
     return data as ListingMedia;
   }
 
-  async function uploadMediaFiles(): Promise<ListingMedia[]> {
+  async function uploadMediaFiles() {
     const uploaded: ListingMedia[] = [];
 
     for (let i = 0; i < mediaFiles.length; i++) {
       setUploadText(`Загружаем файлы: ${i + 1} из ${mediaFiles.length}`);
-
       const uploadedFile = await uploadOneFile(mediaFiles[i]);
       uploaded.push(uploadedFile);
     }
@@ -184,6 +199,16 @@ export default function NewPostPage() {
       return;
     }
 
+    if (!category) {
+      setError("Выбери категорию.");
+      return;
+    }
+
+    if (!subcategory) {
+      setError("Выбери подкатегорию.");
+      return;
+    }
+
     if (!city.trim()) {
       setError("Укажи город.");
       return;
@@ -194,7 +219,7 @@ export default function NewPostPage() {
       return;
     }
 
-    setSending(true);
+    setSubmitting(true);
 
     try {
       const uploadedMedia = await uploadMediaFiles();
@@ -217,26 +242,30 @@ export default function NewPostPage() {
         priceFrom: priceFrom ? Number(priceFrom) : null,
 
         paymentMethods,
+
         media: uploadedMedia,
         imageUrls,
         videoUrls,
 
         authorId: user.uid,
-        authorName: profile?.displayName || user.displayName || user.email,
+        authorName:
+          profile?.displayName || user.displayName || user.email || "Пользователь",
         authorAvatarUrl: profile?.avatarUrl || user.photoURL || "",
         accountType: profile?.accountType || "individual",
 
         viewsCount: 0,
         favoritesCount: 0,
+
         createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
       });
 
       router.push(`/listing/${listingRef.id}`);
     } catch (err) {
       console.error(err);
-      setError(err instanceof Error ? err.message : "Ошибка публикации.");
+      setError(err instanceof Error ? err.message : "Не получилось разместить объявление.");
     } finally {
-      setSending(false);
+      setSubmitting(false);
       setUploadText("");
     }
   }
@@ -244,7 +273,7 @@ export default function NewPostPage() {
   if (loading) {
     return (
       <main className="min-h-screen bg-[#f5f7fb] px-5 py-10">
-        Загрузка...
+        <div className="mx-auto max-w-6xl">Загрузка...</div>
       </main>
     );
   }
@@ -252,13 +281,13 @@ export default function NewPostPage() {
   if (!user) {
     return (
       <main className="min-h-screen bg-[#f5f7fb] px-5 py-10">
-        <div className="mx-auto max-w-xl rounded-[30px] bg-white p-8 text-center shadow-xl">
+        <div className="mx-auto max-w-xl rounded-[30px] bg-white p-8 text-center shadow-sm">
           <h1 className="text-3xl font-black text-gray-950">
             Сначала войди в аккаунт
           </h1>
 
           <p className="mt-3 text-gray-500">
-            Размещать объявления могут только зарегистрированные пользователи.
+            Разместить объявление могут только авторизованные пользователи.
           </p>
 
           <button
@@ -266,7 +295,7 @@ export default function NewPostPage() {
             onClick={() => router.push("/auth")}
             className="btn-primary mt-6"
           >
-            Войти или зарегистрироваться
+            Войти
           </button>
         </div>
       </main>
@@ -279,12 +308,10 @@ export default function NewPostPage() {
         <div className="mb-8 rounded-[34px] bg-[#0057ff] p-8 text-white">
           <p className="font-black text-[#ffd233]">Стройка.ру</p>
 
-          <h1 className="mt-3 text-4xl font-black">
-            Разместить объявление
-          </h1>
+          <h1 className="mt-3 text-4xl font-black">Разместить объявление</h1>
 
           <p className="mt-3 text-blue-50">
-            Добавь описание услуги, фото, видео, цену и способы оплаты.
+            Добавь описание услуги, город, цену, фото и видео.
           </p>
         </div>
 
@@ -389,7 +416,7 @@ export default function NewPostPage() {
                   </h2>
 
                   <p className="mt-2 text-gray-500">
-                    До {MAX_IMAGES} фото и до {MAX_VIDEOS} видео.
+                    Фото появляется сразу после выбора. На сервер загрузится после кнопки “Разместить”.
                   </p>
                 </div>
 
@@ -427,7 +454,7 @@ export default function NewPostPage() {
                   {mediaFiles.map((item) => (
                     <div
                       key={item.id}
-                      className="relative overflow-hidden rounded-3xl border border-gray-200 bg-gray-50"
+                      className="relative overflow-hidden rounded-3xl border border-blue-200 bg-blue-50"
                     >
                       {item.type === "image" ? (
                         <img
@@ -451,7 +478,7 @@ export default function NewPostPage() {
                         <Trash2 size={18} />
                       </button>
 
-                      <p className="truncate p-3 text-sm font-bold text-gray-700">
+                      <p className="truncate p-3 text-sm font-bold text-[#0057ff]">
                         {item.file.name}
                       </p>
                     </div>
@@ -512,9 +539,7 @@ export default function NewPostPage() {
           </section>
 
           <aside className="h-fit rounded-[30px] bg-white p-6 shadow-sm lg:sticky lg:top-24">
-            <h2 className="text-2xl font-black text-gray-950">
-              Публикация
-            </h2>
+            <h2 className="text-2xl font-black text-gray-950">Публикация</h2>
 
             <div className="mt-5 space-y-3 text-sm text-gray-600">
               <div className="flex justify-between rounded-2xl bg-gray-50 p-3">
@@ -554,18 +579,18 @@ export default function NewPostPage() {
 
             <button
               type="submit"
-              disabled={sending}
+              disabled={submitting}
               className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#0057ff] px-5 py-4 text-lg font-black text-white disabled:opacity-70"
             >
-              {sending ? (
+              {submitting ? (
                 <>
                   <Loader2 className="animate-spin" size={22} />
                   Публикуем...
                 </>
               ) : (
                 <>
-                  <Plus size={22} />
-                  Опубликовать
+                  <Send size={22} />
+                  Разместить
                 </>
               )}
             </button>

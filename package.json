@@ -2,12 +2,12 @@
   "name": "stroika-ru",
   "version": "0.1.0",
   "private": true,
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
-  },
+ "scripts": {
+  "dev": "next dev",
+  "build": "next build",
+  "start": "node server.js",
+  "lint": "next lint"
+},
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1075.0",
     "firebase": "^12.15.0",

@@ -3,10 +3,10 @@ import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 const bucket = process.env.YANDEX_S3_BUCKET;
-const endpoint =
-  process.env.YANDEX_S3_ENDPOINT || "https://storage.yandexcloud.net";
+const endpoint = process.env.YANDEX_S3_ENDPOINT || "https://storage.yandexcloud.net";
 const region = process.env.YANDEX_S3_REGION || "ru-central1";
 const accessKeyId = process.env.YANDEX_S3_ACCESS_KEY_ID;
 const secretAccessKey = process.env.YANDEX_S3_SECRET_ACCESS_KEY;
@@ -21,6 +21,10 @@ const s3 = new S3Client({
   },
 });
 
+function jsonError(message: string, status = 500) {
+  return NextResponse.json({ error: message }, { status });
+}
+
 function getFileExtension(file: File) {
   const fromName = file.name.split(".").pop();
 
@@ -29,6 +33,7 @@ function getFileExtension(file: File) {
   }
 
   const fromType = file.type.split("/").pop();
+
   return fromType || "bin";
 }
 
@@ -41,88 +46,56 @@ function getMediaType(file: File): "image" | "video" | null {
 export async function GET() {
   return NextResponse.json({
     ok: true,
-    message: "Upload API работает",
+    route: "/api/upload",
+    message: "API загрузки объявлений работает. Для загрузки отправь POST multipart/form-data с полем file.",
   });
 }
 
 export async function POST(request: NextRequest) {
   try {
     if (!bucket || !accessKeyId || !secretAccessKey) {
-      return NextResponse.json(
-        {
-          error:
-            "Не настроены переменные YANDEX_S3_BUCKET, YANDEX_S3_ACCESS_KEY_ID или YANDEX_S3_SECRET_ACCESS_KEY.",
-        },
-        { status: 500 }
+      return jsonError(
+        "Не настроены переменные Yandex Object Storage: YANDEX_S3_BUCKET, YANDEX_S3_ACCESS_KEY_ID или YANDEX_S3_SECRET_ACCESS_KEY.",
+        500
+      );
+    }
+
+    const contentType = request.headers.get("content-type") || "";
+
+    if (!contentType.includes("multipart/form-data")) {
+      return jsonError(
+        "Нужно отправить файл через multipart/form-data с полем file.",
+        400
       );
     }
 
     const formData = await request.formData();
     const file = formData.get("file");
-    const folderType = String(formData.get("folder") || "listings");
 
     if (!(file instanceof File)) {
-      return NextResponse.json(
-        { error: "Файл не найден." },
-        { status: 400 }
-      );
+      return jsonError("Файл не найден. Поле должно называться file.", 400);
     }
 
     const mediaType = getMediaType(file);
 
     if (!mediaType) {
-      return NextResponse.json(
-        { error: "Можно загружать только фото и видео." },
-        { status: 400 }
-      );
+      return jsonError("Можно загружать только фото и видео.", 400);
     }
 
-    if (folderType === "avatars" && mediaType !== "image") {
-      return NextResponse.json(
-        { error: "Фото профиля должно быть изображением." },
-        { status: 400 }
-      );
-    }
-
-    const maxAvatarSize = 5 * 1024 * 1024;
     const maxImageSize = 10 * 1024 * 1024;
     const maxVideoSize = 80 * 1024 * 1024;
 
-    if (folderType === "avatars" && file.size > maxAvatarSize) {
-      return NextResponse.json(
-        { error: "Фото профиля слишком большое. Максимум 5 МБ." },
-        { status: 400 }
-      );
-    }
-
-    if (
-      folderType !== "avatars" &&
-      mediaType === "image" &&
-      file.size > maxImageSize
-    ) {
-      return NextResponse.json(
-        { error: "Фото слишком большое. Максимум 10 МБ." },
-        { status: 400 }
-      );
+    if (mediaType === "image" && file.size > maxImageSize) {
+      return jsonError("Фото слишком большое. Максимум 10 МБ.", 400);
     }
 
     if (mediaType === "video" && file.size > maxVideoSize) {
-      return NextResponse.json(
-        { error: "Видео слишком большое. Максимум 80 МБ." },
-        { status: 400 }
-      );
+      return jsonError("Видео слишком большое. Максимум 80 МБ.", 400);
     }
 
     const extension = getFileExtension(file);
-
-    const folder =
-      folderType === "avatars"
-        ? "profiles/avatars"
-        : mediaType === "image"
-        ? "listings/photos"
-        : "listings/videos";
-
-    const key = `${folder}/${randomUUID()}.${extension}`;
+    const folder = mediaType === "image" ? "photos" : "videos";
+    const key = `listings/${folder}/${randomUUID()}.${extension}`;
 
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
@@ -132,7 +105,8 @@ export async function POST(request: NextRequest) {
         Bucket: bucket,
         Key: key,
         Body: buffer,
-        ContentType: file.type,
+        ContentType: file.type || "application/octet-stream",
+        ContentLength: file.size,
       })
     );
 
@@ -148,9 +122,11 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Yandex upload error:", error);
 
-    return NextResponse.json(
-      { error: "Не получилось загрузить файл в Yandex Object Storage." },
-      { status: 500 }
+    return jsonError(
+      error instanceof Error
+        ? `Не получилось загрузить файл в Yandex Object Storage: ${error.message}`
+        : "Не получилось загрузить файл в Yandex Object Storage.",
+      500
     );
   }
 }
