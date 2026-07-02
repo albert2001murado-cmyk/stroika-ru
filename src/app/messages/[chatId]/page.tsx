@@ -2,6 +2,7 @@
 
 import { useAuth } from "@/components/AuthProvider";
 import { db } from "@/lib/firebase";
+import { getApiUrl } from "@/lib/getApiUrl";
 import type { Timestamp } from "firebase/firestore";
 import {
   addDoc,
@@ -190,7 +191,7 @@ export default function ChatPage() {
     const formData = new FormData();
     formData.append("file", file);
 
-    const response = await fetch("/api/chat-upload", {
+    const response = await fetch(getApiUrl("/api/chat-upload"), {
       method: "POST",
       body: formData,
     });
