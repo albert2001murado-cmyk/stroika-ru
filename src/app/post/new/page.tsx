@@ -5,22 +5,24 @@ import { categories } from "@/data/categories";
 import { db } from "@/lib/firebase";
 import { getApiUrl } from "@/lib/getApiUrl";
 import type { ListingMedia, PaymentMethod } from "@/types";
+import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import {
+  ArrowLeft,
   Banknote,
   Camera,
-  Check,
   CreditCard,
-  FileVideo,
-  ImagePlus,
   Loader2,
   MapPin,
   Phone,
+  Plus,
   Send,
   Trash2,
+  Video,
+  X,
 } from "lucide-react";
-import { addDoc, collection, serverTimestamp } from "firebase/firestore";
-import { ChangeEvent, FormEvent, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { ChangeEvent, FormEvent, useMemo, useState } from "react";
 
 type LocalMediaFile = {
   id: string;
@@ -32,38 +34,95 @@ type LocalMediaFile = {
 const MAX_IMAGES = 15;
 const MAX_VIDEOS = 3;
 
-export default function NewPostPage() {
+function createLocalId() {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function getFileType(file: File): "image" | "video" | null {
+  if (file.type.startsWith("image/")) return "image";
+  if (file.type.startsWith("video/")) return "video";
+
+  return null;
+}
+
+async function uploadOneFile(item: LocalMediaFile): Promise<ListingMedia> {
+  const formData = new FormData();
+  formData.append("file", item.file);
+
+  const response = await fetch(getApiUrl("/api/upload"), {
+    method: "POST",
+    body: formData,
+  });
+
+  const text = await response.text();
+
+  let data: any = null;
+
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    throw new Error(
+      "API /api/upload не вернул JSON. Проверь src/app/api/upload/route.ts"
+    );
+  }
+
+  if (!response.ok) {
+    throw new Error(data?.error || "Не получилось загрузить файл.");
+  }
+
+  if (!data?.url) {
+    throw new Error("API /api/upload не вернул ссылку на файл.");
+  }
+
+  return data as ListingMedia;
+}
+
+export default function NewListingPage() {
   const router = useRouter();
-  const { user, profile, loading } = useAuth();
+  const { user, profile } = useAuth();
+
+  const firstCategory = categories[0]?.name || "";
+  const firstSubcategory = categories[0]?.subcategories?.[0] || "";
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [category, setCategory] = useState(categories[0]?.name || "");
-  const [subcategory, setSubcategory] = useState(
-    categories[0]?.subcategories?.[0] || ""
-  );
+  const [category, setCategory] = useState(firstCategory);
+  const [subcategory, setSubcategory] = useState(firstSubcategory);
   const [city, setCity] = useState("");
-  const [phone, setPhone] = useState("");
+  const [phone, setPhone] = useState(profile?.phone || "");
   const [priceFrom, setPriceFrom] = useState("");
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([
     "cash",
   ]);
+
   const [mediaFiles, setMediaFiles] = useState<LocalMediaFile[]>([]);
   const [error, setError] = useState("");
-  const [uploadText, setUploadText] = useState("");
-  const [submitting, setSubmitting] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const selectedCategory = useMemo(() => {
-    return categories.find((item) => item.name === category);
-  }, [category]);
+  const selectedCategory = useMemo(
+    () => categories.find((item) => item.name === category),
+    [category]
+  );
 
-  const imagesCount = mediaFiles.filter((item) => item.type === "image").length;
-  const videosCount = mediaFiles.filter((item) => item.type === "video").length;
+  const imageCount = mediaFiles.filter((item) => item.type === "image").length;
+  const videoCount = mediaFiles.filter((item) => item.type === "video").length;
 
-  function togglePayment(method: PaymentMethod) {
+  function handleCategoryChange(value: string) {
+    const nextCategory = categories.find((item) => item.name === value);
+
+    setCategory(value);
+    setSubcategory(nextCategory?.subcategories?.[0] || "");
+  }
+
+  function togglePaymentMethod(method: PaymentMethod) {
     setPaymentMethods((current) => {
       if (current.includes(method)) {
         const next = current.filter((item) => item !== method);
+
         return next.length ? next : current;
       }
 
@@ -71,65 +130,67 @@ export default function NewPostPage() {
     });
   }
 
-  function handleMediaChange(e: ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files || []);
+  function handleMediaSelect(event: ChangeEvent<HTMLInputElement>) {
     setError("");
 
+    const files = Array.from(event.target.files || []);
+
     if (!files.length) {
-      e.target.value = "";
       return;
     }
 
-    const nextFiles: LocalMediaFile[] = [];
+    const preparedFiles: LocalMediaFile[] = [];
+
+    let nextImageCount = imageCount;
+    let nextVideoCount = videoCount;
 
     for (const file of files) {
-      const isImage = file.type.startsWith("image/");
-      const isVideo = file.type.startsWith("video/");
+      const fileType = getFileType(file);
 
-      if (!isImage && !isVideo) {
-        setError("Можно загружать только фото и видео.");
+      if (!fileType) {
+        setError("Можно добавлять только фото и видео.");
         continue;
       }
 
-      if (isImage && file.size > 10 * 1024 * 1024) {
-        setError("Одно фото не должно быть больше 10 МБ.");
+      if (fileType === "image" && nextImageCount >= MAX_IMAGES) {
+        setError(`Можно добавить максимум ${MAX_IMAGES} фото.`);
         continue;
       }
 
-      if (isVideo && file.size > 80 * 1024 * 1024) {
-        setError("Одно видео не должно быть больше 80 МБ.");
+      if (fileType === "video" && nextVideoCount >= MAX_VIDEOS) {
+        setError(`Можно добавить максимум ${MAX_VIDEOS} видео.`);
         continue;
       }
 
-      const currentImages =
-        imagesCount + nextFiles.filter((item) => item.type === "image").length;
-
-      const currentVideos =
-        videosCount + nextFiles.filter((item) => item.type === "video").length;
-
-      if (isImage && currentImages >= MAX_IMAGES) {
-        setError(`Максимум ${MAX_IMAGES} фото.`);
+      if (fileType === "image" && file.size > 10 * 1024 * 1024) {
+        setError("Фото слишком большое. Максимум 10 МБ.");
         continue;
       }
 
-      if (isVideo && currentVideos >= MAX_VIDEOS) {
-        setError(`Максимум ${MAX_VIDEOS} видео.`);
+      if (fileType === "video" && file.size > 80 * 1024 * 1024) {
+        setError("Видео слишком большое. Максимум 80 МБ.");
         continue;
       }
 
-      nextFiles.push({
-        id: crypto.randomUUID(),
+      preparedFiles.push({
+        id: createLocalId(),
         file,
-        type: isImage ? "image" : "video",
+        type: fileType,
         previewUrl: URL.createObjectURL(file),
       });
+
+      if (fileType === "image") nextImageCount += 1;
+      if (fileType === "video") nextVideoCount += 1;
     }
 
-    setMediaFiles((current) => [...current, ...nextFiles]);
-    e.target.value = "";
+    if (preparedFiles.length) {
+      setMediaFiles((current) => [...current, ...preparedFiles]);
+    }
+
+    event.target.value = "";
   }
 
-  function removeMedia(id: string) {
+  function removeMediaFile(id: string) {
     setMediaFiles((current) => {
       const found = current.find((item) => item.id === id);
 
@@ -141,72 +202,16 @@ export default function NewPostPage() {
     });
   }
 
-  async function uploadOneFile(item: LocalMediaFile): Promise<ListingMedia> {
-    const formData = new FormData();
-    formData.append("file", item.file);
-
-    const response = await fetch(getApiUrl("/api/upload"), {
-      method: "POST",
-      body: formData,
-    });
-
-    const text = await response.text();
-
-    let data;
-
-    try {
-      data = text ? JSON.parse(text) : null;
-    } catch {
-      throw new Error(
-        "API /api/upload не вернул JSON. Значит route.ts не на месте или сервер не пересобран."
-      );
-    }
-
-    if (!response.ok) {
-      throw new Error(data?.error || "Ошибка загрузки файла.");
-    }
-
-    return data as ListingMedia;
-  }
-
-  async function uploadMediaFiles() {
-    const uploaded: ListingMedia[] = [];
-
-    for (let i = 0; i < mediaFiles.length; i++) {
-      setUploadText(`Загружаем файлы: ${i + 1} из ${mediaFiles.length}`);
-      const uploadedFile = await uploadOneFile(mediaFiles[i]);
-      uploaded.push(uploadedFile);
-    }
-
-    return uploaded;
-  }
-
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    setError("");
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
 
     if (!user) {
       router.push("/auth");
       return;
     }
 
-    if (!title.trim()) {
-      setError("Укажи название услуги.");
-      return;
-    }
-
-    if (!description.trim()) {
-      setError("Добавь описание услуги.");
-      return;
-    }
-
-    if (!category) {
-      setError("Выбери категорию.");
-      return;
-    }
-
-    if (!subcategory) {
-      setError("Выбери подкатегорию.");
+    if (!title.trim() || !description.trim() || !category || !subcategory) {
+      setError("Заполни название, описание, категорию и подкатегорию.");
       return;
     }
 
@@ -220,10 +225,16 @@ export default function NewPostPage() {
       return;
     }
 
-    setSubmitting(true);
+    setIsSaving(true);
+    setError("");
 
     try {
-      const uploadedMedia = await uploadMediaFiles();
+      const uploadedMedia: ListingMedia[] = [];
+
+      for (const item of mediaFiles) {
+        const uploaded = await uploadOneFile(item);
+        uploadedMedia.push(uploaded);
+      }
 
       const imageUrls = uploadedMedia
         .filter((item) => item.type === "image")
@@ -240,8 +251,7 @@ export default function NewPostPage() {
         subcategory,
         city: city.trim(),
         phone: phone.trim(),
-        priceFrom: priceFrom ? Number(priceFrom) : null,
-
+        priceFrom: priceFrom.trim() ? Number(priceFrom) : null,
         paymentMethods,
 
         media: uploadedMedia,
@@ -258,335 +268,252 @@ export default function NewPostPage() {
         favoritesCount: 0,
 
         createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
       });
 
       router.push(`/listing/${listingRef.id}`);
-    } catch (err) {
-      console.error(err);
-      setError(err instanceof Error ? err.message : "Не получилось разместить объявление.");
+    } catch (uploadError) {
+      console.error(uploadError);
+
+      setError(
+        uploadError instanceof Error
+          ? uploadError.message
+          : "Не получилось разместить объявление."
+      );
     } finally {
-      setSubmitting(false);
-      setUploadText("");
+      setIsSaving(false);
     }
   }
 
-  if (loading) {
-    return (
-      <main className="min-h-screen bg-[#f5f7fb] px-5 py-10">
-        <div className="mx-auto max-w-6xl">Загрузка...</div>
-      </main>
-    );
-  }
-
-  if (!user) {
-    return (
-      <main className="min-h-screen bg-[#f5f7fb] px-5 py-10">
-        <div className="mx-auto max-w-xl rounded-[30px] bg-white p-8 text-center shadow-sm">
-          <h1 className="text-3xl font-black text-gray-950">
-            Сначала войди в аккаунт
-          </h1>
-
-          <p className="mt-3 text-gray-500">
-            Разместить объявление могут только авторизованные пользователи.
-          </p>
-
-          <button
-            type="button"
-            onClick={() => router.push("/auth")}
-            className="btn-primary mt-6"
-          >
-            Войти
-          </button>
-        </div>
-      </main>
-    );
-  }
-
   return (
-    <main className="min-h-screen bg-[#f5f7fb] px-5 py-8">
-      <div className="mx-auto max-w-6xl">
-        <div className="mb-8 rounded-[34px] bg-[#0057ff] p-8 text-white">
-          <p className="font-black text-[#ffd233]">Стройка.ру</p>
-
-          <h1 className="mt-3 text-4xl font-black">Разместить объявление</h1>
-
-          <p className="mt-3 text-blue-50">
-            Добавь описание услуги, город, цену, фото и видео.
-          </p>
-        </div>
-
-        <form
-          onSubmit={handleSubmit}
-          className="grid gap-6 lg:grid-cols-[1fr_340px]"
+    <main className="min-h-screen bg-[#f5f7fb] px-5 py-10">
+      <div className="mx-auto max-w-7xl">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-2 rounded-2xl bg-white px-5 py-3 font-black text-[#0057ff] shadow-sm"
         >
-          <section className="space-y-6">
-            <div className="rounded-[30px] bg-white p-6 shadow-sm">
-              <h2 className="text-2xl font-black text-gray-950">
-                Основная информация
-              </h2>
+          <ArrowLeft size={18} />
+          Назад
+        </Link>
 
-              <div className="mt-6 space-y-4">
-                <input
-                  className="input"
-                  placeholder="Название услуги"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                />
+        <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_360px]">
+          <form
+            onSubmit={handleSubmit}
+            className="rounded-[36px] bg-white p-6 shadow-sm ring-1 ring-gray-100 md:p-8"
+          >
+            <div>
+              <p className="text-sm font-black uppercase tracking-[0.2em] text-[#0057ff]">
+                Новая анкета
+              </p>
 
-                <textarea
-                  className="input min-h-40 resize-none"
-                  placeholder="Описание услуги"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                />
+              <h1 className="mt-3 text-4xl font-black text-gray-950">
+                Разместить услугу
+              </h1>
 
-                <div className="grid gap-4 md:grid-cols-2">
-                  <select
-                    className="input bg-white font-bold text-gray-950"
-                    value={category}
-                    onChange={(e) => {
-                      const newCategory = e.target.value;
-                      const found = categories.find(
-                        (item) => item.name === newCategory
-                      );
-
-                      setCategory(newCategory);
-                      setSubcategory(found?.subcategories[0] || "");
-                    }}
-                  >
-                    {categories.map((item) => (
-                      <option key={item.name} value={item.name}>
-                        {item.name}
-                      </option>
-                    ))}
-                  </select>
-
-                  <select
-                    className="input bg-white font-bold text-gray-950"
-                    value={subcategory}
-                    onChange={(e) => setSubcategory(e.target.value)}
-                  >
-                    {selectedCategory?.subcategories.map((item) => (
-                      <option key={item} value={item}>
-                        {item}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="relative">
-                    <MapPin
-                      className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
-                      size={20}
-                    />
-
-                    <input
-                      className="input"
-                      style={{ paddingLeft: "58px" }}
-                      placeholder="Город"
-                      value={city}
-                      onChange={(e) => setCity(e.target.value)}
-                    />
-                  </div>
-
-                  <div className="relative">
-                    <Phone
-                      className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
-                      size={20}
-                    />
-
-                    <input
-                      className="input"
-                      style={{ paddingLeft: "58px" }}
-                      placeholder="Телефон"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                    />
-                  </div>
-                </div>
-              </div>
+              <p className="mt-3 text-gray-500">
+                Фото появляется сразу после выбора. На сервер загружается после
+                кнопки “Разместить”.
+              </p>
             </div>
 
-            <div className="rounded-[30px] bg-white p-6 shadow-sm">
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <div>
-                  <h2 className="text-2xl font-black text-gray-950">
-                    Фото и видео
-                  </h2>
-
-                  <p className="mt-2 text-gray-500">
-                    Фото появляется сразу после выбора. На сервер загрузится после кнопки “Разместить”.
-                  </p>
-                </div>
-
-                <label className="inline-flex cursor-pointer items-center gap-2 rounded-2xl bg-[#0057ff] px-5 py-3 font-black text-white">
-                  <ImagePlus size={20} />
-                  Добавить
-                  <input
-                    type="file"
-                    accept="image/*,video/*"
-                    multiple
-                    className="hidden"
-                    onChange={handleMediaChange}
-                  />
-                </label>
+            {error && (
+              <div className="mt-6 rounded-2xl bg-red-50 px-5 py-4 font-bold text-red-700">
+                {error}
               </div>
+            )}
 
-              <div className="mt-5 grid gap-3 md:grid-cols-2">
-                <div className="flex items-center gap-3 rounded-2xl bg-blue-50 p-4">
-                  <Camera className="text-[#0057ff]" />
-                  <b>
-                    Фото: {imagesCount}/{MAX_IMAGES}
-                  </b>
+            <section className="mt-8 grid gap-5">
+              <input
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                placeholder="Название услуги"
+                className="input"
+              />
+
+              <textarea
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+                placeholder="Описание услуги"
+                className="input min-h-40 resize-none"
+              />
+
+              <div className="grid gap-5 md:grid-cols-2">
+                <select
+                  value={category}
+                  onChange={(event) => handleCategoryChange(event.target.value)}
+                  className="input"
+                >
+                  {categories.map((item) => (
+                    <option key={item.name} value={item.name}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  value={subcategory}
+                  onChange={(event) => setSubcategory(event.target.value)}
+                  className="input"
+                >
+                  {(selectedCategory?.subcategories || []).map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </select>
+
+                <div className="relative">
+                  <MapPin
+                    size={19}
+                    className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400"
+                  />
+                  <input
+                    value={city}
+                    onChange={(event) => setCity(event.target.value)}
+                    placeholder="Город"
+                    className="input"
+                    style={{ paddingLeft: "52px" }}
+                  />
                 </div>
 
-                <div className="flex items-center gap-3 rounded-2xl bg-blue-50 p-4">
-                  <FileVideo className="text-[#0057ff]" />
-                  <b>
-                    Видео: {videosCount}/{MAX_VIDEOS}
-                  </b>
+                <div className="relative">
+                  <Phone
+                    size={19}
+                    className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400"
+                  />
+                  <input
+                    value={phone}
+                    onChange={(event) => setPhone(event.target.value)}
+                    placeholder="Телефон"
+                    className="input"
+                    style={{ paddingLeft: "52px" }}
+                  />
                 </div>
+              </div>
+            </section>
+
+            <section className="mt-8 rounded-[28px] border border-gray-100 bg-gray-50 p-5">
+              <h2 className="text-2xl font-black text-gray-950">Фото и видео</h2>
+
+              <p className="mt-2 text-sm font-medium text-gray-500">
+                Фото выбирается сразу и должно появиться ниже. Если фото не
+                появилось — значит браузер не передал файл в форму.
+              </p>
+
+              <input
+                id="listing-media-input"
+                type="file"
+                accept="image/*,video/*"
+                multiple
+                onChange={handleMediaSelect}
+                className="hidden"
+              />
+
+              <label
+                htmlFor="listing-media-input"
+                className="mt-5 inline-flex cursor-pointer items-center gap-2 rounded-2xl bg-[#0057ff] px-5 py-3 font-black text-white shadow-lg shadow-blue-500/20 transition hover:-translate-y-0.5"
+              >
+                <Plus size={18} />
+                Добавить фото/видео
+              </label>
+
+              <div className="mt-5 flex flex-wrap gap-4 text-sm font-black text-gray-500">
+                <span className="inline-flex items-center gap-2">
+                  <Camera size={17} className="text-[#0057ff]" />
+                  Фото: {imageCount}/{MAX_IMAGES}
+                </span>
+
+                <span className="inline-flex items-center gap-2">
+                  <Video size={17} className="text-[#0057ff]" />
+                  Видео: {videoCount}/{MAX_VIDEOS}
+                </span>
               </div>
 
               {mediaFiles.length > 0 && (
-                <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="mt-6 grid grid-cols-2 gap-4 md:grid-cols-4">
                   {mediaFiles.map((item) => (
                     <div
                       key={item.id}
-                      className="relative overflow-hidden rounded-3xl border border-blue-200 bg-blue-50"
+                      className="relative overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-gray-100"
                     >
                       {item.type === "image" ? (
                         <img
                           src={item.previewUrl}
-                          alt={item.file.name}
-                          className="h-48 w-full object-cover"
+                          alt="Фото объявления"
+                          className="h-36 w-full object-cover"
                         />
                       ) : (
                         <video
                           src={item.previewUrl}
-                          className="h-48 w-full object-cover"
+                          className="h-36 w-full object-cover"
                           controls
                         />
                       )}
 
                       <button
                         type="button"
-                        onClick={() => removeMedia(item.id)}
-                        className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-full bg-white text-red-500 shadow-lg"
+                        onClick={() => removeMediaFile(item.id)}
+                        className="absolute right-2 top-2 flex h-9 w-9 items-center justify-center rounded-full bg-red-500 text-white shadow-lg"
                       >
-                        <Trash2 size={18} />
+                        <X size={18} />
                       </button>
-
-                      <p className="truncate p-3 text-sm font-bold text-[#0057ff]">
-                        {item.file.name}
-                      </p>
                     </div>
                   ))}
                 </div>
               )}
-            </div>
+            </section>
 
-            <div className="rounded-[30px] bg-white p-6 shadow-sm">
-              <h2 className="text-2xl font-black text-gray-950">
-                Цена и оплата
-              </h2>
+            <section className="mt-8 rounded-[28px] border border-gray-100 bg-white p-5">
+              <h2 className="text-2xl font-black text-gray-950">Цена и оплата</h2>
 
-              <input
-                className="input mt-6"
-                placeholder="Цена от, ₽"
-                type="number"
-                value={priceFrom}
-                onChange={(e) => setPriceFrom(e.target.value)}
-              />
+              <div className="mt-5 grid gap-5 md:grid-cols-2">
+                <input
+                  value={priceFrom}
+                  onChange={(event) => setPriceFrom(event.target.value)}
+                  type="number"
+                  min="0"
+                  placeholder="Цена от, ₽"
+                  className="input"
+                />
 
-              <div className="mt-5 grid gap-3 md:grid-cols-2">
-                <button
-                  type="button"
-                  onClick={() => togglePayment("cash")}
-                  className={`flex items-center justify-between rounded-3xl border p-5 font-black ${
-                    paymentMethods.includes("cash")
-                      ? "border-[#0057ff] bg-blue-50 text-[#0057ff]"
-                      : "border-gray-200 bg-white text-gray-700"
-                  }`}
-                >
-                  <span className="flex items-center gap-3">
-                    <Banknote />
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() => togglePaymentMethod("cash")}
+                    className={`flex items-center justify-center gap-2 rounded-2xl border px-4 py-4 font-black ${
+                      paymentMethods.includes("cash")
+                        ? "border-[#0057ff] bg-blue-50 text-[#0057ff]"
+                        : "border-gray-200 bg-white text-gray-500"
+                    }`}
+                  >
+                    <Banknote size={18} />
                     Наличными
-                  </span>
+                  </button>
 
-                  {paymentMethods.includes("cash") && <Check />}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => togglePayment("transfer")}
-                  className={`flex items-center justify-between rounded-3xl border p-5 font-black ${
-                    paymentMethods.includes("transfer")
-                      ? "border-[#0057ff] bg-blue-50 text-[#0057ff]"
-                      : "border-gray-200 bg-white text-gray-700"
-                  }`}
-                >
-                  <span className="flex items-center gap-3">
-                    <CreditCard />
+                  <button
+                    type="button"
+                    onClick={() => togglePaymentMethod("transfer")}
+                    className={`flex items-center justify-center gap-2 rounded-2xl border px-4 py-4 font-black ${
+                      paymentMethods.includes("transfer")
+                        ? "border-[#0057ff] bg-blue-50 text-[#0057ff]"
+                        : "border-gray-200 bg-white text-gray-500"
+                    }`}
+                  >
+                    <CreditCard size={18} />
                     Переводом
-                  </span>
-
-                  {paymentMethods.includes("transfer") && <Check />}
-                </button>
+                  </button>
+                </div>
               </div>
-            </div>
-          </section>
-
-          <aside className="h-fit rounded-[30px] bg-white p-6 shadow-sm lg:sticky lg:top-24">
-            <h2 className="text-2xl font-black text-gray-950">Публикация</h2>
-
-            <div className="mt-5 space-y-3 text-sm text-gray-600">
-              <div className="flex justify-between rounded-2xl bg-gray-50 p-3">
-                <span>Фото</span>
-                <b>{imagesCount}</b>
-              </div>
-
-              <div className="flex justify-between rounded-2xl bg-gray-50 p-3">
-                <span>Видео</span>
-                <b>{videosCount}</b>
-              </div>
-
-              <div className="flex justify-between rounded-2xl bg-gray-50 p-3">
-                <span>Оплата</span>
-                <b>
-                  {paymentMethods.includes("cash") &&
-                  paymentMethods.includes("transfer")
-                    ? "Нал. + перевод"
-                    : paymentMethods.includes("cash")
-                    ? "Наличные"
-                    : "Перевод"}
-                </b>
-              </div>
-            </div>
-
-            {error && (
-              <p className="mt-5 rounded-2xl bg-red-50 p-4 text-sm font-black text-red-600">
-                {error}
-              </p>
-            )}
-
-            {uploadText && (
-              <p className="mt-5 rounded-2xl bg-blue-50 p-4 text-sm font-black text-[#0057ff]">
-                {uploadText}
-              </p>
-            )}
+            </section>
 
             <button
               type="submit"
-              disabled={submitting}
-              className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#0057ff] px-5 py-4 text-lg font-black text-white disabled:opacity-70"
+              disabled={isSaving}
+              className="mt-8 flex w-full items-center justify-center gap-3 rounded-3xl bg-[#0057ff] px-6 py-5 text-lg font-black text-white shadow-xl shadow-blue-500/20 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {submitting ? (
+              {isSaving ? (
                 <>
-                  <Loader2 className="animate-spin" size={22} />
-                  Публикуем...
+                  <Loader2 size={22} className="animate-spin" />
+                  Загружаем и размещаем...
                 </>
               ) : (
                 <>
@@ -595,8 +522,58 @@ export default function NewPostPage() {
                 </>
               )}
             </button>
+          </form>
+
+          <aside className="h-fit rounded-[36px] bg-white p-6 shadow-sm ring-1 ring-gray-100">
+            <h2 className="text-2xl font-black text-gray-950">Публикация</h2>
+
+            <div className="mt-6 space-y-4 text-sm font-bold text-gray-500">
+              <div className="flex items-center justify-between">
+                <span>Фото</span>
+                <span className="text-gray-950">{imageCount}/{MAX_IMAGES}</span>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span>Видео</span>
+                <span className="text-gray-950">{videoCount}/{MAX_VIDEOS}</span>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span>Оплата</span>
+                <span className="text-gray-950">
+                  {paymentMethods.includes("cash") &&
+                  paymentMethods.includes("transfer")
+                    ? "Наличные / перевод"
+                    : paymentMethods.includes("transfer")
+                    ? "Перевод"
+                    : "Наличные"}
+                </span>
+              </div>
+            </div>
+
+            <div className="mt-6 rounded-3xl bg-blue-50 p-5 text-sm font-bold leading-6 text-[#0057ff]">
+              Если фото в чате работает, но тут нет — проблема была именно в
+              странице размещения. Этот файл использует тот же рабочий API:
+              /api/upload.
+            </div>
+
+            {mediaFiles.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  mediaFiles.forEach((item) =>
+                    URL.revokeObjectURL(item.previewUrl)
+                  );
+                  setMediaFiles([]);
+                }}
+                className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-red-50 px-5 py-3 font-black text-red-600"
+              >
+                <Trash2 size={18} />
+                Очистить фото
+              </button>
+            )}
           </aside>
-        </form>
+        </div>
       </div>
     </main>
   );
