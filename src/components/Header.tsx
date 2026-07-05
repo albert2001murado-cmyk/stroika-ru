@@ -2,7 +2,7 @@
 
 import { useAuth } from "@/components/AuthProvider";
 import {
-  BriefcaseBusiness,
+  HardHat,
   Heart,
   LogOut,
   MessageCircle,
@@ -19,7 +19,7 @@ function Header() {
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-4">
         <Link href="/" className="flex items-center gap-3 text-white">
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#ffd233] text-[#003b95]">
-            <BriefcaseBusiness size={24} />
+            <HardHat size={24} />
           </div>
 
           <div>

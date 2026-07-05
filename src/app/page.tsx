@@ -8,6 +8,7 @@ import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
 import {
   Building2,
   Hammer,
+  HardHat,
   Ruler,
   Search,
   SlidersHorizontal,
