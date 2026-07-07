@@ -3,17 +3,20 @@
 import { auth } from "@/lib/firebase";
 import { signOut } from "firebase/auth";
 import {
+  BadgeCheck,
   HardHat,
   Headphones,
   Heart,
   LogOut,
   MessageCircle,
   Plus,
+  ShieldCheck,
   UserRound,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "./AuthProvider";
+import VerifiedBadge from "./VerifiedBadge";
 
 export default function Header() {
   const router = useRouter();
@@ -22,8 +25,13 @@ export default function Header() {
   const user = authContext?.user || null;
   const profile = authContext?.profile || null;
 
+  const isVerified = Boolean(
+    profile?.verified || profile?.isVerified || profile?.verificationStatus === "approved"
+  );
+
   const displayName =
     profile?.displayName ||
+    profile?.name ||
     user?.displayName ||
     user?.email?.split("@")?.[0] ||
     "Профиль";
@@ -43,27 +51,30 @@ export default function Header() {
   }
 
   return (
-    <header className="sticky top-0 z-40 border-b border-white/10 bg-[#0057ff] text-white shadow-xl shadow-blue-950/10">
-      <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 md:px-6">
-        <Link href="/" className="flex min-w-0 items-center gap-3">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#ffde3d] text-[#0057ff] shadow-lg shadow-blue-950/10 md:h-14 md:w-14">
-            <HardHat size={30} strokeWidth={2.8} />
-          </div>
+    <header className="sticky top-0 z-50 border-b border-white/10 bg-[#0057ff] text-white shadow-xl shadow-blue-950/10">
+      <div className="mx-auto flex h-[82px] max-w-7xl items-center justify-between gap-4 px-4 md:px-6">
+        <Link
+  href="/"
+  className="flex shrink-0 items-center gap-3 min-w-[330px]"
+>
+  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white text-[#0057ff] shadow-lg shadow-blue-500/20">
+    <HardHat size={30} strokeWidth={2.8} />
+  </div>
 
-          <div className="min-w-0 leading-tight">
-            <p className="truncate text-2xl font-black tracking-tight text-[#ffde3d] md:text-3xl">
-              Стройка.ру
-            </p>
-            <p className="truncate text-[11px] font-bold text-white/85 md:text-sm">
-              строительные услуги рядом
-            </p>
-          </div>
-        </Link>
+  <div className="flex min-w-0 flex-col">
+    <span className="whitespace-nowrap text-3xl font-black leading-none tracking-tight text-white">
+      Стройка.ру
+    </span>
+    <span className="mt-1 whitespace-nowrap text-sm font-extrabold leading-none text-blue-100">
+      строительные услуги рядом
+    </span>
+  </div>
+</Link>
 
-        <nav className="flex items-center gap-2">
+        <nav className="hidden flex-1 items-center justify-end gap-2 lg:flex">
           <Link
             href="/post/new"
-            className="hidden items-center gap-2 rounded-2xl bg-[#ffde3d] px-5 py-3 text-sm font-black text-[#0057ff] shadow-lg shadow-blue-950/10 transition hover:-translate-y-0.5 hover:bg-yellow-300 md:inline-flex"
+            className="inline-flex h-12 items-center gap-2 rounded-2xl bg-white px-5 text-sm font-black text-[#0057ff] shadow-lg shadow-blue-950/10 transition hover:-translate-y-0.5 hover:bg-blue-50"
           >
             <Plus size={18} strokeWidth={2.8} />
             Разместить
@@ -71,7 +82,7 @@ export default function Header() {
 
           <Link
             href="/favorites"
-            className="hidden items-center gap-2 rounded-2xl bg-white/10 px-5 py-3 text-sm font-black text-white transition hover:bg-white/20 lg:inline-flex"
+            className="inline-flex h-12 items-center gap-2 rounded-2xl bg-white/10 px-5 text-sm font-black text-white ring-1 ring-white/10 transition hover:bg-white/20"
           >
             <Heart size={18} strokeWidth={2.8} />
             Избранное
@@ -79,53 +90,63 @@ export default function Header() {
 
           <Link
             href="/messages"
-            className="hidden items-center gap-2 rounded-2xl bg-white/10 px-5 py-3 text-sm font-black text-white transition hover:bg-white/20 md:inline-flex"
+            className="inline-flex h-12 items-center gap-2 rounded-2xl bg-white/10 px-5 text-sm font-black text-white ring-1 ring-white/10 transition hover:bg-white/20"
           >
             <MessageCircle size={18} strokeWidth={2.8} />
             Сообщения
           </Link>
 
           <Link
-            href="/support"
-            className="hidden items-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-black text-[#0057ff] shadow-lg shadow-blue-950/10 transition hover:-translate-y-0.5 hover:bg-blue-50 md:inline-flex"
+            href="/verification"
+            className="inline-flex h-12 items-center gap-2 rounded-2xl bg-white/10 px-5 text-sm font-black text-white ring-1 ring-white/10 transition hover:bg-white/20"
           >
-            <Headphones size={18} strokeWidth={2.8} />
-            Поддержка
+            <BadgeCheck size={18} strokeWidth={2.8} />
+            Проверка
           </Link>
 
           <Link
             href="/support"
-            className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-[#0057ff] shadow-lg shadow-blue-950/10 md:hidden"
-            aria-label="Поддержка"
-            title="Поддержка"
+            className="inline-flex h-12 items-center gap-2 rounded-2xl bg-white px-5 text-sm font-black text-[#0057ff] shadow-lg shadow-blue-950/10 transition hover:-translate-y-0.5 hover:bg-blue-50"
           >
-            <Headphones size={21} strokeWidth={2.8} />
+            <Headphones size={18} strokeWidth={2.8} />
+            Поддержка
           </Link>
+        </nav>
 
+        <div className="flex shrink-0 items-center gap-2">
           {user ? (
             <>
               <Link
                 href="/profile"
-                className="hidden items-center gap-3 rounded-2xl bg-white/10 px-3 py-2 transition hover:bg-white/20 sm:flex"
+                className="flex h-14 max-w-[220px] items-center gap-3 rounded-2xl bg-white/10 px-3 text-white ring-1 ring-white/10 transition hover:bg-white/20"
               >
                 {avatarUrl ? (
                   <img
                     src={avatarUrl}
                     alt={displayName}
-                    className="h-10 w-10 rounded-full object-cover ring-2 ring-white/20"
+                    className="h-10 w-10 shrink-0 rounded-full object-cover ring-2 ring-white/20"
                   />
                 ) : (
-                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/15">
                     <UserRound size={20} />
                   </span>
                 )}
 
-                <span className="hidden text-left leading-tight xl:block">
-                  <span className="block max-w-28 truncate text-sm font-black">
-                    {displayName}
+                <span className="hidden min-w-0 text-left leading-tight sm:block">
+                  <span className="flex min-w-0 items-center gap-1.5">
+                    <span className="truncate text-sm font-black">
+                      {displayName}
+                    </span>
+                    {isVerified ? (
+                      <ShieldCheck className="shrink-0 text-white" size={16} />
+                    ) : null}
                   </span>
-                  <span className="block text-xs font-bold text-white/70">
-                    {accountLabel}
+
+                  <span className="mt-0.5 flex items-center gap-1.5">
+                    <span className="truncate text-xs font-bold text-blue-100">
+                      {accountLabel}
+                    </span>
+                    {isVerified ? <VerifiedBadge size="sm" className="hidden xl:inline-flex" /> : null}
                   </span>
                 </span>
               </Link>
@@ -133,7 +154,7 @@ export default function Header() {
               <button
                 type="button"
                 onClick={handleLogout}
-                className="hidden items-center gap-2 rounded-2xl bg-white/10 px-4 py-3 text-sm font-black text-white transition hover:bg-white/20 md:inline-flex"
+                className="hidden h-12 items-center gap-2 rounded-2xl bg-white/10 px-4 text-sm font-black text-white ring-1 ring-white/10 transition hover:bg-white/20 xl:inline-flex"
               >
                 <LogOut size={18} />
                 Выйти
@@ -142,19 +163,19 @@ export default function Header() {
           ) : (
             <Link
               href="/auth"
-              className="rounded-2xl bg-white px-5 py-3 text-sm font-black text-[#0057ff] shadow-lg shadow-blue-950/10 transition hover:-translate-y-0.5"
+              className="inline-flex h-12 items-center rounded-2xl bg-white px-5 text-sm font-black text-[#0057ff] shadow-lg shadow-blue-950/10 transition hover:-translate-y-0.5 hover:bg-blue-50"
             >
               Войти
             </Link>
           )}
-        </nav>
+        </div>
       </div>
 
-      <div className="border-t border-white/10 px-4 pb-3 md:hidden">
+      <div className="border-t border-white/10 px-4 pb-3 lg:hidden">
         <div className="mx-auto flex max-w-7xl gap-2 overflow-x-auto pt-3">
           <Link
             href="/post/new"
-            className="inline-flex shrink-0 items-center gap-2 rounded-2xl bg-[#ffde3d] px-4 py-3 text-sm font-black text-[#0057ff]"
+            className="inline-flex shrink-0 items-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-black text-[#0057ff]"
           >
             <Plus size={17} />
             Разместить
@@ -162,7 +183,7 @@ export default function Header() {
 
           <Link
             href="/favorites"
-            className="inline-flex shrink-0 items-center gap-2 rounded-2xl bg-white/10 px-4 py-3 text-sm font-black text-white"
+            className="inline-flex shrink-0 items-center gap-2 rounded-2xl bg-white/10 px-4 py-3 text-sm font-black text-white ring-1 ring-white/10"
           >
             <Heart size={17} />
             Избранное
@@ -170,18 +191,35 @@ export default function Header() {
 
           <Link
             href="/messages"
-            className="inline-flex shrink-0 items-center gap-2 rounded-2xl bg-white/10 px-4 py-3 text-sm font-black text-white"
+            className="inline-flex shrink-0 items-center gap-2 rounded-2xl bg-white/10 px-4 py-3 text-sm font-black text-white ring-1 ring-white/10"
           >
             <MessageCircle size={17} />
             Сообщения
           </Link>
 
           <Link
+            href="/verification"
+            className="inline-flex shrink-0 items-center gap-2 rounded-2xl bg-white/10 px-4 py-3 text-sm font-black text-white ring-1 ring-white/10"
+          >
+            <BadgeCheck size={17} />
+            Проверка
+          </Link>
+
+          <Link
+            href="/support"
+            className="inline-flex shrink-0 items-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-black text-[#0057ff]"
+          >
+            <Headphones size={17} />
+            Поддержка
+          </Link>
+
+          <Link
             href="/profile"
-            className="inline-flex shrink-0 items-center gap-2 rounded-2xl bg-white/10 px-4 py-3 text-sm font-black text-white"
+            className="inline-flex shrink-0 items-center gap-2 rounded-2xl bg-white/10 px-4 py-3 text-sm font-black text-white ring-1 ring-white/10"
           >
             <UserRound size={17} />
             Профиль
+            {isVerified ? <ShieldCheck size={16} /> : null}
           </Link>
         </div>
       </div>

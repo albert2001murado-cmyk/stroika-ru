@@ -10,7 +10,7 @@ import {
   UserRound,
 } from "lucide-react";
 import Link from "next/link";
-
+import ListingAuthorVerifiedBadge from "@/components/ListingAuthorVerifiedBadge";
 type ListingCardProps = {
   listing: Listing;
 };
@@ -133,6 +133,7 @@ function ListingCard({ listing }: ListingCardProps) {
               </div>
 
               <p className="mt-2 flex items-center gap-1 text-xs font-bold text-yellow-500">
+                <ListingAuthorVerifiedBadge listing={listing} />
                 <Star size={14} className="fill-yellow-400" />
                 Новая анкета
               </p>

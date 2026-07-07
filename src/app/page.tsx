@@ -6,18 +6,14 @@ import { db } from "@/lib/firebase";
 import type { Listing } from "@/types";
 import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
 import {
-  Building2,
   Hammer,
-  HardHat,
-  Ruler,
   Search,
   SlidersHorizontal,
-  Truck,
-  Wrench,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import NearbyWorkerButton from "@/components/NearbyWorkerButton";
+import PremiumCategoryGrid from "@/components/PremiumCategoryGrid";
 
-const categoryIcons = [Hammer, Building2, Wrench, Truck, Ruler];
 
 function normalizeSearch(value: string) {
   return value
@@ -156,6 +152,8 @@ export default function HomePage() {
         </div>
       </section>
 
+      <NearbyWorkerButton />
+
       <section className="mx-auto max-w-7xl px-5 py-8">
         <div className="-mt-16 rounded-[28px] border border-gray-200 bg-white p-5 shadow-xl shadow-blue-900/10">
           <div className="mb-4 flex items-center gap-2">
@@ -207,51 +205,17 @@ export default function HomePage() {
             </button>
           </div>
         </div>
-
-        <div className="mt-8 grid gap-4 md:grid-cols-5">
-          {categories.map((item, index) => {
-            const Icon = categoryIcons[index] || Hammer;
-            const active = category === item.name;
-
-            return (
-              <button
-                key={item.name}
-                type="button"
-                onClick={() => {
-                  setCategory(active ? "" : item.name);
-                  setSubcategory("");
-                }}
-                className={`rounded-3xl border p-5 text-left transition hover:-translate-y-1 hover:shadow-xl ${
-                  active
-                    ? "border-[#0057ff] bg-[#0057ff] text-white"
-                    : "border-gray-200 bg-white text-gray-950"
-                }`}
-              >
-                <div
-                  className={`mb-4 flex h-12 w-12 items-center justify-center rounded-2xl ${
-                    active
-                      ? "bg-white/15 text-[#ffd233]"
-                      : "bg-blue-50 text-[#0057ff]"
-                  }`}
-                >
-                  <Icon size={25} />
-                </div>
-
-                <p className="font-black">{item.name}</p>
-
-                <p
-                  className={`mt-1 text-sm ${
-                    active ? "text-blue-50" : "text-gray-500"
-                  }`}
-                >
-                  {item.subcategories.length} подкатегорий
-                </p>
-              </button>
-            );
-          })}
+        <div className="mt-8">
+          <PremiumCategoryGrid
+            categories={categories}
+            selectedCategory={category}
+            onSelectCategory={(value) => {
+              setCategory(value);
+              setSubcategory("");
+            }}
+          />
         </div>
-
-        <div className="mt-10 flex flex-wrap items-end justify-between gap-4">
+<div className="mt-10 flex flex-wrap items-end justify-between gap-4">
           <div>
             <h2 className="text-4xl font-black text-gray-950">
               Рекомендованные анкеты

@@ -81,6 +81,58 @@ async function uploadOneFile(item: LocalMediaFile): Promise<ListingMedia> {
   return data as ListingMedia;
 }
 
+type GeocodeResult = {
+  lat: number;
+  lng: number;
+  address: string;
+};
+
+async function geocodeAddress(
+  city: string,
+  address?: string
+): Promise<GeocodeResult | null> {
+  const fullAddress = [city, address]
+    .map((item) => item?.trim())
+    .filter(Boolean)
+    .join(", ");
+
+  if (!fullAddress) {
+    return null;
+  }
+
+  try {
+    const response = await fetch(
+      getApiUrl(`/api/geocode?address=${encodeURIComponent(fullAddress)}`)
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.warn("Не удалось определить координаты:", data?.error);
+      return null;
+    }
+
+    if (
+      typeof data?.lat !== "number" ||
+      typeof data?.lng !== "number" ||
+      !Number.isFinite(data.lat) ||
+      !Number.isFinite(data.lng)
+    ) {
+      console.warn("Геокодер вернул некорректные координаты:", data);
+      return null;
+    }
+
+    return {
+      lat: data.lat,
+      lng: data.lng,
+      address: data.address || fullAddress,
+    };
+  } catch (error) {
+    console.warn("Ошибка геокодинга:", error);
+    return null;
+  }
+}
+
 export default function NewListingPage() {
   const router = useRouter();
   const { user, profile } = useAuth();
@@ -93,6 +145,7 @@ export default function NewListingPage() {
   const [category, setCategory] = useState(firstCategory);
   const [subcategory, setSubcategory] = useState(firstSubcategory);
   const [city, setCity] = useState("");
+  const [address, setAddress] = useState("");
   const [phone, setPhone] = useState(profile?.phone || "");
   const [priceFrom, setPriceFrom] = useState("");
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([
@@ -244,12 +297,27 @@ export default function NewListingPage() {
         .filter((item) => item.type === "video")
         .map((item) => item.url);
 
+      const geo = await geocodeAddress(city.trim(), address.trim());
+
       const listingRef = await addDoc(collection(db, "listings"), {
         title: title.trim(),
         description: description.trim(),
         category,
         subcategory,
         city: city.trim(),
+        address: address.trim(),
+
+        location: geo
+          ? {
+              lat: geo.lat,
+              lng: geo.lng,
+              address: geo.address,
+            }
+          : null,
+        lat: geo?.lat ?? null,
+        lng: geo?.lng ?? null,
+        geocodedAddress: geo?.address ?? "",
+
         phone: phone.trim(),
         priceFrom: priceFrom.trim() ? Number(priceFrom) : null,
         paymentMethods,
@@ -370,6 +438,20 @@ export default function NewListingPage() {
                     value={city}
                     onChange={(event) => setCity(event.target.value)}
                     placeholder="Город"
+                    className="input"
+                    style={{ paddingLeft: "52px" }}
+                  />
+                </div>
+
+                <div className="relative">
+                  <MapPin
+                    size={19}
+                    className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400"
+                  />
+                  <input
+                    value={address}
+                    onChange={(event) => setAddress(event.target.value)}
+                    placeholder="Адрес, деревня, улица или объект"
                     className="input"
                     style={{ paddingLeft: "52px" }}
                   />
@@ -552,9 +634,7 @@ export default function NewListingPage() {
             </div>
 
             <div className="mt-6 rounded-3xl bg-blue-50 p-5 text-sm font-bold leading-6 text-[#0057ff]">
-              Если фото в чате работает, но тут нет — проблема была именно в
-              странице размещения. Этот файл использует тот же рабочий API:
-              /api/upload.
+             
             </div>
 
             {mediaFiles.length > 0 && (
