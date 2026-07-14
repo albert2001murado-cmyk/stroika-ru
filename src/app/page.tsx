@@ -4,6 +4,10 @@ import ListingCard from "@/components/ListingCard";
 import { categories } from "@/data/categories";
 import { db } from "@/lib/firebase";
 import type { Listing } from "@/types";
+import {
+  matchesListingSearch,
+  type SearchableListingFields,
+} from "@/lib/listingOffer";
 import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
 import {
   Hammer,
@@ -14,17 +18,11 @@ import { useEffect, useMemo, useState } from "react";
 import NearbyWorkerButton from "@/components/NearbyWorkerButton";
 import PremiumCategoryGrid from "@/components/PremiumCategoryGrid";
 
-function normalizeSearch(value: string) {
-  return value
-    .toLowerCase()
-    .replaceAll("ё", "е")
-    .replace(/[^\p{L}\p{N}\s]/gu, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
+
+type SearchableListing = Listing & SearchableListingFields;
 
 export default function HomePage() {
-  const [listings, setListings] = useState<Listing[]>([]);
+  const [listings, setListings] = useState<SearchableListing[]>([]);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
   const [subcategory, setSubcategory] = useState("");
@@ -36,7 +34,7 @@ export default function HomePage() {
       const data = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
-      })) as Listing[];
+      })) as SearchableListing[];
 
       setListings(data);
     });
@@ -47,26 +45,13 @@ export default function HomePage() {
   const selectedCategory = categories.find((item) => item.name === category);
 
   const filteredListings = useMemo(() => {
-    const words = normalizeSearch(search).split(" ").filter(Boolean);
-
     return listings.filter((listing) => {
-      const text = normalizeSearch(
-        [
-          listing.title,
-          listing.description,
-          listing.authorName,
-          listing.category,
-          listing.subcategory,
-          listing.city,
-          listing.phone,
-        ]
-          .filter(Boolean)
-          .join(" ")
+      const matchesSearch = matchesListingSearch(
+        listing as Record<string, any>,
+        search,
+        category,
+        subcategory
       );
-
-      const matchesSearch = words.length
-        ? words.every((word) => text.includes(word))
-        : true;
 
       const matchesCategory = category ? listing.category === category : true;
       const matchesSubcategory = subcategory

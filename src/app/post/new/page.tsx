@@ -4,12 +4,20 @@ import { useAuth } from "@/components/AuthProvider";
 import { categories } from "@/data/categories";
 import { db } from "@/lib/firebase";
 import { getApiUrl } from "@/lib/getApiUrl";
+import {
+  buildListingSearchTags,
+  getOfferActions,
+  getOfferFeatures,
+  getOfferGroup,
+  getOfferGroupInfo,
+} from "@/lib/listingOffer";
 import type { ListingMedia, PaymentMethod } from "@/types";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import {
   ArrowLeft,
   Banknote,
   Camera,
+  Check,
   CreditCard,
   Loader2,
   MapPin,
@@ -152,6 +160,14 @@ export default function NewListingPage() {
     "cash",
   ]);
 
+  const initialOfferGroup = getOfferGroup(firstCategory);
+  const [offerAction, setOfferAction] = useState(
+    getOfferActions(initialOfferGroup)[0]?.id || ""
+  );
+  const [offerFeatures, setOfferFeatures] = useState<Record<string, boolean>>(
+    {}
+  );
+
   const [mediaFiles, setMediaFiles] = useState<LocalMediaFile[]>([]);
   const [error, setError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -161,14 +177,42 @@ export default function NewListingPage() {
     [category]
   );
 
+  const offerGroup = useMemo(() => getOfferGroup(category), [category]);
+  const offerGroupInfo = useMemo(
+    () => getOfferGroupInfo(offerGroup),
+    [offerGroup]
+  );
+  const offerActions = useMemo(
+    () => getOfferActions(offerGroup),
+    [offerGroup]
+  );
+  const offerFeatureOptions = useMemo(
+    () => getOfferFeatures(offerGroup),
+    [offerGroup]
+  );
+  const selectedOfferAction = useMemo(
+    () => offerActions.find((item) => item.id === offerAction),
+    [offerActions, offerAction]
+  );
+
   const imageCount = mediaFiles.filter((item) => item.type === "image").length;
   const videoCount = mediaFiles.filter((item) => item.type === "video").length;
 
   function handleCategoryChange(value: string) {
     const nextCategory = categories.find((item) => item.name === value);
+    const nextGroup = getOfferGroup(value);
 
     setCategory(value);
     setSubcategory(nextCategory?.subcategories?.[0] || "");
+    setOfferAction(getOfferActions(nextGroup)[0]?.id || "");
+    setOfferFeatures({});
+  }
+
+  function toggleOfferFeature(featureId: string) {
+    setOfferFeatures((current) => ({
+      ...current,
+      [featureId]: !current[featureId],
+    }));
   }
 
   function togglePaymentMethod(method: PaymentMethod) {
@@ -268,6 +312,11 @@ export default function NewListingPage() {
       return;
     }
 
+    if (!offerAction) {
+      setError("Выбери, что именно ты предлагаешь.");
+      return;
+    }
+
     if (!city.trim()) {
       setError("Укажи город.");
       return;
@@ -299,6 +348,21 @@ export default function NewListingPage() {
 
       const geo = await geocodeAddress(city.trim(), address.trim());
 
+      const enabledFeatureIds = Object.entries(offerFeatures)
+        .filter(([, enabled]) => enabled)
+        .map(([featureId]) => featureId);
+
+      const searchTags = buildListingSearchTags({
+        title: title.trim(),
+        description: description.trim(),
+        category,
+        subcategory,
+        city: city.trim(),
+        group: offerGroup,
+        actionId: offerAction,
+        enabledFeatureIds,
+      });
+
       const listingRef = await addDoc(collection(db, "listings"), {
         title: title.trim(),
         description: description.trim(),
@@ -321,6 +385,14 @@ export default function NewListingPage() {
         phone: phone.trim(),
         priceFrom: priceFrom.trim() ? Number(priceFrom) : null,
         paymentMethods,
+
+        searchGroup: offerGroup,
+        offerAction,
+        offerActionLabel: selectedOfferAction?.label || "",
+        offerFeatures,
+        searchTags,
+        searchText: searchTags.join(" "),
+        searchVersion: 1,
 
         media: uploadedMedia,
         imageUrls,
@@ -393,14 +465,14 @@ export default function NewListingPage() {
               <input
                 value={title}
                 onChange={(event) => setTitle(event.target.value)}
-                placeholder="Название услуги"
+                placeholder="Название объявления"
                 className="input"
               />
 
               <textarea
                 value={description}
                 onChange={(event) => setDescription(event.target.value)}
-                placeholder="Описание услуги"
+                placeholder="Описание предложения"
                 className="input min-h-40 resize-none"
               />
 
@@ -469,6 +541,134 @@ export default function NewListingPage() {
                     className="input"
                     style={{ paddingLeft: "52px" }}
                   />
+                </div>
+              </div>
+            </section>
+
+
+            <section className="mt-8 rounded-[30px] border border-blue-100 bg-[linear-gradient(135deg,#eff6ff_0%,#ffffff_58%,#f8fbff_100%)] p-5 md:p-6">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-[#0057ff]">
+                    Точная фильтрация
+                  </p>
+
+                  <h2 className="mt-2 text-2xl font-black text-gray-950">
+                    Что вы предлагаете?
+                  </h2>
+
+                  <p className="mt-2 max-w-2xl text-sm font-medium leading-6 text-gray-500">
+                    Выбор сохранится в объявлении и поможет покупателям находить
+                    ваше предложение через новые категории на главной странице.
+                  </p>
+                </div>
+
+                <div className="inline-flex shrink-0 items-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-black text-[#0057ff] shadow-sm ring-1 ring-blue-100">
+                  <span className="text-xl">{offerGroupInfo.emoji}</span>
+                  {offerGroupInfo.title}
+                </div>
+              </div>
+
+              <div className="mt-5 grid gap-3 md:grid-cols-3">
+                {offerActions.map((action) => {
+                  const active = action.id === offerAction;
+
+                  return (
+                    <button
+                      key={action.id}
+                      type="button"
+                      onClick={() => setOfferAction(action.id)}
+                      className={[
+                        "group relative min-h-[128px] rounded-[24px] border p-4 text-left transition duration-300",
+                        active
+                          ? "border-[#0057ff] bg-[#0057ff] text-white shadow-xl shadow-blue-600/20"
+                          : "border-white bg-white text-gray-950 shadow-sm hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-lg",
+                      ].join(" ")}
+                    >
+                      <div
+                        className={[
+                          "flex h-9 w-9 items-center justify-center rounded-2xl transition",
+                          active
+                            ? "bg-white text-[#0057ff]"
+                            : "bg-blue-50 text-[#0057ff]",
+                        ].join(" ")}
+                      >
+                        {active ? (
+                          <Check size={19} strokeWidth={3} />
+                        ) : (
+                          <span className="h-2.5 w-2.5 rounded-full bg-[#0057ff]" />
+                        )}
+                      </div>
+
+                      <p
+                        className={[
+                          "mt-4 text-base font-black",
+                          active ? "text-white" : "text-gray-950",
+                        ].join(" ")}
+                      >
+                        {action.label}
+                      </p>
+
+                      <p
+                        className={[
+                          "mt-1 text-xs font-bold leading-5",
+                          active ? "text-blue-100" : "text-gray-500",
+                        ].join(" ")}
+                      >
+                        {action.description}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="mt-6">
+                <h3 className="text-base font-black text-gray-950">
+                  Дополнительные возможности
+                </h3>
+
+                <p className="mt-1 text-sm font-medium text-gray-500">
+                  Отметь всё, что действительно доступно клиенту.
+                </p>
+
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  {offerFeatureOptions.map((feature) => {
+                    const active = Boolean(offerFeatures[feature.id]);
+
+                    return (
+                      <button
+                        key={feature.id}
+                        type="button"
+                        onClick={() => toggleOfferFeature(feature.id)}
+                        className={[
+                          "flex min-h-[76px] items-center gap-3 rounded-[22px] border px-4 py-3 text-left transition duration-300",
+                          active
+                            ? "border-[#0057ff] bg-white shadow-md shadow-blue-500/10"
+                            : "border-white bg-white/75 hover:border-blue-200 hover:bg-white",
+                        ].join(" ")}
+                      >
+                        <span
+                          className={[
+                            "flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border transition",
+                            active
+                              ? "border-[#0057ff] bg-[#0057ff] text-white"
+                              : "border-gray-200 bg-gray-50 text-gray-300",
+                          ].join(" ")}
+                        >
+                          <Check size={19} strokeWidth={3} />
+                        </span>
+
+                        <span>
+                          <span className="block text-sm font-black text-gray-950">
+                            {feature.label}
+                          </span>
+                          <span className="mt-1 block text-xs font-bold leading-5 text-gray-500">
+                            {feature.description}
+                          </span>
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </section>
@@ -610,6 +810,13 @@ export default function NewListingPage() {
             <h2 className="text-2xl font-black text-gray-950">Публикация</h2>
 
             <div className="mt-6 space-y-4 text-sm font-bold text-gray-500">
+              <div className="flex items-start justify-between gap-4">
+                <span>Предложение</span>
+                <span className="max-w-[190px] text-right text-gray-950">
+                  {selectedOfferAction?.label || "Не выбрано"}
+                </span>
+              </div>
+
               <div className="flex items-center justify-between">
                 <span>Фото</span>
                 <span className="text-gray-950">{imageCount}/{MAX_IMAGES}</span>
