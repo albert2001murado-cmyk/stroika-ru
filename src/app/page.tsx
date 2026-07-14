@@ -1,6 +1,6 @@
 "use client";
 
-import  ListingCard  from "@/components/ListingCard";
+import ListingCard from "@/components/ListingCard";
 import { categories } from "@/data/categories";
 import { db } from "@/lib/firebase";
 import type { Listing } from "@/types";
@@ -13,7 +13,6 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import NearbyWorkerButton from "@/components/NearbyWorkerButton";
 import PremiumCategoryGrid from "@/components/PremiumCategoryGrid";
-
 
 function normalizeSearch(value: string) {
   return value
@@ -209,13 +208,23 @@ export default function HomePage() {
           <PremiumCategoryGrid
             categories={categories}
             selectedCategory={category}
+            selectedSubcategory={subcategory}
             onSelectCategory={(value) => {
               setCategory(value);
               setSubcategory("");
             }}
+            onApplySelection={({
+              category: nextCategory,
+              subcategory: nextSubcategory,
+              search: nextSearch,
+            }) => {
+              setCategory(nextCategory || "");
+              setSubcategory(nextSubcategory || "");
+              setSearch(nextSearch || "");
+            }}
           />
         </div>
-<div className="mt-10 flex flex-wrap items-end justify-between gap-4">
+<div id="recommended-listings" className="mt-10 scroll-mt-8 flex flex-wrap items-end justify-between gap-4">
           <div>
             <h2 className="text-4xl font-black text-gray-950">
               Рекомендованные анкеты
