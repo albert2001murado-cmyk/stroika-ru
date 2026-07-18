@@ -1,76 +1,44 @@
 "use client";
 
-import {
-  ArrowRight,
-  BadgeCheck,
-  Building2,
-  LocateFixed,
-  MapPin,
-  Navigation,
-  Radar,
-  Sparkles,
-  Truck,
-  UsersRound,
-} from "lucide-react";
+import { ArrowRight, MapPin, Navigation } from "lucide-react";
 import Link from "next/link";
 
 export default function NearbyWorkerButton() {
   return (
-    <section className="w-full px-4 pb-10 pt-4 md:px-6 md:pb-12">
-  <div className="mx-auto w-full max-w-7xl">
-        <Link
-          href="/nearby"
-          className="group relative block w-full overflow-hidden rounded-[34px] bg-[#0057ff] p-6 text-white shadow-2xl shadow-blue-500/20 transition hover:-translate-y-1 hover:shadow-blue-500/30 md:p-8"
-        >
-          <div className="absolute -right-16 -top-16 h-48 w-48 rounded-full bg-white/15 blur-3xl" />
-          <div className="absolute -bottom-24 left-1/3 h-60 w-60 rounded-full bg-blue-200/20 blur-3xl" />
+    <Link
+      href="/nearby"
+      aria-label="Открыть карту исполнителей рядом"
+      className="group relative inline-flex min-h-14 shrink-0 items-center gap-3 overflow-hidden rounded-2xl bg-[#0057ff] px-4 py-3 text-white shadow-lg shadow-blue-600/20 transition-all duration-300 ease-out hover:-translate-y-1 hover:scale-[1.025] hover:bg-[#004de6] hover:shadow-[0_18px_38px_rgba(0,87,255,0.28)] active:translate-y-0 active:scale-[0.97] sm:px-5"
+    >
+      <span className="pointer-events-none absolute -right-8 -top-10 h-24 w-24 rounded-full bg-white/15 blur-2xl transition-transform duration-500 group-hover:scale-150" />
+      <span className="pointer-events-none absolute inset-0 -translate-x-[130%] bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-700 group-hover:translate-x-[130%]" />
 
-          <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex items-start gap-4">
-              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-3xl bg-white text-[#0057ff] shadow-lg shadow-blue-950/10">
-                <MapPin size={34} strokeWidth={2.8} />
-              </div>
+      <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-[#0057ff] shadow-md transition-all duration-300 group-hover:rotate-[-6deg] group-hover:scale-110">
+        <MapPin size={21} strokeWidth={2.8} />
+      </span>
 
-              <div>
-                <div className="inline-flex items-center gap-2 rounded-full bg-white/15 px-4 py-2 text-xs font-black text-blue-50 ring-1 ring-white/15">
-                  <Sparkles size={15} />
-                  Реальная карта
-                </div>
+      <span className="relative min-w-0 text-left">
+        <span className="block whitespace-nowrap text-sm font-black leading-tight">
+          Исполнитель рядом
+        </span>
+        <span className="mt-0.5 hidden whitespace-nowrap text-[11px] font-bold text-blue-100 sm:block">
+          Открыть карту
+        </span>
+      </span>
 
-                <h2 className="mt-3 text-3xl font-black leading-tight md:text-4xl">
-                  Исполнитель рядом
-                </h2>
+      <span className="relative ml-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/12 ring-1 ring-white/15 transition-all duration-300 group-hover:bg-white group-hover:text-[#0057ff]">
+        <ArrowRight
+          size={17}
+          strokeWidth={2.8}
+          className="transition-transform duration-300 group-hover:translate-x-1"
+        />
+      </span>
 
-                <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-blue-50 md:text-base">
-                  Открой карту как в Яндекс.Картах, выбери категорию и найди
-                  мастеров, компании, спецтехнику или материалы рядом.
-                </p>
-              </div>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-3 lg:w-[520px]">
-              <div className="rounded-3xl bg-white/10 p-4 ring-1 ring-white/10">
-                <UsersRound size={24} />
-                <p className="mt-2 text-sm font-black">Профили</p>
-                <p className="text-xs font-semibold text-blue-50">на карте</p>
-              </div>
-
-              <div className="rounded-3xl bg-white/10 p-4 ring-1 ring-white/10">
-                <Radar size={24} />
-                <p className="mt-2 text-sm font-black">Фильтры</p>
-                <p className="text-xs font-semibold text-blue-50">
-                  по категории
-                </p>
-              </div>
-
-              <div className="inline-flex items-center justify-center gap-3 rounded-3xl bg-white px-5 py-4 text-sm font-black text-[#0057ff] shadow-xl shadow-blue-950/10 transition group-hover:bg-blue-50">
-                <Navigation size={20} strokeWidth={2.8} />
-                Открыть
-              </div>
-            </div>
-          </div>
-        </Link>
-      </div>
-    </section>
+      <Navigation
+        size={14}
+        strokeWidth={2.7}
+        className="pointer-events-none absolute bottom-1.5 left-1.5 text-white/35 transition-all duration-500 group-hover:-translate-y-1 group-hover:translate-x-1 group-hover:text-white/60"
+      />
+    </Link>
   );
 }

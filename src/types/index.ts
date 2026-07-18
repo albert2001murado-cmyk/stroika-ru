@@ -85,3 +85,64 @@ export type Message = {
   text: string;
   createdAt?: Timestamp;
 };
+
+
+export type PortfolioItem = {
+  id: string;
+  userId: string;
+  title: string;
+  description?: string;
+  city?: string;
+  imageUrls?: string[];
+  imagePaths?: string[];
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+};
+
+export type AvailabilityStatus = "free" | "busy";
+
+export type AvailabilityDay = {
+  id: string;
+  userId: string;
+  date: string;
+  status: AvailabilityStatus;
+  updatedAt?: Timestamp;
+};
+
+export type CustomerRequest = {
+  id: string;
+  customerId: string;
+  customerName?: string;
+  title: string;
+  description: string;
+  category?: string;
+  city?: string;
+  budget?: number | null;
+  status: "active" | "closed";
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+};
+
+export type CustomerRequestOffer = {
+  id: string;
+  contractorId: string;
+  contractorName?: string;
+  message?: string;
+  price?: number | null;
+  createdAt?: Timestamp;
+};
+
+export type ComparisonSelection = {
+  userIds: string[];
+  updatedAt?: Timestamp;
+};
+
+export type AnalyticsEventType = "view" | "phone" | "chat";
+
+export type ListingAnalyticsEvent = {
+  id: string;
+  listingId: string;
+  userId: string;
+  type: AnalyticsEventType;
+  createdAt?: Timestamp;
+};

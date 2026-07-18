@@ -124,10 +124,10 @@ export default function MessagesPage() {
   return (
     <main className="min-h-screen bg-[#f5f7fb] px-5 py-8">
       <div className="mx-auto max-w-5xl">
-        <div className="rounded-[34px] bg-[#0057ff] p-8 text-white">
+        <div className="rounded-[28px] bg-[#0057ff] p-5 text-white sm:rounded-[34px] sm:p-8">
           <p className="font-black text-[#ffd233]">Стройка.ру</p>
 
-          <h1 className="mt-3 text-4xl font-black">Сообщения</h1>
+          <h1 className="mt-3 text-3xl font-black sm:text-4xl">Сообщения</h1>
 
           <p className="mt-3 text-blue-50">
             Здесь хранится история переписок с заказчиками и исполнителями.
@@ -175,9 +175,9 @@ export default function MessagesPage() {
                   <Link
                     key={chat.id}
                     href={`/messages/${chat.id}`}
-                    className="flex gap-4 rounded-[26px] border border-gray-100 bg-white p-4 transition hover:border-blue-200 hover:bg-blue-50/40"
+                    className="flex gap-3 rounded-[22px] border border-gray-100 bg-white p-3 transition hover:border-blue-200 hover:bg-blue-50/40 sm:gap-4 sm:rounded-[26px] sm:p-4"
                   >
-                    <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-blue-50 text-[#0057ff]">
+                    <div className="flex h-13 w-13 shrink-0 items-center justify-center overflow-hidden rounded-full bg-blue-50 text-[#0057ff] sm:h-16 sm:w-16">
                       {other?.avatarUrl ? (
                         <img
                           src={other.avatarUrl}

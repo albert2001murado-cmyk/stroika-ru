@@ -121,3 +121,173 @@ select.input:disabled {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+
+/* Общая адаптация новых разделов сайта */
+.app-page {
+  min-height: calc(100dvh - 82px);
+  background: #f5f7fb;
+  padding: 28px 20px 48px;
+}
+
+.app-container {
+  width: min(1280px, 100%);
+  margin: 0 auto;
+}
+
+.panel {
+  border: 1px solid #eef2f7;
+  border-radius: 30px;
+  background: #ffffff;
+  padding: 24px;
+  box-shadow: 0 8px 30px rgba(15, 23, 42, 0.05);
+}
+
+.page-title-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.page-eyebrow {
+  color: #0057ff;
+  font-size: 13px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.page-title {
+  margin-top: 3px;
+  color: #111827;
+  font-size: clamp(30px, 5vw, 48px);
+  line-height: 1;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+}
+
+.icon-button {
+  display: inline-flex;
+  width: 46px;
+  height: 46px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 16px;
+  background: #ffffff;
+  color: #0057ff;
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.08);
+  transition: 0.2s ease;
+}
+
+.icon-button:hover {
+  transform: translateY(-1px);
+  background: #eff6ff;
+}
+
+.empty-card {
+  border: 1px dashed #bfdbfe;
+  border-radius: 28px;
+  background: #ffffff;
+  padding: 36px 24px;
+  text-align: center;
+  color: #6b7280;
+}
+
+.empty-card h1,
+.empty-card h3 {
+  color: #111827;
+  font-size: 24px;
+  font-weight: 900;
+}
+
+.empty-card p {
+  margin-top: 8px;
+}
+
+.info-card {
+  display: flex;
+  min-height: 58px;
+  align-items: center;
+  gap: 10px;
+  border-radius: 18px;
+  background: #f5f7fb;
+  padding: 14px 16px;
+  color: #111827;
+  font-weight: 900;
+}
+
+.info-card svg {
+  flex: 0 0 auto;
+  color: #0057ff;
+}
+
+.tab-button {
+  flex: 0 0 auto;
+  border-radius: 16px;
+  background: #ffffff;
+  padding: 12px 18px;
+  color: #6b7280;
+  font-weight: 900;
+  transition: 0.2s ease;
+}
+
+.tab-button-active {
+  background: #0057ff;
+  color: #ffffff;
+}
+
+.chat-action {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 10px;
+  border-radius: 12px;
+  padding: 10px 11px;
+  text-align: left;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.chat-action:hover {
+  background: #f3f4f6;
+}
+
+@media (max-width: 767px) {
+  html,
+  body {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .app-page {
+    padding: 18px 12px 36px;
+  }
+
+  .panel {
+    border-radius: 24px;
+    padding: 18px;
+  }
+
+  .page-title-row {
+    align-items: flex-start;
+  }
+
+  .input {
+    min-height: 52px;
+    border-radius: 16px;
+    padding: 12px 14px;
+  }
+
+  .btn-primary,
+  .btn-yellow {
+    min-height: 50px;
+    border-radius: 16px;
+    padding: 12px 17px;
+  }
+
+  main img,
+  main video {
+    max-width: 100%;
+  }
+}

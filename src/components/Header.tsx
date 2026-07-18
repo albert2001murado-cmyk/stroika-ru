@@ -4,6 +4,11 @@ import { auth } from "@/lib/firebase";
 import { signOut } from "firebase/auth";
 import {
   BadgeCheck,
+  BarChart3,
+  CalendarDays,
+  GitCompareArrows,
+  BriefcaseBusiness,
+  ClipboardList,
   HardHat,
   Headphones,
   Heart,
@@ -12,14 +17,17 @@ import {
   Plus,
   ShieldCheck,
   UserRound,
+  X,
 } from "lucide-react";
 import Link from "next/link";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "./AuthProvider";
 import VerifiedBadge from "./VerifiedBadge";
 
 export default function Header() {
   const router = useRouter();
+  const [publicationMenuOpen, setPublicationMenuOpen] = useState(false);
   const authContext = useAuth() as any;
 
   const user = authContext?.user || null;
@@ -52,7 +60,7 @@ export default function Header() {
 
   return (
     <header className="sticky top-0 z-50 border-b border-white/10 bg-[#0057ff] text-white shadow-xl shadow-blue-950/10">
-      <div className="mx-auto flex h-[82px] max-w-7xl items-center justify-between gap-4 px-4 md:px-6">
+      <div className="flex h-[82px] w-full max-w-none items-center justify-between gap-4 px-3 md:px-4">
         <Link
   href="/"
   className="flex shrink-0 items-center gap-3 min-w-[330px]"
@@ -66,19 +74,20 @@ export default function Header() {
       Стройка.ру
     </span>
     <span className="mt-1 whitespace-nowrap text-sm font-extrabold leading-none text-blue-100">
-      строительные услуги рядом
+      все для стройки в одном месте
     </span>
   </div>
 </Link>
 
         <nav className="hidden flex-1 items-center justify-end gap-2 lg:flex">
-          <Link
-            href="/post/new"
-            className="inline-flex h-12 items-center gap-2 rounded-2xl bg-white px-5 text-sm font-black text-[#0057ff] shadow-lg shadow-blue-950/10 transition hover:-translate-y-0.5 hover:bg-blue-50"
+          <button
+            type="button"
+            onClick={() => setPublicationMenuOpen(true)}
+            className="inline-flex h-12 items-center gap-2 rounded-2xl bg-white px-5 text-sm font-black text-[#0057ff] shadow-lg shadow-blue-950/10 transition duration-300 hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-blue-50 active:scale-[0.97]"
           >
             <Plus size={18} strokeWidth={2.8} />
             Разместить
-          </Link>
+          </button>
 
           <Link
             href="/favorites"
@@ -94,6 +103,22 @@ export default function Header() {
           >
             <MessageCircle size={18} strokeWidth={2.8} />
             Сообщения
+          </Link>
+
+          <Link
+            href="/portfolio"
+            className="inline-flex h-12 items-center gap-2 rounded-2xl bg-white/10 px-4 text-sm font-black text-white ring-1 ring-white/10 transition hover:bg-white/20"
+          >
+            <BriefcaseBusiness size={18} />
+            Портфолио
+          </Link>
+
+          <Link
+            href="/requests"
+            className="inline-flex h-12 items-center gap-2 rounded-2xl bg-white/10 px-4 text-sm font-black text-white ring-1 ring-white/10 transition hover:bg-white/20"
+          >
+            <ClipboardList size={18} />
+            Заявки
           </Link>
 
           <Link
@@ -174,12 +199,53 @@ export default function Header() {
       <div className="border-t border-white/10 px-4 pb-3 lg:hidden">
         <div className="mx-auto flex max-w-7xl gap-2 overflow-x-auto pt-3">
           <Link
-            href="/post/new"
-            className="inline-flex shrink-0 items-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-black text-[#0057ff]"
+            href="/portfolio"
+            className="inline-flex shrink-0 items-center gap-2 rounded-2xl bg-white/10 px-4 py-3 text-sm font-black text-white ring-1 ring-white/10"
+          >
+            <BriefcaseBusiness size={17} />
+            Портфолио
+          </Link>
+
+          <Link
+            href="/availability"
+            className="inline-flex shrink-0 items-center gap-2 rounded-2xl bg-white/10 px-4 py-3 text-sm font-black text-white ring-1 ring-white/10"
+          >
+            <CalendarDays size={17} />
+            Календарь
+          </Link>
+
+          <Link
+            href="/analytics"
+            className="inline-flex shrink-0 items-center gap-2 rounded-2xl bg-white/10 px-4 py-3 text-sm font-black text-white ring-1 ring-white/10"
+          >
+            <BarChart3 size={17} />
+            Статистика
+          </Link>
+
+          <Link
+            href="/compare"
+            className="inline-flex shrink-0 items-center gap-2 rounded-2xl bg-white/10 px-4 py-3 text-sm font-black text-white ring-1 ring-white/10"
+          >
+            <GitCompareArrows size={17} />
+            Сравнение
+          </Link>
+
+          <Link
+            href="/requests"
+            className="inline-flex shrink-0 items-center gap-2 rounded-2xl bg-white/10 px-4 py-3 text-sm font-black text-white ring-1 ring-white/10"
+          >
+            <ClipboardList size={17} />
+            Заявки
+          </Link>
+
+          <button
+            type="button"
+            onClick={() => setPublicationMenuOpen(true)}
+            className="inline-flex shrink-0 items-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-black text-[#0057ff] transition active:scale-95"
           >
             <Plus size={17} />
             Разместить
-          </Link>
+          </button>
 
           <Link
             href="/favorites"
@@ -223,6 +289,81 @@ export default function Header() {
           </Link>
         </div>
       </div>
+
+      {publicationMenuOpen ? (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/55 px-4 py-8 backdrop-blur-sm"
+          onMouseDown={(event) => {
+            if (event.currentTarget === event.target) setPublicationMenuOpen(false);
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="publication-menu-title"
+            className="w-full max-w-2xl overflow-hidden rounded-[34px] bg-white p-6 text-gray-950 shadow-2xl ring-1 ring-white/40 md:p-8"
+          >
+            <div className="flex items-start justify-between gap-5">
+              <div>
+                <p className="text-sm font-black uppercase tracking-[0.2em] text-[#0057ff]">
+                  Стройка.ру
+                </p>
+                <h2 id="publication-menu-title" className="mt-2 text-3xl font-black md:text-4xl">
+                  Что разместить?
+                </h2>
+                <p className="mt-2 font-bold text-gray-500">
+                  Выбери нужный тип публикации.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                aria-label="Закрыть"
+                onClick={() => setPublicationMenuOpen(false)}
+                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gray-100 text-gray-700 transition duration-300 hover:rotate-90 hover:bg-gray-200 active:scale-90"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <div className="mt-7 grid gap-4 md:grid-cols-2">
+              <Link
+                href="/post/new"
+                onClick={() => setPublicationMenuOpen(false)}
+                className="group relative overflow-hidden rounded-[28px] border border-blue-100 bg-blue-50/70 p-5 transition duration-300 hover:-translate-y-1 hover:border-blue-300 hover:bg-blue-50 hover:shadow-xl active:scale-[0.98]"
+              >
+                <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#0057ff] text-white shadow-lg shadow-blue-600/20 transition duration-300 group-hover:rotate-[-5deg] group-hover:scale-110">
+                  <HardHat size={28} />
+                </span>
+                <h3 className="mt-5 text-2xl font-black">Анкету исполнителя</h3>
+                <p className="mt-2 leading-6 text-gray-500">
+                  Предложить услуги, материалы или спецтехнику.
+                </p>
+                <span className="mt-5 inline-flex items-center gap-2 font-black text-[#0057ff]">
+                  Перейти <Plus className="transition group-hover:rotate-90" size={18} />
+                </span>
+              </Link>
+
+              <Link
+                href="/requests/new"
+                onClick={() => setPublicationMenuOpen(false)}
+                className="group relative overflow-hidden rounded-[28px] border border-blue-100 bg-white p-5 transition duration-300 hover:-translate-y-1 hover:border-blue-300 hover:shadow-xl active:scale-[0.98]"
+              >
+                <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-900 text-white shadow-lg transition duration-300 group-hover:rotate-[5deg] group-hover:scale-110">
+                  <ClipboardList size={28} />
+                </span>
+                <h3 className="mt-5 text-2xl font-black">Заявку заказчика</h3>
+                <p className="mt-2 leading-6 text-gray-500">
+                  Описать задачу, бюджет, сроки и получить отклики.
+                </p>
+                <span className="mt-5 inline-flex items-center gap-2 font-black text-[#0057ff]">
+                  Перейти <Plus className="transition group-hover:rotate-90" size={18} />
+                </span>
+              </Link>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </header>
   );
 }

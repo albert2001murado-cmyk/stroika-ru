@@ -1,7 +1,9 @@
 "use client";
 
 import FavoriteButton from "@/components/FavoriteButton";
+import ListingAuthorVerifiedBadge from "@/components/ListingAuthorVerifiedBadge";
 import type { Listing } from "@/types";
+import { isCreatedWithinHours } from "@/types";
 import {
   Banknote,
   CreditCard,
@@ -10,7 +12,7 @@ import {
   UserRound,
 } from "lucide-react";
 import Link from "next/link";
-import ListingAuthorVerifiedBadge from "@/components/ListingAuthorVerifiedBadge";
+
 type ListingCardProps = {
   listing: Listing;
 };
@@ -30,28 +32,24 @@ function paymentText(listing: Listing) {
     return "Наличные / перевод";
   }
 
-  if (methods.includes("transfer")) {
-    return "Переводом";
-  }
-
+  if (methods.includes("transfer")) return "Переводом";
   return "Наличными";
 }
 
 function paymentIcon(listing: Listing) {
-  const methods = listing.paymentMethods || [];
-
-  if (methods.includes("transfer")) {
-    return <CreditCard size={15} />;
+  if ((listing.paymentMethods || []).includes("transfer")) {
+    return <CreditCard size={14} />;
   }
 
-  return <Banknote size={15} />;
+  return <Banknote size={14} />;
 }
 
 function ListingCard({ listing }: ListingCardProps) {
   const imageUrl = getImageUrl(listing);
+  const isNew = isCreatedWithinHours(listing.createdAt, 72);
 
   return (
-    <article className="relative overflow-hidden rounded-[30px] bg-white shadow-sm ring-1 ring-gray-100 transition hover:-translate-y-1 hover:shadow-xl">
+    <article className="group relative overflow-hidden rounded-[26px] bg-white shadow-sm ring-1 ring-gray-100 transition duration-300 hover:-translate-y-1 hover:shadow-xl">
       <FavoriteButton
         listingId={listing.id}
         title={listing.title}
@@ -59,31 +57,31 @@ function ListingCard({ listing }: ListingCardProps) {
         priceFrom={listing.priceFrom}
         imageUrl={imageUrl}
         compact
-        className="absolute right-4 top-4 z-20 shadow-lg"
+        className="absolute right-3 top-3 z-20 shadow-lg"
       />
 
       <Link href={`/listing/${listing.id}`} className="block">
-        <div className="relative h-56 overflow-hidden bg-blue-50">
+        <div className="relative h-44 overflow-hidden bg-blue-50">
           {imageUrl ? (
             <img
               src={imageUrl}
               alt={listing.title}
-              className="h-full w-full object-cover transition duration-300 hover:scale-105"
+              className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
             />
           ) : (
-            <div className="flex h-full w-full items-center justify-center text-4xl font-black text-blue-200">
+            <div className="flex h-full w-full items-center justify-center text-3xl font-black text-blue-200">
               Стройка
             </div>
           )}
 
-          <div className="absolute left-4 top-4 rounded-full bg-white/95 px-3 py-1 text-xs font-black text-[#0057ff] shadow-sm">
-            {listing.category}
+          <div className="absolute left-3 top-3 max-w-[70%] truncate rounded-full bg-white/95 px-3 py-1 text-xs font-black text-[#0057ff] shadow-sm">
+            {listing.category || "Строительные услуги"}
           </div>
         </div>
 
-        <div className="p-5">
-          <div className="flex flex-wrap items-center gap-2 text-xs font-black">
-            <span className="rounded-full bg-green-50 px-3 py-1 text-green-700">
+        <div className="p-4">
+          <div className="flex flex-wrap items-center gap-2 text-[11px] font-black">
+            <span className="rounded-full bg-green-50 px-2.5 py-1 text-green-700">
               {listing.accountType === "ip"
                 ? "ИП"
                 : listing.accountType === "ooo"
@@ -91,58 +89,61 @@ function ListingCard({ listing }: ListingCardProps) {
                 : "Физлицо"}
             </span>
 
-            <span className="flex items-center gap-1 rounded-full bg-blue-50 px-3 py-1 text-[#0057ff]">
+            <span className="flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 text-[#0057ff]">
               {paymentIcon(listing)}
               {paymentText(listing)}
             </span>
           </div>
 
-          <h3 className="mt-4 line-clamp-2 text-2xl font-black text-gray-950">
+          <h3 className="mt-3 line-clamp-2 text-xl font-black leading-tight text-gray-950">
             {listing.title}
           </h3>
 
-          <p className="mt-2 line-clamp-2 text-sm leading-6 text-gray-500">
+          <p className="mt-2 line-clamp-2 text-sm leading-5 text-gray-500">
             {listing.description}
           </p>
 
-          <p className="mt-4 flex items-center gap-2 text-sm font-bold text-gray-500">
-            <MapPin size={16} className="text-[#0057ff]" />
-            {listing.city}
+          <p className="mt-3 flex items-center gap-2 text-sm font-bold text-gray-500">
+            <MapPin size={15} className="shrink-0 text-[#0057ff]" />
+            <span className="truncate">{listing.city || "Город не указан"}</span>
           </p>
 
-          <div className="mt-5 flex items-end justify-between gap-4">
-            <div>
-              <p className="text-xs font-bold text-gray-400">Исполнитель</p>
+          <div className="mt-4 flex items-end justify-between gap-3 border-t border-gray-100 pt-4">
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold text-gray-400">Исполнитель</p>
 
-              <div className="mt-2 flex items-center gap-2">
-                <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-blue-50 text-[#0057ff]">
+              <div className="mt-1.5 flex min-w-0 items-center gap-2">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-blue-50 text-[#0057ff]">
                   {listing.authorAvatarUrl ? (
                     <img
                       src={listing.authorAvatarUrl}
-                      alt={listing.authorName}
+                      alt={listing.authorName || "Исполнитель"}
                       className="h-full w-full object-cover"
                     />
                   ) : (
-                    <UserRound size={17} />
+                    <UserRound size={16} />
                   )}
                 </div>
 
-                <p className="font-black text-gray-950">
-                  {listing.authorName}
+                <p className="truncate text-sm font-black text-gray-950">
+                  {listing.authorName || "Исполнитель"}
                 </p>
               </div>
 
-              <p className="mt-2 flex items-center gap-1 text-xs font-bold text-yellow-500">
+              <div className="mt-2 flex flex-wrap items-center gap-2">
                 <ListingAuthorVerifiedBadge listing={listing} />
-                <Star size={14} className="fill-yellow-400" />
-                Новая анкета
-              </p>
+                {isNew ? (
+                  <span className="flex items-center gap-1 text-xs font-black text-amber-500">
+                    <Star size={13} className="fill-amber-400" />
+                    Новая анкета
+                  </span>
+                ) : null}
+              </div>
             </div>
 
-            <div className="text-right">
-              <p className="text-xs font-bold text-gray-400">Цена от</p>
-
-              <p className="mt-1 text-2xl font-black text-[#0057ff]">
+            <div className="shrink-0 text-right">
+              <p className="text-[11px] font-bold text-gray-400">Цена от</p>
+              <p className="mt-1 text-xl font-black text-[#0057ff]">
                 {listing.priceFrom
                   ? `${listing.priceFrom.toLocaleString("ru-RU")} ₽`
                   : "Договорная"}

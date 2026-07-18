@@ -1,29 +1,7 @@
 "use client";
 
-import {
-  ArrowLeft,
-  ArrowRight,
-  Blocks,
-  Bolt,
-  Building2,
-  ChevronRight,
-  DoorOpen,
-  Hammer,
-  HardHat,
-  Home,
-  Layers3,
-  Paintbrush,
-  PlugZap,
-  Ruler,
-  Search,
-  ShieldCheck,
-  ShowerHead,
-  Sofa,
-  Sparkles,
-  Truck,
-  Wrench,
-} from "lucide-react";
-import type { ComponentType, ReactNode } from "react";
+import { ArrowLeft, ArrowRight, Search, ShieldCheck } from "lucide-react";
+import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 
 type CategoryLike = {
@@ -57,7 +35,7 @@ type SectionConfig = {
   id: SectionId;
   title: string;
   description: string;
-  Icon: ComponentType<{ size?: number; className?: string; strokeWidth?: number }>;
+  image: string;
   keys: string[];
 };
 
@@ -66,50 +44,30 @@ const sections: SectionConfig[] = [
     id: "materials",
     title: "Материалы",
     description: "Бетон, кирпич, отделка и инженерные материалы",
-    Icon: Blocks,
+    image: "/categories/materials.png",
     keys: ["материал"],
   },
   {
     id: "services",
     title: "Услуги",
     description: "Мастера и бригады для отдельных строительных работ",
-    Icon: Wrench,
+    image: "/categories/finishing.png",
     keys: ["отдел", "элект", "сант", "пол", "крыша", "фасад", "участок", "благоустрой", "инженер", "окна", "двер", "мебель", "дополнитель"],
   },
   {
     id: "machinery",
     title: "Техника",
     description: "Спецтехника, доставка и работа с оператором",
-    Icon: Truck,
+    image: "/categories/equipment.png",
     keys: ["спецтехника"],
   },
   {
     id: "complex",
     title: "Комплексные решения",
     description: "Ремонт, строительство и работы под ключ",
-    Icon: HardHat,
+    image: "/categories/construction.png",
     keys: ["ремонт квартир", "строительство"],
   },
-];
-
-const iconByName: Array<{
-  keys: string[];
-  Icon: ComponentType<{ size?: number; className?: string; strokeWidth?: number }>;
-}> = [
-  { keys: ["ремонт"], Icon: Home },
-  { keys: ["отдел"], Icon: Paintbrush },
-  { keys: ["элект"], Icon: Bolt },
-  { keys: ["сант"], Icon: ShowerHead },
-  { keys: ["стро"], Icon: HardHat },
-  { keys: ["спец", "техника"], Icon: Truck },
-  { keys: ["материал"], Icon: Blocks },
-  { keys: ["пол"], Icon: Layers3 },
-  { keys: ["крыша", "фасад"], Icon: Building2 },
-  { keys: ["участок", "благоустрой"], Icon: Ruler },
-  { keys: ["инженер"], Icon: PlugZap },
-  { keys: ["окна", "двер"], Icon: DoorOpen },
-  { keys: ["мебель"], Icon: Sofa },
-  { keys: ["дополнитель"], Icon: Sparkles },
 ];
 
 function normalize(value: string) {
@@ -129,9 +87,39 @@ function getTitle(category: CategoryLike) {
   return category.title || category.name || "Категория";
 }
 
-function getIcon(title: string) {
+const CATEGORY_IMAGES = {
+  materials: "/categories/materials.png",
+  repair: "/categories/repair.png",
+  finishing: "/categories/finishing.png",
+  electric: "/categories/electric.png",
+  plumbing: "/categories/plumbing.png",
+  construction: "/categories/construction.png",
+  equipment: "/categories/equipment.png",
+  design: "/categories/design.png",
+  engineering: "/categories/engineering.png",
+  windows: "/categories/windows.png",
+  furniture: "/categories/furniture.png",
+  extra: "/categories/extra.png",
+  all: "/categories/all.png",
+} as const;
+
+function getCategoryImage(title: string) {
   const value = normalize(title);
-  return iconByName.find((item) => item.keys.some((key) => value.includes(key)))?.Icon || Hammer;
+
+  if (value.includes("материал")) return CATEGORY_IMAGES.materials;
+  if (value.includes("ремонт квартир")) return CATEGORY_IMAGES.repair;
+  if (value.includes("отдел") || value.includes("пол")) return CATEGORY_IMAGES.finishing;
+  if (value.includes("элект")) return CATEGORY_IMAGES.electric;
+  if (value.includes("сант")) return CATEGORY_IMAGES.plumbing;
+  if (value.includes("спец") || value.includes("техника")) return CATEGORY_IMAGES.equipment;
+  if (value.includes("участок") || value.includes("благоустрой")) return CATEGORY_IMAGES.design;
+  if (value.includes("инженер")) return CATEGORY_IMAGES.engineering;
+  if (value.includes("окна") || value.includes("двер")) return CATEGORY_IMAGES.windows;
+  if (value.includes("мебель")) return CATEGORY_IMAGES.furniture;
+  if (value.includes("дополнитель")) return CATEGORY_IMAGES.extra;
+  if (value.includes("стро") || value.includes("крыша") || value.includes("фасад")) return CATEGORY_IMAGES.construction;
+
+  return CATEGORY_IMAGES.repair;
 }
 
 function getCount(category: CategoryLike) {
@@ -164,7 +152,7 @@ function getPopular(category: CategoryLike) {
 function buildActions(category: CategoryLike, subcategory: string): Array<{
   title: string;
   description: string;
-  icon: string;
+  image: string;
   selection: CategorySelection;
 }> {
   const categoryName = getTitle(category);
@@ -176,25 +164,25 @@ function buildActions(category: CategoryLike, subcategory: string): Array<{
       {
         title: `Купить ${subject.toLowerCase()}`,
         description: "Продавцы и производители",
-        icon: "🧱",
+        image: CATEGORY_IMAGES.materials,
         selection: { category: categoryName, subcategory },
       },
       {
         title: "Заказать доставку",
         description: `Доставка: ${subject.toLowerCase()}`,
-        icon: "🚚",
+        image: CATEGORY_IMAGES.extra,
         selection: { category: categoryName, subcategory, search: `${subject} доставка` },
       },
       {
         title: "Найти специалистов",
         description: `Исполнители, которые работают с «${subject}»`,
-        icon: "👷",
+        image: CATEGORY_IMAGES.repair,
         selection: { category: "", search: subject },
       },
       {
         title: "Показать все предложения",
         description: "Все объявления по выбранному материалу",
-        icon: "📦",
+        image: CATEGORY_IMAGES.all,
         selection: { category: categoryName, subcategory },
       },
     ];
@@ -205,19 +193,19 @@ function buildActions(category: CategoryLike, subcategory: string): Array<{
       {
         title: `Арендовать ${subject.toLowerCase()}`,
         description: "Предложения техники рядом",
-        icon: "🚜",
+        image: CATEGORY_IMAGES.equipment,
         selection: { category: categoryName, subcategory },
       },
       {
         title: "Заказать с оператором",
         description: "Работа на объекте с опытным специалистом",
-        icon: "👷",
+        image: CATEGORY_IMAGES.repair,
         selection: { category: categoryName, subcategory, search: `${subject} оператор` },
       },
       {
         title: "Заказать доставку техники",
         description: "Перевозка техники до объекта",
-        icon: "🚛",
+        image: CATEGORY_IMAGES.extra,
         selection: { category: categoryName, subcategory, search: `${subject} доставка` },
       },
     ];
@@ -228,19 +216,19 @@ function buildActions(category: CategoryLike, subcategory: string): Array<{
       {
         title: "Найти электрика",
         description: "Частные мастера, ИП и компании",
-        icon: "⚡",
+        image: CATEGORY_IMAGES.electric,
         selection: { category: categoryName, subcategory },
       },
       {
         title: "Купить материалы",
         description: "Кабель, автоматы, розетки и освещение",
-        icon: "💡",
+        image: CATEGORY_IMAGES.materials,
         selection: { category: "🧰 Материалы", search: "электрика кабель розетки" },
       },
       {
         title: "Электромонтаж под ключ",
         description: "Полный комплекс работ на объекте",
-        icon: "🏠",
+        image: CATEGORY_IMAGES.construction,
         selection: { category: categoryName, search: "под ключ" },
       },
     ];
@@ -251,25 +239,25 @@ function buildActions(category: CategoryLike, subcategory: string): Array<{
       {
         title: "Заказать строительство",
         description: "Подрядчики и бригады",
-        icon: "👷",
+        image: CATEGORY_IMAGES.repair,
         selection: { category: categoryName, subcategory },
       },
       {
         title: "Найти материалы",
         description: "Материалы для выбранной работы",
-        icon: "🧱",
+        image: CATEGORY_IMAGES.materials,
         selection: { category: "🧰 Материалы", search: subject },
       },
       {
         title: "Заказать технику",
         description: "Экскаваторы, краны и другая спецтехника",
-        icon: "🚜",
+        image: CATEGORY_IMAGES.equipment,
         selection: { category: "🚜 Спецтехника", search: subject },
       },
       {
         title: "Рассчитать стоимость",
         description: "Найти исполнителя для оценки и сметы",
-        icon: "📋",
+        image: CATEGORY_IMAGES.design,
         selection: { category: categoryName, search: `${subject} стоимость` },
       },
     ];
@@ -279,19 +267,19 @@ function buildActions(category: CategoryLike, subcategory: string): Array<{
     {
       title: "Найти исполнителя",
       description: `Мастера и компании: ${subject.toLowerCase()}`,
-      icon: "👷",
+      image: CATEGORY_IMAGES.repair,
       selection: { category: categoryName, subcategory },
     },
     {
       title: "Заказать работу под ключ",
       description: "Полный комплекс работ одним исполнителем",
-      icon: "🏠",
+      image: CATEGORY_IMAGES.construction,
       selection: { category: categoryName, search: "под ключ" },
     },
     {
       title: "Показать все объявления",
       description: "Все предложения в выбранной категории",
-      icon: "📋",
+      image: CATEGORY_IMAGES.design,
       selection: { category: categoryName, subcategory },
     },
   ];
@@ -407,17 +395,26 @@ export default function PremiumCategoryGrid({
         <div key={`${sectionId}-${categoryName}-${subcategory}`} className="category-stage relative mt-7">
           {!sectionId ? (
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              {sections.map(({ id, title, description, Icon }) => (
-                <button key={id} type="button" onClick={() => setSectionId(id)} className="group relative min-h-[210px] overflow-hidden rounded-[30px] border border-slate-100 bg-[#f8fbff] p-5 text-left transition duration-300 hover:-translate-y-1 hover:border-blue-200 hover:bg-white hover:shadow-[0_24px_65px_rgba(0,87,255,0.15)]">
-                  <div className="pointer-events-none absolute -right-14 -top-14 h-40 w-40 rounded-full bg-[radial-gradient(circle,rgba(0,87,255,0.16),transparent_66%)] transition duration-500 group-hover:scale-125" />
-                  <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-[#0057ff] shadow-sm transition duration-300 group-hover:bg-[#0057ff] group-hover:text-white">
-                    <Icon size={28} strokeWidth={2.7} />
+              {sections.map(({ id, title, description, image }) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setSectionId(id)}
+                  className="group relative min-h-[228px] overflow-hidden rounded-[30px] border border-slate-100 bg-[#f8fbff] p-5 text-left transition duration-500 ease-out hover:-translate-y-1.5 hover:border-blue-200 hover:bg-white hover:shadow-[0_26px_70px_rgba(0,87,255,0.16)] active:scale-[0.975]"
+                >
+                  <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_88%_82%,rgba(0,87,255,0.13),transparent_42%)] opacity-70 transition duration-500 group-hover:opacity-100" />
+
+                  <div className="relative z-10 max-w-[66%]">
+                    <h3 className="text-2xl font-black tracking-tight text-slate-950">{title}</h3>
+                    <p className="mt-3 text-sm font-bold leading-6 text-slate-500">{description}</p>
                   </div>
-                  <h3 className="relative mt-7 text-2xl font-black tracking-tight text-slate-950">{title}</h3>
-                  <p className="relative mt-3 text-sm font-bold leading-6 text-slate-500">{description}</p>
-                  <div className="absolute bottom-5 right-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-[#0057ff] shadow-sm transition duration-300 group-hover:bg-[#0057ff] group-hover:text-white">
-                    <ArrowRight size={19} strokeWidth={2.8} />
-                  </div>
+
+                  <img
+                    src={image}
+                    alt=""
+                    aria-hidden="true"
+                    className="pointer-events-none absolute -bottom-4 -right-3 h-[154px] w-[154px] object-contain drop-shadow-[0_20px_22px_rgba(15,23,42,0.2)] transition duration-500 ease-out group-hover:-translate-x-1.5 group-hover:-translate-y-2 group-hover:rotate-[-1deg] group-hover:scale-[1.07]"
+                  />
                 </button>
               ))}
             </div>
@@ -427,18 +424,47 @@ export default function PremiumCategoryGrid({
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {sectionCategories.map((category, index) => {
                 const title = getTitle(category);
-                const Icon = getIcon(title);
+                const image = getCategoryImage(title);
                 const active = selectedCategory === title;
+
                 return (
-                  <button key={`${title}-${index}`} type="button" onClick={() => setCategoryName(title)} className={["group relative min-h-[154px] overflow-hidden rounded-[28px] border p-5 text-left transition duration-300 hover:-translate-y-1 hover:shadow-[0_22px_55px_rgba(0,87,255,0.14)]", active ? "border-[#0057ff] bg-[#0057ff] text-white" : "border-slate-100 bg-[#f8fbff] text-slate-950 hover:border-blue-200 hover:bg-white"].join(" ")}>
-                    <div className="flex items-start justify-between gap-4">
-                      <div className={["flex h-12 w-12 items-center justify-center rounded-2xl transition duration-300", active ? "bg-white text-[#0057ff]" : "bg-white text-[#0057ff] group-hover:bg-[#0057ff] group-hover:text-white"].join(" ")}>
-                        <Icon size={24} strokeWidth={2.7} />
-                      </div>
-                      <span className={["rounded-full px-3 py-1 text-[11px] font-black", active ? "bg-white/15 text-white" : "bg-white text-slate-500"].join(" ")}>{getCount(category)} вариантов</span>
-                    </div>
-                    <h3 className={["mt-5 text-xl font-black leading-tight", active ? "text-white" : "text-slate-950"].join(" ")}>{cleanTitle(title)}</h3>
-                    <ChevronRight size={20} strokeWidth={2.8} className={["absolute bottom-5 right-5 transition duration-300 group-hover:translate-x-1", active ? "text-white" : "text-[#0057ff]"].join(" ")} />
+                  <button
+                    key={`${title}-${index}`}
+                    type="button"
+                    onClick={() => setCategoryName(title)}
+                    className={[
+                      "group relative min-h-[184px] overflow-hidden rounded-[28px] border p-5 text-left transition duration-500 ease-out hover:-translate-y-1.5 hover:shadow-[0_24px_60px_rgba(0,87,255,0.15)] active:scale-[0.98]",
+                      active
+                        ? "border-[#0057ff] bg-[#0057ff] text-white"
+                        : "border-slate-100 bg-[#f8fbff] text-slate-950 hover:border-blue-200 hover:bg-white",
+                    ].join(" ")}
+                  >
+                    <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_88%_82%,rgba(0,87,255,0.12),transparent_44%)] opacity-70 transition duration-500 group-hover:opacity-100" />
+
+                    <span
+                      className={[
+                        "relative z-10 inline-flex rounded-full px-3 py-1 text-[11px] font-black",
+                        active ? "bg-white/15 text-white" : "bg-white text-slate-500",
+                      ].join(" ")}
+                    >
+                      {getCount(category)} вариантов
+                    </span>
+
+                    <h3
+                      className={[
+                        "relative z-10 mt-5 max-w-[62%] text-xl font-black leading-tight",
+                        active ? "text-white" : "text-slate-950",
+                      ].join(" ")}
+                    >
+                      {cleanTitle(title)}
+                    </h3>
+
+                    <img
+                      src={image}
+                      alt=""
+                      aria-hidden="true"
+                      className="pointer-events-none absolute -bottom-4 -right-2 h-[126px] w-[126px] object-contain drop-shadow-[0_16px_18px_rgba(15,23,42,0.18)] transition duration-500 ease-out group-hover:-translate-x-1 group-hover:-translate-y-2 group-hover:rotate-[-1deg] group-hover:scale-[1.08]"
+                    />
                   </button>
                 );
               })}
@@ -456,9 +482,18 @@ export default function PremiumCategoryGrid({
 
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {visibleSubcategories.map((item) => (
-                  <button key={item} type="button" onClick={() => setSubcategory(item)} className={["group flex min-h-16 items-center justify-between gap-4 rounded-2xl border px-4 py-3 text-left transition duration-300 hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-lg hover:shadow-blue-900/5", selectedSubcategory === item ? "border-[#0057ff] bg-[#0057ff] text-white" : "border-slate-200 bg-white text-slate-800"].join(" ")}>
-                    <span className="font-black leading-5">{item}</span>
-                    <ChevronRight size={18} strokeWidth={2.8} className={selectedSubcategory === item ? "text-white" : "text-[#0057ff]"} />
+                  <button
+                    key={item}
+                    type="button"
+                    onClick={() => setSubcategory(item)}
+                    className={[
+                      "group flex min-h-16 items-center rounded-2xl border px-5 py-3 text-left transition duration-300 ease-out hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-lg hover:shadow-blue-900/5 active:scale-[0.985]",
+                      selectedSubcategory === item
+                        ? "border-[#0057ff] bg-[#0057ff] text-white"
+                        : "border-slate-200 bg-white text-slate-800",
+                    ].join(" ")}
+                  >
+                    <span className="font-black leading-5 transition duration-300 group-hover:translate-x-1">{item}</span>
                   </button>
                 ))}
               </div>
@@ -476,15 +511,23 @@ export default function PremiumCategoryGrid({
           {activeCategory && subcategory ? (
             <div className="grid gap-4 sm:grid-cols-2">
               {actions.map((action, index) => (
-                <button key={`${action.title}-${index}`} type="button" onClick={() => apply(action.selection)} className="group flex min-h-[126px] items-center gap-4 rounded-[28px] border border-slate-100 bg-[#f8fbff] p-5 text-left transition duration-300 hover:-translate-y-1 hover:border-blue-200 hover:bg-white hover:shadow-[0_22px_55px_rgba(0,87,255,0.14)]">
-                  <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white text-2xl shadow-sm transition duration-300 group-hover:scale-105">{action.icon}</span>
-                  <span className="min-w-0 flex-1">
+                <button
+                  key={`${action.title}-${index}`}
+                  type="button"
+                  onClick={() => apply(action.selection)}
+                  className="group relative min-h-[142px] overflow-hidden rounded-[28px] border border-slate-100 bg-[#f8fbff] p-5 text-left transition duration-500 ease-out hover:-translate-y-1.5 hover:border-blue-200 hover:bg-white hover:shadow-[0_24px_60px_rgba(0,87,255,0.15)] active:scale-[0.98]"
+                >
+                  <span className="relative z-10 block max-w-[68%]">
                     <span className="block text-lg font-black text-slate-950">{action.title}</span>
-                    <span className="mt-1 block text-sm font-bold leading-5 text-slate-500">{action.description}</span>
+                    <span className="mt-2 block text-sm font-bold leading-5 text-slate-500">{action.description}</span>
                   </span>
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white text-[#0057ff] transition duration-300 group-hover:bg-[#0057ff] group-hover:text-white">
-                    <ArrowRight size={18} strokeWidth={2.8} />
-                  </span>
+
+                  <img
+                    src={action.image}
+                    alt=""
+                    aria-hidden="true"
+                    className="pointer-events-none absolute -bottom-3 -right-1 h-[112px] w-[112px] object-contain drop-shadow-[0_15px_18px_rgba(15,23,42,0.18)] transition duration-500 ease-out group-hover:-translate-x-1 group-hover:-translate-y-2 group-hover:rotate-[-1deg] group-hover:scale-[1.08]"
+                  />
                 </button>
               ))}
             </div>

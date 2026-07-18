@@ -181,7 +181,14 @@ export default function ListingPage() {
 
     if (!listing) return;
 
-    if (user.uid === listing.authorId) {
+    if (!listing.authorId) {
+      setChatError("У объявления не указан исполнитель.");
+      return;
+    }
+
+    const ownerId = listing.authorId;
+
+    if (user.uid === ownerId) {
       router.push("/messages");
       return;
     }
@@ -189,7 +196,7 @@ export default function ListingPage() {
     setChatLoading(true);
 
     try {
-      const chatId = getChatId(listing.id, listing.authorId, user.uid);
+      const chatId = getChatId(listing.id, ownerId, user.uid);
       const chatRef = doc(db, "chats", chatId);
 
       const currentUserName =
@@ -208,10 +215,10 @@ export default function ListingPage() {
           listingId: listing.id,
           listingTitle: listing.title,
           listingImageUrl: listing.imageUrls?.[0] || listing.media?.find((item) => item.type === "image")?.url || "",
-          participantIds: [listing.authorId, user.uid],
+          participantIds: [ownerId, user.uid],
           participants: {
-            [listing.authorId]: {
-              uid: listing.authorId,
+            [ownerId]: {
+              uid: ownerId,
               displayName: ownerName,
               avatarUrl: ownerAvatar,
             },
@@ -221,7 +228,7 @@ export default function ListingPage() {
               avatarUrl: currentAvatar,
             },
           },
-          ownerId: listing.authorId,
+          ownerId,
           clientId: user.uid,
           lastMessageText: "Чат создан",
           updatedAt: serverTimestamp(),

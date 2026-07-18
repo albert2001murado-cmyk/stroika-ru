@@ -67,7 +67,7 @@ const ACTIONS: Record<OfferGroup, OfferActionOption[]> = {
     {
       id: "material_production",
       label: "Производство материалов",
-      description: "Собственное производство и изготовление",
+      description: "Материалы собственного производства ",
       keywords: ["производитель", "производство", "изготовление", "завод"],
     },
     {

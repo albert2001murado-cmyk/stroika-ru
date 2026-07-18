@@ -1,9 +1,10 @@
 "use client";
 
-import  {ListingCard}  from "@/components/ListingCard";
+import CustomerRequestCard from "@/components/CustomerRequestCard";
+import { ListingCard } from "@/components/ListingCard";
 import { useAuth } from "@/components/AuthProvider";
 import { db } from "@/lib/firebase";
-import type { AccountType, Listing } from "@/types";
+import type { AccountType, CustomerRequest, Listing } from "@/types";
 import { updateProfile } from "firebase/auth";
 import {
   collection,
@@ -18,15 +19,19 @@ import {
 import {
   Building2,
   Camera,
+  ClipboardList,
+  HardHat,
   Loader2,
   Mail,
   MapPin,
   Phone,
+  Plus,
   Save,
   Trash2,
   UserRound,
 } from "lucide-react";
 import Link from "next/link";
+import ProfileTools from "@/components/ProfileTools";
 import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 
 type UploadedFile = {
@@ -52,6 +57,8 @@ export default function ProfilePage() {
   const [avatarPreview, setAvatarPreview] = useState("");
 
   const [listings, setListings] = useState<Listing[]>([]);
+  const [requests, setRequests] = useState<CustomerRequest[]>([]);
+  const [publicationTab, setPublicationTab] = useState<"listings" | "requests">("listings");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -91,6 +98,32 @@ export default function ProfilePage() {
     });
 
     return () => unsub();
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const requestQuery = query(
+      collection(db, "customerRequests"),
+      where("customerId", "==", user.uid)
+    );
+
+    const unsubscribe = onSnapshot(requestQuery, (snapshot) => {
+      const data = snapshot.docs.map((document) => ({
+        id: document.id,
+        ...document.data(),
+      })) as CustomerRequest[];
+
+      data.sort((a, b) => {
+        const aTime = a.createdAt?.toMillis?.() || 0;
+        const bTime = b.createdAt?.toMillis?.() || 0;
+        return bTime - aTime;
+      });
+
+      setRequests(data);
+    });
+
+    return () => unsubscribe();
   }, [user]);
 
   function handleAvatarChange(e: ChangeEvent<HTMLInputElement>) {
@@ -208,6 +241,12 @@ export default function ProfilePage() {
     await deleteDoc(doc(db, "listings", id));
   }
 
+  async function handleDeleteRequest(id: string) {
+    const ok = confirm("Удалить заявку заказчика?");
+    if (!ok) return;
+    await deleteDoc(doc(db, "customerRequests", id));
+  }
+
   if (loading) {
     return (
       <main className="min-h-screen bg-[#f5f7fb] px-5 py-10">
@@ -241,12 +280,16 @@ export default function ProfilePage() {
           <p className="font-black text-[#ffd233]">Личный кабинет</p>
 
           <h1 className="mt-3 text-4xl font-black md:text-5xl">
-            Профиль исполнителя
+            Мой профиль
           </h1>
 
           <p className="mt-3 max-w-2xl text-blue-50">
-            Здесь можно менять фото, данные профиля и смотреть свои объявления.
+            Управляй данными профиля, анкетами исполнителя и заявками заказчика.
           </p>
+        </div>
+
+        <div className="mt-6">
+          <ProfileTools />
         </div>
 
         <div className="mt-6 grid gap-6 lg:grid-cols-[420px_1fr]">
@@ -413,49 +456,126 @@ export default function ProfilePage() {
           </form>
 
           <section className="rounded-[30px] bg-white p-6 shadow-sm">
-            <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
               <div>
                 <h2 className="text-3xl font-black text-gray-950">
-                  Мои объявления
+                  Мои публикации
                 </h2>
                 <p className="mt-2 text-gray-500">
-                  Всего объявлений: {listings.length}
+                  Анкеты исполнителя: {listings.length} · Заявки заказчика: {requests.length}
                 </p>
               </div>
 
-              <Link href="/post/new" className="btn-yellow">
-                Разместить ещё
-              </Link>
+              <div className="flex flex-wrap gap-2">
+                <Link
+                  href="/post/new"
+                  className="inline-flex items-center gap-2 rounded-2xl bg-[#0057ff] px-4 py-3 text-sm font-black text-white transition hover:-translate-y-0.5 hover:shadow-lg active:scale-95"
+                >
+                  <HardHat size={18} />
+                  Анкета исполнителя
+                </Link>
+                <Link
+                  href="/requests/new"
+                  className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-black text-white transition hover:-translate-y-0.5 hover:shadow-lg active:scale-95"
+                >
+                  <Plus size={18} />
+                  Заявка заказчика
+                </Link>
+              </div>
             </div>
 
-            {listings.length === 0 ? (
+            <div className="mt-6 inline-flex rounded-2xl bg-gray-100 p-1.5">
+              <button
+                type="button"
+                onClick={() => setPublicationTab("listings")}
+                className={`flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-black transition ${
+                  publicationTab === "listings"
+                    ? "bg-[#0057ff] text-white shadow-lg"
+                    : "text-gray-500 hover:text-[#0057ff]"
+                }`}
+              >
+                <HardHat size={18} />
+                Исполнитель ({listings.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setPublicationTab("requests")}
+                className={`flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-black transition ${
+                  publicationTab === "requests"
+                    ? "bg-[#0057ff] text-white shadow-lg"
+                    : "text-gray-500 hover:text-[#0057ff]"
+                }`}
+              >
+                <ClipboardList size={18} />
+                Заказчик ({requests.length})
+              </button>
+            </div>
+
+            {publicationTab === "listings" ? (
+              listings.length === 0 ? (
+                <div className="mt-8 rounded-[26px] border border-dashed border-blue-200 bg-blue-50/50 p-10 text-center">
+                  <h3 className="text-2xl font-black text-gray-950">
+                    У тебя пока нет анкет исполнителя
+                  </h3>
+                  <p className="mt-2 text-gray-500">
+                    Создай первую анкету, и она появится здесь.
+                  </p>
+                </div>
+              ) : (
+                <div className="mt-8 grid gap-5 xl:grid-cols-2">
+                  {listings.map((listing) => (
+                    <div key={listing.id} className="relative">
+                      <ListingCard listing={listing} />
+                      <div className="mt-3 flex gap-2">
+                        <Link
+                          href={`/listing/${listing.id}/edit`}
+                          className="flex-1 rounded-2xl bg-[#0057ff] px-4 py-3 text-center text-sm font-black text-white transition hover:bg-[#004de6] active:scale-[0.98]"
+                        >
+                          Редактировать
+                        </Link>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteListing(listing.id)}
+                          className="flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50 text-red-500 transition hover:bg-red-100 active:scale-90"
+                          title="Удалить объявление"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            ) : requests.length === 0 ? (
               <div className="mt-8 rounded-[26px] border border-dashed border-blue-200 bg-blue-50/50 p-10 text-center">
                 <h3 className="text-2xl font-black text-gray-950">
-                  У тебя пока нет объявлений
+                  У тебя пока нет заявок заказчика
                 </h3>
                 <p className="mt-2 text-gray-500">
-                  Создай первое объявление, и оно появится здесь.
+                  Опиши задачу, бюджет и сроки — заявка появится здесь и в мобильном приложении.
                 </p>
               </div>
             ) : (
               <div className="mt-8 grid gap-5 xl:grid-cols-2">
-                {listings.map((listing) => (
-                  <div key={listing.id} className="relative">
-                    <ListingCard listing={listing} />
-<Link
-  href={`/listing/${listing.id}/edit`}
-  className="mt-3 inline-flex items-center justify-center rounded-2xl bg-[#0057ff] px-4 py-3 text-sm font-black text-white"
->
-  Редактировать
-</Link>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteListing(listing.id)}
-                      className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-full bg-white text-red-500 shadow-lg transition hover:scale-105 hover:bg-red-50"
-                      title="Удалить объявление"
-                    >
-                      <Trash2 size={18} />
-                    </button>
+                {requests.map((request) => (
+                  <div key={request.id}>
+                    <CustomerRequestCard request={request} />
+                    <div className="mt-3 flex gap-2">
+                      <Link
+                        href={`/requests/${request.id}/edit`}
+                        className="flex-1 rounded-2xl bg-[#0057ff] px-4 py-3 text-center text-sm font-black text-white transition hover:bg-[#004de6] active:scale-[0.98]"
+                      >
+                        Редактировать
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteRequest(request.id)}
+                        className="flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50 text-red-500 transition hover:bg-red-100 active:scale-90"
+                        title="Удалить заявку"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
