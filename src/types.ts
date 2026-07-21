@@ -4,6 +4,35 @@ export type MediaType = "image" | "video";
 
 export type FirestoreDate = any;
 
+export type VerificationStatus =
+  | "unverified"
+  | "pending"
+  | "approved"
+  | "rejected";
+
+export type CompanyRegistryType = "LEGAL" | "INDIVIDUAL";
+export type CompanyRegistryStatus =
+  | "ACTIVE"
+  | "LIQUIDATING"
+  | "LIQUIDATED"
+  | "BANKRUPT"
+  | "REORGANIZING";
+
+export type CompanyLookupResult = {
+  inn: string;
+  kpp?: string;
+  ogrn: string;
+  officialName: string;
+  shortName: string;
+  legalAddress?: string;
+  registryType: CompanyRegistryType;
+  registryStatus: CompanyRegistryStatus;
+  managementName?: string;
+  managementPost?: string;
+  registrationDate?: number | null;
+};
+
+
 
 export type UserProfile = {
   uid: string;
@@ -11,6 +40,7 @@ export type UserProfile = {
   username?: string;
   displayName?: string;
   name?: string;
+  representativeName?: string;
   photoURL?: string;
   avatarUrl?: string;
   avatarPath?: string;
@@ -22,11 +52,25 @@ export type UserProfile = {
   xp?: number;
   accountType?: AccountType;
   companyName?: string;
+  companyOfficialName?: string;
+  companyShortName?: string;
+  companyInn?: string;
+  companyKpp?: string;
+  companyOgrn?: string;
+  companyLegalAddress?: string;
+  companyRegistryType?: CompanyRegistryType;
+  companyRegistryStatus?: CompanyRegistryStatus;
+  companyManagementName?: string;
+  companyManagementPost?: string;
+  companyLookupProvider?: "dadata";
+  companyRegistryCheckedAt?: FirestoreDate;
   city?: string;
   phone?: string;
   verified?: boolean;
   isVerified?: boolean;
-  verificationStatus?: string;
+  verificationStatus?: VerificationStatus;
+  verifiedAt?: FirestoreDate | null;
+  verifiedBy?: string;
   createdAt?: FirestoreDate;
   updatedAt?: FirestoreDate;
   [key: string]: unknown;

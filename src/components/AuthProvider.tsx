@@ -5,17 +5,13 @@ import type { AccountType, UserProfile } from "@/types";
 import {
   User,
   createUserWithEmailAndPassword,
+  deleteUser,
   onAuthStateChanged,
   signInWithEmailAndPassword,
   signOut,
   updateProfile,
 } from "firebase/auth";
-import {
-  doc,
-  onSnapshot,
-  serverTimestamp,
-  setDoc,
-} from "firebase/firestore";
+import { doc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
 import {
   createContext,
   ReactNode,
@@ -30,7 +26,7 @@ type RegisterData = {
   password: string;
   displayName: string;
   accountType: AccountType;
-  companyName?: string;
+  companyInn?: string;
   city?: string;
   phone?: string;
 };
@@ -58,30 +54,75 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       data.password
     );
 
-    await updateProfile(credential.user, {
-      displayName: data.displayName,
-    });
+    const isBusiness = data.accountType === "ip" || data.accountType === "ooo";
 
-    const userProfile: UserProfile = {
-      uid: credential.user.uid,
-      email: data.email,
-      displayName: data.displayName,
-      accountType: data.accountType,
-      companyName: data.companyName || "",
-      city: data.city || "",
-      phone: data.phone || "",
-      avatarUrl: "",
-      avatarPath: "",
-    };
+    try {
+      if (isBusiness) {
+        const token = await credential.user.getIdToken(true);
+        const response = await fetch("/api/register-business", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            accountType: data.accountType,
+            inn: data.companyInn,
+            representativeName: data.displayName,
+            city: data.city,
+            phone: data.phone,
+          }),
+        });
 
-    await setDoc(doc(db, "users", credential.user.uid), {
-      ...userProfile,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload.error || "Не получилось зарегистрировать организацию.");
+        }
 
-    setUser(credential.user);
-    setProfile(userProfile);
+        await credential.user.reload();
+        const businessProfile = payload.profile as UserProfile;
+        setUser(auth.currentUser || credential.user);
+        setProfile(businessProfile);
+        return;
+      }
+
+      const individualName = data.displayName.trim();
+      await updateProfile(credential.user, { displayName: individualName });
+
+      const userProfile: UserProfile = {
+        uid: credential.user.uid,
+        email: data.email,
+        displayName: individualName,
+        representativeName: individualName,
+        accountType: "individual",
+        companyName: "",
+        city: data.city?.trim() || "",
+        phone: data.phone?.trim() || "",
+        avatarUrl: "",
+        avatarPath: "",
+        verified: false,
+        isVerified: false,
+        verificationStatus: "unverified",
+        verifiedAt: null,
+        verifiedBy: "",
+      };
+
+      await setDoc(doc(db, "users", credential.user.uid), {
+        ...userProfile,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+
+      setUser(credential.user);
+      setProfile(userProfile);
+    } catch (error) {
+      try {
+        await deleteUser(credential.user);
+      } catch (deleteError) {
+        console.error("Не получилось откатить созданного пользователя:", deleteError);
+      }
+      throw error;
+    }
   }
 
   async function login(email: string, password: string) {
@@ -114,12 +155,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       unsubscribeProfile = onSnapshot(
         doc(db, "users", currentUser.uid),
         (snapshot) => {
-          if (snapshot.exists()) {
-            setProfile(snapshot.data() as UserProfile);
-          } else {
-            setProfile(null);
-          }
-
+          setProfile(snapshot.exists() ? (snapshot.data() as UserProfile) : null);
           setLoading(false);
         },
         (error) => {
@@ -132,22 +168,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => {
       unsubscribeAuth();
-
-      if (unsubscribeProfile) {
-        unsubscribeProfile();
-      }
+      if (unsubscribeProfile) unsubscribeProfile();
     };
   }, []);
 
   const value = useMemo<AuthContextValue>(
-    () => ({
-      user,
-      profile,
-      loading,
-      register,
-      login,
-      logout,
-    }),
+    () => ({ user, profile, loading, register, login, logout }),
     [user, profile, loading]
   );
 
@@ -156,14 +182,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export function useAuth() {
   const context = useContext(AuthContext);
-
   if (!context) {
     throw new Error("useAuth должен использоваться внутри AuthProvider");
   }
-
   return context;
 }
-
-
-
-

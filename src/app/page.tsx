@@ -380,28 +380,11 @@ export default function HomePage() {
     );
   }, [feedMode, listings, requests]);
 
-  const priceCeiling = useMemo(() => {
-    const values =
-      feedMode === "contractors"
-        ? listings.flatMap((listing) => {
-            const range = listingPriceRange(listing);
-            return [range.from, range.to].filter(
-              (value): value is number => value !== null && value > 0
-            );
-          })
-        : requests.flatMap((request) => {
-            const range = requestPriceRange(request);
-            return [range.from, range.to].filter(
-              (value): value is number => value !== null && value > 0
-            );
-          });
+  // Верхняя граница фильтра фиксирована на 9 млн рублей,
+  // чтобы можно было искать крупные строительные работы и проекты.
+  const priceCeiling = 9_000_000;
 
-    const rawMax = values.length ? Math.max(...values) : 100_000;
-    const rounded = Math.ceil(rawMax / 10_000) * 10_000;
-    return Math.max(100_000, rounded);
-  }, [feedMode, listings, requests]);
-
-  const priceStep = priceCeiling >= 1_000_000 ? 10_000 : 1_000;
+  const priceStep = 10_000;
 
   useEffect(() => {
     if (priceTo !== null && priceTo > priceCeiling) {

@@ -126,27 +126,48 @@ function getCount(category: CategoryLike) {
   return typeof category.count === "number" ? category.count : category.subcategories?.length || 0;
 }
 
-function getPopular(category: CategoryLike) {
-  const all = category.subcategories || [];
-  if (!normalize(getTitle(category)).includes("материал")) return all.slice(0, 16);
+const SUBCATEGORY_PAGE_SIZE = 18;
 
-  const preferred = [
-    "Бетон",
-    "Цемент",
-    "Кирпич",
-    "Арматура",
-    "Газобетонные блоки",
-    "Песок",
-    "Щебень",
-    "Пиломатериалы",
-    "Кровельные материалы",
-    "Кабель и провод",
-    "Трубы водопроводные",
-    "Утеплитель минеральная вата",
-  ];
+function getOrderedSubcategories(category: CategoryLike) {
+  const all = category.subcategories || [];
+  const title = normalize(getTitle(category));
+
+  const preferred = title.includes("материал")
+    ? [
+        "Бетон",
+        "Цемент",
+        "Кирпич",
+        "Арматура",
+        "Газобетонные блоки",
+        "Песок",
+        "Щебень",
+        "Пиломатериалы",
+        "Кровельные материалы",
+        "Кабель и провод",
+        "Трубы водопроводные",
+        "Утеплитель минеральная вата",
+      ]
+    : title.includes("спецтехника")
+      ? [
+          "Экскаваторы",
+          "Мини-экскаваторы",
+          "Экскаваторы-погрузчики",
+          "Фронтальные погрузчики",
+          "Автокраны",
+          "Манипуляторы",
+          "Самосвалы",
+          "Автовышки",
+          "Бетононасосы",
+          "Автобетоносмесители (миксеры)",
+          "Бульдозеры",
+          "Тракторы",
+        ]
+      : [];
+
+  if (!preferred.length) return all;
 
   const found = preferred.filter((item) => all.includes(item));
-  return [...found, ...all.filter((item) => !found.includes(item))].slice(0, 18);
+  return [...found, ...all.filter((item) => !found.includes(item))];
 }
 
 function buildActions(category: CategoryLike, subcategory: string): Array<{
@@ -297,6 +318,7 @@ export default function PremiumCategoryGrid({
   const [categoryName, setCategoryName] = useState("");
   const [subcategory, setSubcategory] = useState("");
   const [search, setSearch] = useState("");
+  const [subcategoryPage, setSubcategoryPage] = useState(1);
 
   const section = sections.find((item) => item.id === sectionId) || null;
   const activeCategory = categories.find((item) => getTitle(item) === categoryName);
@@ -309,13 +331,35 @@ export default function PremiumCategoryGrid({
     });
   }, [categories, section]);
 
-  const visibleSubcategories = useMemo(() => {
+  const filteredSubcategories = useMemo(() => {
     if (!activeCategory) return [];
-    const all = activeCategory.subcategories || [];
+    const all = getOrderedSubcategories(activeCategory);
     const value = normalize(search);
-    if (!value) return getPopular(activeCategory);
-    return all.filter((item) => normalize(item).includes(value)).slice(0, 24);
+    if (!value) return all;
+    return all.filter((item) => normalize(item).includes(value));
   }, [activeCategory, search]);
+
+  const subcategoryPageCount = Math.max(
+    1,
+    Math.ceil(filteredSubcategories.length / SUBCATEGORY_PAGE_SIZE)
+  );
+  const safeSubcategoryPage = Math.min(
+    Math.max(subcategoryPage, 1),
+    subcategoryPageCount
+  );
+  const visibleSubcategories = filteredSubcategories.slice(
+    (safeSubcategoryPage - 1) * SUBCATEGORY_PAGE_SIZE,
+    safeSubcategoryPage * SUBCATEGORY_PAGE_SIZE
+  );
+  const subcategoryPageNumbers = Array.from(
+    { length: subcategoryPageCount },
+    (_, index) => index + 1
+  ).filter(
+    (pageNumber) =>
+      pageNumber === 1 ||
+      pageNumber === subcategoryPageCount ||
+      Math.abs(pageNumber - safeSubcategoryPage) <= 1
+  );
 
   const actions = activeCategory ? buildActions(activeCategory, subcategory) : [];
 
@@ -324,6 +368,7 @@ export default function PremiumCategoryGrid({
     setCategoryName("");
     setSubcategory("");
     setSearch("");
+    setSubcategoryPage(1);
     onSelectCategory?.("");
     onApplySelection?.({ category: "", subcategory: "", search: "" });
   }
@@ -333,9 +378,19 @@ export default function PremiumCategoryGrid({
     if (categoryName) {
       setCategoryName("");
       setSearch("");
+      setSubcategoryPage(1);
       return;
     }
     setSectionId(null);
+    setSubcategoryPage(1);
+  }
+
+  function changeSubcategoryPage(nextPage: number) {
+    const targetPage = Math.min(
+      Math.max(nextPage, 1),
+      subcategoryPageCount
+    );
+    setSubcategoryPage(targetPage);
   }
 
   function apply(selection: CategorySelection) {
@@ -431,7 +486,11 @@ export default function PremiumCategoryGrid({
                   <button
                     key={`${title}-${index}`}
                     type="button"
-                    onClick={() => setCategoryName(title)}
+                    onClick={() => {
+                      setCategoryName(title);
+                      setSearch("");
+                      setSubcategoryPage(1);
+                    }}
                     className={[
                       "group relative min-h-[184px] overflow-hidden rounded-[28px] border p-5 text-left transition duration-500 ease-out hover:-translate-y-1.5 hover:shadow-[0_24px_60px_rgba(0,87,255,0.15)] active:scale-[0.98]",
                       active
@@ -476,29 +535,109 @@ export default function PremiumCategoryGrid({
               {(activeCategory.subcategories?.length || 0) > 10 ? (
                 <div className="relative mb-5">
                   <Search size={20} className="pointer-events-none absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={`Найти внутри «${cleanTitle(getTitle(activeCategory))}»`} className="h-14 w-full rounded-2xl border border-slate-200 bg-[#f8fafc] pl-14 pr-5 text-sm font-bold text-slate-950 outline-none transition focus:border-[#0057ff] focus:bg-white focus:ring-4 focus:ring-blue-100" />
+                  <input
+                    value={search}
+                    onChange={(event) => {
+                      setSearch(event.target.value);
+                      setSubcategoryPage(1);
+                    }}
+                    placeholder={`Найти внутри «${cleanTitle(getTitle(activeCategory))}»`}
+                    className="h-14 w-full rounded-2xl border border-slate-200 bg-[#f8fafc] pl-14 pr-5 text-sm font-bold text-slate-950 outline-none transition focus:border-[#0057ff] focus:bg-white focus:ring-4 focus:ring-blue-100"
+                  />
                 </div>
               ) : null}
 
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {filteredSubcategories.length > 0 ? (
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-sm font-bold text-slate-500">
+                    Найдено позиций: {filteredSubcategories.length}
+                  </p>
+                  {subcategoryPageCount > 1 ? (
+                    <span className="rounded-full bg-blue-50 px-3 py-1.5 text-xs font-black text-[#0057ff] ring-1 ring-blue-100">
+                      Страница {safeSubcategoryPage} из {subcategoryPageCount}
+                    </span>
+                  ) : null}
+                </div>
+              ) : null}
+
+              <div
+                key={`${categoryName}-${search}-${safeSubcategoryPage}`}
+                className="catalog-page-stage grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
+              >
                 {visibleSubcategories.map((item) => (
                   <button
                     key={item}
                     type="button"
                     onClick={() => setSubcategory(item)}
                     className={[
-                      "group flex min-h-16 items-center rounded-2xl border px-5 py-3 text-left transition duration-300 ease-out hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-lg hover:shadow-blue-900/5 active:scale-[0.985]",
+                      "group flex min-h-16 items-center justify-between gap-3 rounded-2xl border px-5 py-3 text-left transition duration-300 ease-out hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-lg hover:shadow-blue-900/5 active:scale-[0.985]",
                       selectedSubcategory === item
                         ? "border-[#0057ff] bg-[#0057ff] text-white"
                         : "border-slate-200 bg-white text-slate-800",
                     ].join(" ")}
                   >
                     <span className="font-black leading-5 transition duration-300 group-hover:translate-x-1">{item}</span>
+                    <ArrowRight
+                      size={17}
+                      className="shrink-0 text-[#0057ff] opacity-0 transition duration-300 group-hover:translate-x-1 group-hover:opacity-100"
+                    />
                   </button>
                 ))}
               </div>
 
-              {visibleSubcategories.length === 0 ? (
+              {subcategoryPageCount > 1 && filteredSubcategories.length > 0 ? (
+                <div className="mt-6 flex flex-wrap items-center justify-center gap-2 rounded-[24px] border border-blue-100 bg-blue-50/50 p-3">
+                  <button
+                    type="button"
+                    onClick={() => changeSubcategoryPage(safeSubcategoryPage - 1)}
+                    disabled={safeSubcategoryPage === 1}
+                    aria-label="Предыдущая страница каталога"
+                    className="group flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-[#0057ff] shadow-sm ring-1 ring-blue-100 transition duration-300 hover:-translate-x-0.5 hover:shadow-lg active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:translate-x-0"
+                  >
+                    <ArrowLeft size={18} className="transition duration-300 group-hover:-translate-x-0.5" />
+                  </button>
+
+                  <div className="flex flex-wrap items-center justify-center gap-2">
+                    {subcategoryPageNumbers.map((pageNumber, index) => {
+                      const previous = subcategoryPageNumbers[index - 1];
+                      const showGap = previous && pageNumber - previous > 1;
+
+                      return (
+                        <span key={pageNumber} className="flex items-center gap-2">
+                          {showGap ? (
+                            <span className="px-1 font-black text-slate-400">…</span>
+                          ) : null}
+                          <button
+                            type="button"
+                            onClick={() => changeSubcategoryPage(pageNumber)}
+                            aria-current={pageNumber === safeSubcategoryPage ? "page" : undefined}
+                            className={[
+                              "flex h-11 min-w-11 items-center justify-center rounded-2xl px-3 text-sm font-black transition duration-300 active:scale-95",
+                              pageNumber === safeSubcategoryPage
+                                ? "bg-[#0057ff] text-white shadow-lg shadow-blue-600/20"
+                                : "bg-white text-slate-600 ring-1 ring-blue-100 hover:-translate-y-0.5 hover:text-[#0057ff] hover:shadow-lg",
+                            ].join(" ")}
+                          >
+                            {pageNumber}
+                          </button>
+                        </span>
+                      );
+                    })}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => changeSubcategoryPage(safeSubcategoryPage + 1)}
+                    disabled={safeSubcategoryPage === subcategoryPageCount}
+                    aria-label="Следующая страница каталога"
+                    className="group flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-[#0057ff] shadow-sm ring-1 ring-blue-100 transition duration-300 hover:translate-x-0.5 hover:shadow-lg active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:translate-x-0"
+                  >
+                    <ArrowRight size={18} className="transition duration-300 group-hover:translate-x-0.5" />
+                  </button>
+                </div>
+              ) : null}
+
+              {filteredSubcategories.length === 0 ? (
                 <div className="rounded-[26px] border border-dashed border-blue-200 bg-blue-50/50 p-8 text-center">
                   <Search size={28} className="mx-auto text-[#0057ff]" />
                   <p className="mt-3 font-black text-slate-950">Ничего не найдено</p>
@@ -541,6 +680,7 @@ export default function PremiumCategoryGrid({
           to { opacity: 1; transform: translateY(0) scale(1); }
         }
         .category-stage { animation: categoryStageIn 260ms ease-out both; }
+        .catalog-page-stage { animation: categoryStageIn 240ms ease-out both; }
       `}</style>
     </section>
   );

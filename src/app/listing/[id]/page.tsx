@@ -5,7 +5,10 @@ import { db } from "@/lib/firebase";
 import type { Listing, Review, UserProfile } from "@/types";
 import {
   Banknote,
+  ChevronLeft,
+  ChevronRight,
   CreditCard,
+  ImageIcon,
   Loader2,
   MapPin,
   MessageCircle,
@@ -13,6 +16,7 @@ import {
   PlayCircle,
   Star,
   UserRound,
+  X,
 } from "lucide-react";
 import {
   addDoc,
@@ -72,6 +76,8 @@ export default function ListingPage() {
   const [reviewText, setReviewText] = useState("");
   const [loading, setLoading] = useState(true);
   const [activeMediaUrl, setActiveMediaUrl] = useState("");
+  const [galleryOpen, setGalleryOpen] = useState(false);
+  const [galleryImageIndex, setGalleryImageIndex] = useState(0);
   const [chatLoading, setChatLoading] = useState(false);
   const [chatError, setChatError] = useState("");
 
@@ -170,6 +176,67 @@ export default function ListingPage() {
 
   const activeMedia =
     allMedia.find((item) => item.url === activeMediaUrl) || allMedia[0];
+
+  const listingImages = useMemo(
+    () => allMedia.filter((item) => item.type === "image"),
+    [allMedia]
+  );
+
+  const galleryImage = listingImages[galleryImageIndex]?.url || "";
+
+  useEffect(() => {
+    if (galleryImageIndex >= listingImages.length) {
+      setGalleryImageIndex(0);
+    }
+  }, [galleryImageIndex, listingImages.length]);
+
+  useEffect(() => {
+    if (!galleryOpen) return;
+
+    function handleGalleryKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setGalleryOpen(false);
+      if (event.key === "ArrowLeft") {
+        setGalleryImageIndex((current) =>
+          listingImages.length
+            ? (current - 1 + listingImages.length) % listingImages.length
+            : 0
+        );
+      }
+      if (event.key === "ArrowRight") {
+        setGalleryImageIndex((current) =>
+          listingImages.length ? (current + 1) % listingImages.length : 0
+        );
+      }
+    }
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleGalleryKeyDown);
+
+    return () => {
+      document.body.style.overflow = "";
+      window.removeEventListener("keydown", handleGalleryKeyDown);
+    };
+  }, [galleryOpen, listingImages.length]);
+
+  function openImageGallery(imageUrl: string) {
+    const index = listingImages.findIndex((item) => item.url === imageUrl);
+    setGalleryImageIndex(index >= 0 ? index : 0);
+    setGalleryOpen(true);
+  }
+
+  function showPreviousGalleryImage() {
+    setGalleryImageIndex((current) =>
+      listingImages.length
+        ? (current - 1 + listingImages.length) % listingImages.length
+        : 0
+    );
+  }
+
+  function showNextGalleryImage() {
+    setGalleryImageIndex((current) =>
+      listingImages.length ? (current + 1) % listingImages.length : 0
+    );
+  }
 
   async function handleStartChat() {
     setChatError("");
@@ -317,11 +384,24 @@ export default function ListingPage() {
                         controls
                       />
                     ) : (
-                      <img
-                        src={activeMedia?.url}
-                        alt={listing.title}
-                        className="max-h-[620px] max-w-full object-contain"
-                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          activeMedia?.url && openImageGallery(activeMedia.url)
+                        }
+                        className="group relative flex min-h-[420px] w-full cursor-zoom-in items-center justify-center overflow-hidden"
+                        aria-label="Открыть фотографию на весь экран"
+                      >
+                        <img
+                          src={activeMedia?.url}
+                          alt={listing.title}
+                          className="max-h-[620px] max-w-full object-contain transition duration-700 ease-out group-hover:scale-[1.015]"
+                        />
+                        <span className="pointer-events-none absolute bottom-4 left-4 inline-flex items-center gap-2 rounded-2xl bg-slate-950/65 px-3.5 py-2 text-xs font-black text-white opacity-0 shadow-lg backdrop-blur-md transition duration-300 group-hover:opacity-100">
+                          <ImageIcon size={15} />
+                          Открыть фото
+                        </span>
+                      </button>
                     )}
                   </div>
 
@@ -574,6 +654,55 @@ export default function ListingPage() {
           </aside>
         </div>
       </div>
+      {galleryOpen && galleryImage ? (
+        <div
+          className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-950/95 p-4 backdrop-blur-sm"
+          onMouseDown={(event) => {
+            if (event.currentTarget === event.target) setGalleryOpen(false);
+          }}
+        >
+          <div className="absolute left-4 top-4 rounded-2xl bg-white/10 px-4 py-2 text-sm font-black text-white ring-1 ring-white/15 backdrop-blur-md sm:left-6 sm:top-6">
+            {galleryImageIndex + 1} из {listingImages.length}
+          </div>
+
+          <button
+            type="button"
+            aria-label="Закрыть галерею"
+            onClick={() => setGalleryOpen(false)}
+            className="absolute right-4 top-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 text-white ring-1 ring-white/20 transition duration-300 hover:rotate-90 hover:bg-white/20 active:scale-90 sm:right-6 sm:top-6"
+          >
+            <X size={25} />
+          </button>
+
+          {listingImages.length > 1 ? (
+            <button
+              type="button"
+              aria-label="Предыдущее фото"
+              onClick={showPreviousGalleryImage}
+              className="absolute left-3 top-1/2 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-2xl bg-white/10 text-white ring-1 ring-white/20 transition duration-300 hover:bg-white hover:text-slate-950 active:scale-90 sm:left-6 sm:h-14 sm:w-14"
+            >
+              <ChevronLeft size={28} />
+            </button>
+          ) : null}
+
+          <img
+            src={galleryImage}
+            alt={`Фотография объявления ${galleryImageIndex + 1}`}
+            className="max-h-[88vh] max-w-[88vw] rounded-[24px] object-contain shadow-2xl"
+          />
+
+          {listingImages.length > 1 ? (
+            <button
+              type="button"
+              aria-label="Следующее фото"
+              onClick={showNextGalleryImage}
+              className="absolute right-3 top-1/2 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-2xl bg-white/10 text-white ring-1 ring-white/20 transition duration-300 hover:bg-white hover:text-slate-950 active:scale-90 sm:right-6 sm:h-14 sm:w-14"
+            >
+              <ChevronRight size={28} />
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </main>
   );
 }

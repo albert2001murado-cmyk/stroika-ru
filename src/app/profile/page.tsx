@@ -17,8 +17,10 @@ import {
   where,
 } from "firebase/firestore";
 import {
+  BadgeCheck,
   Building2,
   Camera,
+  Clock3,
   ClipboardList,
   HardHat,
   Loader2,
@@ -198,8 +200,13 @@ export default function ProfilePage() {
         }
       }
 
+      const businessAccount = accountType === "ip" || accountType === "ooo";
+      const safeDisplayName = businessAccount
+        ? profile?.companyShortName || profile?.companyName || profile?.displayName || displayName
+        : displayName.trim();
+
       await updateProfile(user, {
-        displayName: displayName.trim(),
+        displayName: safeDisplayName,
         photoURL: finalAvatarUrl || null,
       });
 
@@ -208,9 +215,7 @@ export default function ProfilePage() {
         {
           uid: user.uid,
           email: user.email,
-          displayName: displayName.trim(),
-          accountType,
-          companyName: companyName.trim(),
+          displayName: safeDisplayName,
           city: city.trim(),
           phone: phone.trim(),
           avatarUrl: finalAvatarUrl,
@@ -272,6 +277,9 @@ export default function ProfilePage() {
   }
 
   const shownAvatar = avatarPreview || avatarUrl;
+  const businessAccount = accountType === "ip" || accountType === "ooo";
+  const verificationApproved = profile?.verificationStatus === "approved";
+  const verificationRejected = profile?.verificationStatus === "rejected";
 
   return (
     <main className="min-h-screen bg-[#f5f7fb] px-5 py-8">
@@ -346,9 +354,10 @@ export default function ProfilePage() {
                 <input
                   className="input"
                   style={{ paddingLeft: "58px" }}
-                  placeholder="Имя или название исполнителя"
+                  placeholder={businessAccount ? "Официальное название" : "Имя исполнителя"}
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
+                  disabled={businessAccount}
                 />
               </div>
 
@@ -365,40 +374,63 @@ export default function ProfilePage() {
                 />
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-3">
-                {[
-                  { value: "individual", label: "Физлицо" },
-                  { value: "ip", label: "ИП" },
-                  { value: "ooo", label: "ООО" },
-                ].map((item) => (
-                  <button
-                    key={item.value}
-                    type="button"
-                    onClick={() => setAccountType(item.value as AccountType)}
-                    className={`rounded-2xl border px-4 py-4 font-black transition hover:-translate-y-0.5 ${
-                      accountType === item.value
-                        ? "border-[#0057ff] bg-blue-50 text-[#0057ff]"
-                        : "border-gray-200 bg-white text-gray-600"
-                    }`}
-                  >
-                    {item.label}
-                  </button>
-                ))}
+              <div>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  {[
+                    { value: "individual", label: "Физлицо" },
+                    { value: "ip", label: "ИП" },
+                    { value: "ooo", label: "ООО" },
+                  ].map((item) => (
+                    <button
+                      key={item.value}
+                      type="button"
+                      disabled
+                      className={`cursor-not-allowed rounded-2xl border px-4 py-4 font-black ${
+                        accountType === item.value
+                          ? "border-[#0057ff] bg-blue-50 text-[#0057ff]"
+                          : "border-gray-200 bg-gray-50 text-gray-400"
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-2 text-xs font-bold leading-5 text-gray-500">
+                  Тип аккаунта и реквизиты нельзя менять вручную после регистрации.
+                </p>
               </div>
 
-              {(accountType === "ip" || accountType === "ooo") && (
-                <div className="relative">
-                  <Building2
-                    className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
-                    size={20}
-                  />
-                  <input
-                    className="input"
-                    style={{ paddingLeft: "58px" }}
-                    placeholder="Название ИП или ООО"
-                    value={companyName}
-                    onChange={(e) => setCompanyName(e.target.value)}
-                  />
+              {businessAccount && (
+                <div className="rounded-[24px] border border-blue-100 bg-blue-50/60 p-5">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-[#0057ff] shadow-sm">
+                      <Building2 size={22} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-black text-gray-950">{companyName || profile?.companyOfficialName}</p>
+                      <p className="mt-1 text-sm font-bold text-gray-500">
+                        ИНН {profile?.companyInn || "—"} · ОГРН {profile?.companyOgrn || "—"}
+                      </p>
+                      {profile?.companyKpp && (
+                        <p className="mt-1 text-sm font-bold text-gray-500">КПП {profile.companyKpp}</p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className={`mt-4 flex items-center gap-2 rounded-2xl p-3 text-sm font-black ${
+                    verificationApproved
+                      ? "bg-emerald-100 text-emerald-700"
+                      : verificationRejected
+                      ? "bg-red-100 text-red-700"
+                      : "bg-amber-100 text-amber-700"
+                  }`}>
+                    {verificationApproved ? <BadgeCheck size={18} /> : <Clock3 size={18} />}
+                    {verificationApproved
+                      ? "Организация подтверждена"
+                      : verificationRejected
+                      ? "Проверка отклонена"
+                      : "Организация ожидает подтверждения владельца"}
+                  </div>
                 </div>
               )}
 

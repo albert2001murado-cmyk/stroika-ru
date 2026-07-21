@@ -67,7 +67,7 @@ const ACTIONS: Record<OfferGroup, OfferActionOption[]> = {
     {
       id: "material_production",
       label: "Производство материалов",
-      description: "Материалы собственного производства ",
+      description: "Собственное производство и изготовление",
       keywords: ["производитель", "производство", "изготовление", "завод"],
     },
     {
@@ -127,7 +127,7 @@ const ACTIONS: Record<OfferGroup, OfferActionOption[]> = {
     {
       id: "complex_stage",
       label: "Отдельный этап работ",
-      description: "Фундамент, коробка, кровля, отделка или другой этап",
+      description: "Конкретный этап работы",
       keywords: ["этап работ", "отдельный этап", "часть работ"],
     },
     {
@@ -411,8 +411,6 @@ export function matchesListingSearch(
       .join(" ")
   );
 
-  if (text.includes(normalizedQuery)) return true;
-
   const words = normalizedQuery.split(" ").filter(Boolean);
 
   const requiresDelivery = words.includes("доставка");
@@ -436,8 +434,21 @@ export function matchesListingSearch(
       return false;
     }
 
-    if (requiresTurnkey && !text.includes("под ключ")) return false;
+    if (requiresTurnkey) {
+      const offerAction = normalize(listing.offerAction);
+      const offerActionLabel = normalize(listing.offerActionLabel);
+
+      const isTurnkeyOffer =
+        offerAction === "complex_turnkey" ||
+        offerAction === "service_turnkey" ||
+        offerActionLabel === "выполнение под ключ" ||
+        offerActionLabel === "работа под ключ";
+
+      if (!isTurnkeyOffer) return false;
+    }
   }
+
+  if (text.includes(normalizedQuery)) return true;
 
   const actionWords = new Set([
     "доставка",
