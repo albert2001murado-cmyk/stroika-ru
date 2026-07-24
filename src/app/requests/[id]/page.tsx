@@ -1,6 +1,7 @@
 "use client";
 
 import { useAuth } from "@/components/AuthProvider";
+import ReportDialog from "@/components/ReportDialog";
 import { db } from "@/lib/firebase";
 import type { CustomerRequest } from "@/types";
 import { firestoreDateToMillis } from "@/types";
@@ -480,6 +481,12 @@ export default function CustomerRequestPage() {
                       Телефон не указан
                     </div>
                   )}
+                </div>
+              ) : null}
+
+              {!isOwner && user ? (
+                <div className="mt-3">
+                  <ReportDialog targetType="request" targetId={requestId} targetOwnerId={request.customerId || ""} targetTitle={request.title || "Заявка"} buttonClassName="flex w-full items-center justify-center gap-2 rounded-2xl bg-red-50 px-5 py-4 text-sm font-black text-red-600 ring-1 ring-red-100 transition hover:bg-red-100" />
                 </div>
               ) : null}
 

@@ -223,12 +223,6 @@ function buildActions(category: CategoryLike, subcategory: string): Array<{
         image: CATEGORY_IMAGES.repair,
         selection: { category: categoryName, subcategory, search: `${subject} оператор` },
       },
-      {
-        title: "Заказать доставку техники",
-        description: "Перевозка техники до объекта",
-        image: CATEGORY_IMAGES.extra,
-        selection: { category: categoryName, subcategory, search: `${subject} доставка` },
-      },
     ];
   }
 

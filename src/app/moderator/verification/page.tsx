@@ -235,7 +235,7 @@ isModerator: true`}</pre>
                 Заявки приходят сюда. Модератор нажимает одну кнопку — и у профиля появляется галочка.
               </p>
             </div>
-            <button onClick={load} className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-5 py-4 text-sm font-black text-[#0057ff] shadow-lg shadow-blue-950/10"><RefreshCcw size={18} />Обновить</button>
+<div className="flex flex-wrap gap-3"><Link href="/moderator/reports" className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#ffd233] px-5 py-4 text-sm font-black text-slate-950"><ShieldAlert size={18} />Жалобы</Link>            <button onClick={load} className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-5 py-4 text-sm font-black text-[#0057ff] shadow-lg shadow-blue-950/10"><RefreshCcw size={18} />Обновить</button></div>
           </div>
         </section>
 

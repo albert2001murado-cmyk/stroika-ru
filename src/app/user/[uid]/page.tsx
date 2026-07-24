@@ -1,6 +1,8 @@
 "use client";
 
 import { useAuth } from "@/components/AuthProvider";
+import ReportDialog from "@/components/ReportDialog";
+import UserBlockButton from "@/components/UserBlockButton";
 import CustomerRequestCard from "@/components/CustomerRequestCard";
 import { ListingCard } from "@/components/ListingCard";
 import VerifiedBadge from "@/components/VerifiedBadge";
@@ -555,6 +557,13 @@ export default function PublicUserPage() {
                 </div>
               ) : null}
             </div>
+
+            {!isOwner && user ? (
+              <div className="mt-4 flex flex-wrap gap-2">
+                <ReportDialog targetType="profile" targetId={uid} targetOwnerId={uid} targetTitle={profile.displayName || profile.name || "Пользователь"} />
+                <UserBlockButton targetUserId={uid} />
+              </div>
+            ) : null}
 
             <div className="mt-8 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               {profile.city ? (

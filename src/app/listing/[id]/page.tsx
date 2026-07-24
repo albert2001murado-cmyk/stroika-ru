@@ -1,6 +1,7 @@
 "use client";
 
 import { useAuth } from "@/components/AuthProvider";
+import ReportDialog from "@/components/ReportDialog";
 import { db } from "@/lib/firebase";
 import type { Listing, Review, UserProfile } from "@/types";
 import {
@@ -651,6 +652,12 @@ export default function ListingPage() {
               <Phone size={21} />
               Позвонить
             </a>
+
+            {user?.uid !== listing.authorId ? (
+              <div className="mt-3">
+                <ReportDialog targetType="listing" targetId={listing.id} targetOwnerId={listing.authorId || ""} targetTitle={listing.title || "Объявление"} buttonClassName="flex w-full items-center justify-center gap-2 rounded-2xl bg-red-50 px-5 py-4 text-sm font-black text-red-600 ring-1 ring-red-100 transition hover:bg-red-100" />
+              </div>
+            ) : null}
           </aside>
         </div>
       </div>

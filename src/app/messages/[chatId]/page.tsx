@@ -1,6 +1,8 @@
 "use client";
 
 import { useAuth } from "@/components/AuthProvider";
+import ReportDialog from "@/components/ReportDialog";
+import UserBlockButton from "@/components/UserBlockButton";
 import { db } from "@/lib/firebase";
 import { getApiUrl } from "@/lib/getApiUrl";
 import type { Timestamp } from "firebase/firestore";
@@ -98,12 +100,27 @@ export default function ChatPage() {
   const [pageLoading, setPageLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
+  const [blockedEither, setBlockedEither] = useState(false);
 
   const otherId = useMemo(
     () => chat?.participantIds.find((uid) => uid !== user?.uid) || "",
     [chat, user?.uid]
   );
   const other = otherId ? chat?.participants?.[otherId] : null;
+
+  useEffect(() => {
+    if (!user || !otherId) {
+      setBlockedEither(false);
+      return;
+    }
+
+    Promise.all([
+      getDoc(doc(db, "users", user.uid, "blocked", otherId)),
+      getDoc(doc(db, "users", otherId, "blocked", user.uid)),
+    ])
+      .then(([mine, theirs]) => setBlockedEither(mine.exists() || theirs.exists()))
+      .catch(() => undefined);
+  }, [otherId, user]);
 
   useEffect(() => {
     if (loading) return;
@@ -200,6 +217,7 @@ export default function ChatPage() {
   async function handleSend(event: FormEvent) {
     event.preventDefault();
     if (!user || !chat) return;
+    if (blockedEither) { setError("Отправка сообщений заблокирована."); return; }
 
     const clean = text.trim();
     if (!clean && !imageFile) return;
@@ -247,6 +265,20 @@ export default function ChatPage() {
         [`participants.${user.uid}.displayName`]: senderName,
         [`participants.${user.uid}.avatarUrl`]: senderAvatarUrl,
       });
+
+      if (otherId) {
+        user.getIdToken().then((token) => fetch(getApiUrl("/api/push/send"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            recipientId: otherId,
+            title: senderName,
+            body: clean || "📷 Фото",
+            url: `/messages/${chatId}`,
+            chatId,
+          }),
+        })).catch(() => undefined);
+      }
 
       setText("");
       removeImage();
@@ -311,6 +343,22 @@ export default function ChatPage() {
               {chat?.listingTitle && <p className="truncate text-xs font-bold text-[#0057ff] sm:text-sm">{chat.listingTitle}</p>}
             </div>
           </Link>
+          {otherId ? (
+            <div className="flex items-center gap-2">
+              <ReportDialog targetType="chat" targetId={chatId} targetOwnerId={otherId} targetTitle={`Чат с ${other?.displayName || "пользователем"}`} compact buttonClassName="flex h-10 w-10 items-center justify-center rounded-2xl bg-red-50 text-red-600 ring-1 ring-red-100" />
+              <UserBlockButton
+                targetUserId={otherId}
+                compact
+                onChange={() => {
+                  if (!user) return;
+                  Promise.all([
+                    getDoc(doc(db, "users", user.uid, "blocked", otherId)),
+                    getDoc(doc(db, "users", otherId, "blocked", user.uid)),
+                  ]).then(([mine, theirs]) => setBlockedEither(mine.exists() || theirs.exists())).catch(() => undefined);
+                }}
+              />
+            </div>
+          ) : null}
         </header>
 
         {pinned.length > 0 && (
@@ -353,6 +401,7 @@ export default function ChatPage() {
                       <div className={`absolute z-20 mt-1 w-52 rounded-2xl bg-white p-2 shadow-xl ring-1 ring-gray-100 ${isMine ? "right-0" : "left-0"}`}>
                         <button type="button" onClick={() => togglePin(message)} className="chat-action">{message.pinned ? <PinOff size={17} /> : <Pin size={17} />}{message.pinned ? "Открепить" : "Закрепить"}</button>
                         {isMine && message.type === "text" && <button type="button" onClick={() => beginEdit(message)} className="chat-action"><Edit3 size={17} />Изменить</button>}
+                        {!isMine && <ReportDialog targetType="message" targetId={message.id} targetOwnerId={message.senderId} targetTitle="Сообщение в чате" targetSnapshot={{ chatId, text: message.text || "", imageUrl: message.imageUrl || "", type: message.type }} buttonClassName="chat-action text-red-600" />}
                         <button type="button" onClick={() => hideForMe(message)} className="chat-action"><Trash2 size={17} />Удалить у меня</button>
                         {isMine && <button type="button" onClick={() => deleteForEveryone(message)} className="chat-action text-red-600"><Trash2 size={17} />Удалить у всех</button>}
                       </div>
@@ -383,6 +432,9 @@ export default function ChatPage() {
 
         {error && <p className="border-t border-red-100 bg-red-50 px-4 py-2 text-sm font-black text-red-600">{error}</p>}
 
+        {blockedEither ? (
+          <div className="border-t border-red-100 bg-red-50 px-4 py-4 text-center text-sm font-black text-red-600">Отправка сообщений заблокирована</div>
+        ) : (
         <form onSubmit={handleSend} className="flex items-end gap-2 border-t border-gray-100 bg-white p-3 sm:p-4">
           {!editingId && (
             <label className="icon-button cursor-pointer">
@@ -395,6 +447,7 @@ export default function ChatPage() {
             {sending ? <Loader2 className="animate-spin" size={20} /> : <Send size={20} />}
           </button>
         </form>
+        )}
       </div>
     </main>
   );
