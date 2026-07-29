@@ -71,6 +71,7 @@ export type UserProfile = {
   verificationStatus?: VerificationStatus;
   verifiedAt?: FirestoreDate | null;
   verifiedBy?: string;
+  moderationStatus?: string;
   createdAt?: FirestoreDate;
   updatedAt?: FirestoreDate;
   [key: string]: unknown;
@@ -140,6 +141,11 @@ export type Listing = {
   lat?: number | null;
   lng?: number | null;
   geocodedAddress?: string;
+  moderationStatus?: "pending" | "approved" | "rejected";
+  moderationReason?: string;
+  moderationSubmittedAt?: FirestoreDate;
+  moderationReviewedAt?: FirestoreDate;
+  moderationReviewedBy?: string;
   createdAt?: FirestoreDate;
   updatedAt?: FirestoreDate;
   [key: string]: unknown;
@@ -168,6 +174,11 @@ export type CustomerRequest = {
   imageUrls?: string[];
   offersCount?: number;
   viewsCount?: number;
+  moderationStatus?: "pending" | "approved" | "rejected";
+  moderationReason?: string;
+  moderationSubmittedAt?: FirestoreDate;
+  moderationReviewedAt?: FirestoreDate;
+  moderationReviewedBy?: string;
   createdAt?: FirestoreDate;
   updatedAt?: FirestoreDate;
   [key: string]: unknown;

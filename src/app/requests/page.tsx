@@ -3,6 +3,7 @@
 import CustomerRequestCard from "@/components/CustomerRequestCard";
 import { useAuth } from "@/components/AuthProvider";
 import { db } from "@/lib/firebase";
+import { isPublicationApproved } from "@/lib/moderation";
 import type { CustomerRequest } from "@/types";
 import { firestoreDateToMillis } from "@/types";
 import { collection, onSnapshot } from "firebase/firestore";
@@ -35,6 +36,7 @@ export default function RequestsPage() {
       requests.filter(
         (item) =>
           item.status === "active" &&
+          (item.customerId === user?.uid || isPublicationApproved(item)) &&
           (tab === "all" || item.customerId === user?.uid)
       ),
     [requests, tab, user?.uid]
@@ -74,7 +76,7 @@ export default function RequestsPage() {
                 : "text-gray-500 hover:bg-blue-50 hover:text-[#0057ff]"
             }`}
           >
-            Все активные ({requests.filter((item) => item.status === "active").length})
+            Все активные ({requests.filter((item) => item.status === "active" && isPublicationApproved(item)).length})
           </button>
           <button
             type="button"

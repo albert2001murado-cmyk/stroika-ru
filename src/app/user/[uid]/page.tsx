@@ -7,6 +7,7 @@ import CustomerRequestCard from "@/components/CustomerRequestCard";
 import { ListingCard } from "@/components/ListingCard";
 import VerifiedBadge from "@/components/VerifiedBadge";
 import { db } from "@/lib/firebase";
+import { isPublicationApproved } from "@/lib/moderation";
 import { firestoreDateToMillis } from "@/types";
 import type { CustomerRequest, Listing, UserProfile } from "@/types";
 import {
@@ -184,7 +185,7 @@ export default function PublicUserPage() {
             firestoreDateToMillis(first.createdAt)
         );
 
-        setListings(data);
+        setListings(data.filter(isPublicationApproved));
       },
       (error) => {
         console.error("Не получилось загрузить объявления:", error);
@@ -205,7 +206,7 @@ export default function PublicUserPage() {
             firestoreDateToMillis(first.createdAt)
         );
 
-        setRequests(data);
+        setRequests(data.filter(isPublicationApproved));
       },
       (error) => {
         console.error("Не получилось загрузить заявки заказчика:", error);

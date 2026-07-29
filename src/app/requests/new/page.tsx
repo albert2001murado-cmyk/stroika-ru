@@ -186,12 +186,17 @@ export default function NewRequestPage() {
         imageUrls,
         offersCount: 0,
         viewsCount: 0,
+        moderationStatus: "pending",
+        moderationReason: "",
+        moderationSubmittedAt: serverTimestamp(),
+        moderationSource: "web",
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
 
       images.forEach((image) => URL.revokeObjectURL(image.previewUrl));
-      router.push(`/requests/${reference.id}`);
+      alert("Заявка отправлена на модерацию и появится после одобрения.");
+      router.push("/profile");
     } catch (submitError) {
       console.error(submitError);
       setError(
@@ -220,9 +225,9 @@ export default function NewRequestPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f5f7fb] px-5 py-10">
+    <main className="min-h-screen bg-[#f5f7fb] px-3 py-6 sm:px-5 sm:py-10">
       <div className="mx-auto max-w-4xl">
-        <div className="flex items-center gap-4">
+        <div className="flex items-start gap-3 sm:items-center sm:gap-4">
           <Link href="/requests" className="icon-button">
             <ArrowLeft size={21} />
           </Link>
@@ -234,7 +239,7 @@ export default function NewRequestPage() {
 
         <form
           onSubmit={submit}
-          className="mt-7 space-y-6 rounded-[34px] bg-white p-6 shadow-sm ring-1 ring-gray-100 md:p-8"
+          className="mt-5 space-y-5 rounded-[24px] bg-white p-4 shadow-sm ring-1 ring-gray-100 sm:mt-7 sm:space-y-6 sm:rounded-[34px] sm:p-6 md:p-8"
         >
           <div className="grid gap-5 md:grid-cols-2">
             <label className="md:col-span-2">
@@ -344,7 +349,7 @@ export default function NewRequestPage() {
               </div>
             </label>
 
-            <label className="flex cursor-pointer items-center justify-between rounded-2xl border border-gray-200 bg-gray-50 px-5 py-4">
+            <label className="flex cursor-pointer items-center justify-between gap-4 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4 sm:px-5">
               <span>
                 <span className="block font-black text-gray-950">Срочная заявка</span>
                 <span className="mt-1 block text-sm text-gray-500">
@@ -361,7 +366,7 @@ export default function NewRequestPage() {
           </div>
 
           <section>
-            <div className="flex flex-wrap items-end justify-between gap-3">
+            <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
               <div>
                 <h2 className="text-xl font-black text-gray-950">Фотографии</h2>
                 <p className="mt-1 text-sm text-gray-500">
@@ -369,7 +374,7 @@ export default function NewRequestPage() {
                 </p>
               </div>
 
-              <label className="inline-flex cursor-pointer items-center gap-2 rounded-2xl bg-blue-50 px-4 py-3 text-sm font-black text-[#0057ff] transition hover:bg-blue-100 active:scale-95">
+              <label className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-2xl bg-blue-50 px-4 py-3 sm:inline-flex sm:w-auto text-sm font-black text-[#0057ff] transition hover:bg-blue-100 active:scale-95">
                 <ImagePlus size={19} />
                 Добавить фото
                 <input

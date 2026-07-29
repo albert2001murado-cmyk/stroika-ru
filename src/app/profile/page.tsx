@@ -34,6 +34,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import ProfileTools from "@/components/ProfileTools";
+import { moderationLabel } from "@/lib/moderation";
 import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 
 type UploadedFile = {
@@ -254,7 +255,7 @@ export default function ProfilePage() {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-[#f5f7fb] px-5 py-10">
+      <main className="min-h-screen bg-[#f5f7fb] px-3 py-6 sm:px-5 sm:py-10">
         Загрузка...
       </main>
     );
@@ -262,9 +263,9 @@ export default function ProfilePage() {
 
   if (!user) {
     return (
-      <main className="min-h-screen bg-[#f5f7fb] px-5 py-10">
+      <main className="min-h-screen bg-[#f5f7fb] px-3 py-6 sm:px-5 sm:py-10">
         <div className="mx-auto max-w-xl rounded-[30px] bg-white p-8 text-center shadow-xl">
-          <h1 className="text-3xl font-black text-gray-950">
+          <h1 className="text-2xl font-black text-gray-950 sm:text-3xl">
             Сначала войди в аккаунт
           </h1>
 
@@ -282,12 +283,12 @@ export default function ProfilePage() {
   const verificationRejected = profile?.verificationStatus === "rejected";
 
   return (
-    <main className="min-h-screen bg-[#f5f7fb] px-5 py-8">
+    <main className="min-h-screen bg-[#f5f7fb] px-3 py-5 sm:px-5 sm:py-8">
       <div className="mx-auto max-w-7xl">
-        <div className="rounded-[34px] bg-[#0057ff] p-8 text-white shadow-xl shadow-blue-900/15">
+        <div className="rounded-[26px] bg-[#0057ff] p-5 sm:rounded-[34px] sm:p-8 text-white shadow-xl shadow-blue-900/15">
           <p className="font-black text-[#ffd233]">Личный кабинет</p>
 
-          <h1 className="mt-3 text-4xl font-black md:text-5xl">
+          <h1 className="mt-3 text-3xl font-black sm:text-4xl md:text-5xl">
             Мой профиль
           </h1>
 
@@ -300,18 +301,18 @@ export default function ProfilePage() {
           <ProfileTools />
         </div>
 
-        <div className="mt-6 grid gap-6 lg:grid-cols-[420px_1fr]">
+        <div className="mt-5 grid gap-5 sm:mt-6 sm:gap-6 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
           <form
             onSubmit={handleSave}
-            className="h-fit rounded-[30px] bg-white p-6 shadow-sm lg:sticky lg:top-24"
+            className="h-fit rounded-[24px] bg-white p-4 shadow-sm sm:rounded-[30px] sm:p-6 lg:sticky lg:top-24"
           >
             <h2 className="text-2xl font-black text-gray-950">
               Данные профиля
             </h2>
 
-            <div className="mt-6 flex flex-col items-center rounded-[28px] bg-blue-50/60 p-5">
+            <div className="mt-5 flex flex-col items-center rounded-[22px] bg-blue-50/60 p-4 sm:mt-6 sm:rounded-[28px] sm:p-5">
               <div className="relative">
-                <div className="flex h-32 w-32 items-center justify-center overflow-hidden rounded-full bg-white text-[#0057ff] shadow-lg">
+                <div className="flex h-28 w-28 items-center sm:h-32 sm:w-32 justify-center overflow-hidden rounded-full bg-white text-[#0057ff] shadow-lg">
                   {shownAvatar ? (
                     <img
                       src={shownAvatar}
@@ -487,10 +488,10 @@ export default function ProfilePage() {
             </button>
           </form>
 
-          <section className="rounded-[30px] bg-white p-6 shadow-sm">
+          <section className="rounded-[24px] bg-white p-4 shadow-sm sm:rounded-[30px] sm:p-6">
             <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
               <div>
-                <h2 className="text-3xl font-black text-gray-950">
+                <h2 className="text-2xl font-black text-gray-950 sm:text-3xl">
                   Мои публикации
                 </h2>
                 <p className="mt-2 text-gray-500">
@@ -498,17 +499,17 @@ export default function ProfilePage() {
                 </p>
               </div>
 
-              <div className="flex flex-wrap gap-2">
+              <div className="grid w-full gap-2 sm:flex sm:w-auto sm:flex-wrap">
                 <Link
                   href="/post/new"
-                  className="inline-flex items-center gap-2 rounded-2xl bg-[#0057ff] px-4 py-3 text-sm font-black text-white transition hover:-translate-y-0.5 hover:shadow-lg active:scale-95"
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#0057ff] px-4 py-3 sm:inline-flex sm:w-auto text-sm font-black text-white transition hover:-translate-y-0.5 hover:shadow-lg active:scale-95"
                 >
                   <HardHat size={18} />
                   Анкета исполнителя
                 </Link>
                 <Link
                   href="/requests/new"
-                  className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-black text-white transition hover:-translate-y-0.5 hover:shadow-lg active:scale-95"
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 sm:inline-flex sm:w-auto text-sm font-black text-white transition hover:-translate-y-0.5 hover:shadow-lg active:scale-95"
                 >
                   <Plus size={18} />
                   Заявка заказчика
@@ -516,11 +517,11 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            <div className="mt-6 inline-flex rounded-2xl bg-gray-100 p-1.5">
+            <div className="mt-6 grid w-full grid-cols-2 rounded-2xl bg-gray-100 p-1.5 sm:inline-flex sm:w-auto">
               <button
                 type="button"
                 onClick={() => setPublicationTab("listings")}
-                className={`flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-black transition ${
+                className={`flex min-w-0 items-center justify-center gap-1.5 rounded-xl px-2 py-3 text-xs font-black transition sm:gap-2 sm:px-4 sm:text-sm ${
                   publicationTab === "listings"
                     ? "bg-[#0057ff] text-white shadow-lg"
                     : "text-gray-500 hover:text-[#0057ff]"
@@ -532,7 +533,7 @@ export default function ProfilePage() {
               <button
                 type="button"
                 onClick={() => setPublicationTab("requests")}
-                className={`flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-black transition ${
+                className={`flex min-w-0 items-center justify-center gap-1.5 rounded-xl px-2 py-3 text-xs font-black transition sm:gap-2 sm:px-4 sm:text-sm ${
                   publicationTab === "requests"
                     ? "bg-[#0057ff] text-white shadow-lg"
                     : "text-gray-500 hover:text-[#0057ff]"
@@ -545,7 +546,7 @@ export default function ProfilePage() {
 
             {publicationTab === "listings" ? (
               listings.length === 0 ? (
-                <div className="mt-8 rounded-[26px] border border-dashed border-blue-200 bg-blue-50/50 p-10 text-center">
+                <div className="mt-6 rounded-[22px] border border-dashed border-blue-200 bg-blue-50/50 p-6 text-center sm:mt-8 sm:rounded-[26px] sm:p-10">
                   <h3 className="text-2xl font-black text-gray-950">
                     У тебя пока нет анкет исполнителя
                   </h3>
@@ -558,6 +559,16 @@ export default function ProfilePage() {
                   {listings.map((listing) => (
                     <div key={listing.id} className="relative">
                       <ListingCard listing={listing} />
+                      <div className="mt-3 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3">
+                        <p className="text-sm font-black text-[#0057ff]">
+                          {moderationLabel(listing.moderationStatus)}
+                        </p>
+                        {listing.moderationReason ? (
+                          <p className="mt-1 text-sm font-semibold text-gray-600">
+                            Причина: {listing.moderationReason}
+                          </p>
+                        ) : null}
+                      </div>
                       <div className="mt-3 flex gap-2">
                         <Link
                           href={`/listing/${listing.id}/edit`}
@@ -579,7 +590,7 @@ export default function ProfilePage() {
                 </div>
               )
             ) : requests.length === 0 ? (
-              <div className="mt-8 rounded-[26px] border border-dashed border-blue-200 bg-blue-50/50 p-10 text-center">
+              <div className="mt-6 rounded-[22px] border border-dashed border-blue-200 bg-blue-50/50 p-6 text-center sm:mt-8 sm:rounded-[26px] sm:p-10">
                 <h3 className="text-2xl font-black text-gray-950">
                   У тебя пока нет заявок заказчика
                 </h3>
@@ -592,6 +603,16 @@ export default function ProfilePage() {
                 {requests.map((request) => (
                   <div key={request.id}>
                     <CustomerRequestCard request={request} />
+                    <div className="mt-3 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3">
+                      <p className="text-sm font-black text-[#0057ff]">
+                        {moderationLabel(request.moderationStatus)}
+                      </p>
+                      {request.moderationReason ? (
+                        <p className="mt-1 text-sm font-semibold text-gray-600">
+                          Причина: {request.moderationReason}
+                        </p>
+                      ) : null}
+                    </div>
                     <div className="mt-3 flex gap-2">
                       <Link
                         href={`/requests/${request.id}/edit`}

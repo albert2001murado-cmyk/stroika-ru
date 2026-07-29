@@ -415,26 +415,26 @@ export default function PremiumCategoryGrid({
     <section className={`relative ${className}`}>
       <div className="pointer-events-none absolute inset-x-0 -top-10 h-44 rounded-[48px] bg-[radial-gradient(circle_at_15%_15%,rgba(0,87,255,0.15),transparent_36%),radial-gradient(circle_at_85%_0%,rgba(56,189,248,0.13),transparent_34%)] blur-2xl" />
 
-      <div className="relative overflow-hidden rounded-[36px] border border-blue-100 bg-white p-5 shadow-[0_24px_75px_rgba(15,23,42,0.08)] sm:p-7">
+      <div className="relative overflow-hidden rounded-[26px] border border-blue-100 bg-white p-4 shadow-[0_24px_75px_rgba(15,23,42,0.08)] sm:rounded-[36px] sm:p-7">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <div className="inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-4 py-2 text-xs font-black uppercase tracking-[0.14em] text-[#0057ff]">
               <ShieldCheck size={15} strokeWidth={2.7} />
               Удобный каталог
             </div>
-            <h2 className="mt-4 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">{heading}</h2>
+            <h2 className="mt-4 text-2xl font-black tracking-tight text-slate-950 sm:text-4xl">{heading}</h2>
             <p className="mt-2 max-w-2xl text-sm font-bold leading-6 text-slate-500 sm:text-base">{subtitle}</p>
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:flex-wrap">
             {sectionId ? (
-              <button type="button" onClick={goBack} className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 transition duration-300 hover:-translate-y-0.5 hover:border-blue-200 hover:text-[#0057ff]">
+              <button type="button" onClick={goBack} className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 sm:w-auto text-sm font-black text-slate-700 transition duration-300 hover:-translate-y-0.5 hover:border-blue-200 hover:text-[#0057ff]">
                 <ArrowLeft size={17} strokeWidth={2.8} />
                 Назад
               </button>
             ) : null}
 
-            <button type="button" onClick={resetAll} className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-[#0057ff] px-5 text-sm font-black text-white shadow-xl shadow-blue-600/20 transition duration-300 hover:-translate-y-0.5 hover:bg-[#0047d6]">
+            <button type="button" onClick={resetAll} className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#0057ff] px-5 sm:w-auto text-sm font-black text-white shadow-xl shadow-blue-600/20 transition duration-300 hover:-translate-y-0.5 hover:bg-[#0047d6]">
               Все объявления
               <ArrowRight size={16} strokeWidth={2.8} />
             </button>
@@ -449,12 +449,12 @@ export default function PremiumCategoryGrid({
                   key={id}
                   type="button"
                   onClick={() => setSectionId(id)}
-                  className="group relative min-h-[228px] overflow-hidden rounded-[30px] border border-slate-100 bg-[#f8fbff] p-5 text-left transition duration-500 ease-out hover:-translate-y-1.5 hover:border-blue-200 hover:bg-white hover:shadow-[0_26px_70px_rgba(0,87,255,0.16)] active:scale-[0.975]"
+                  className="group relative min-h-[190px] overflow-hidden rounded-[24px] sm:min-h-[228px] sm:rounded-[30px] border border-slate-100 bg-[#f8fbff] p-5 text-left transition duration-500 ease-out hover:-translate-y-1.5 hover:border-blue-200 hover:bg-white hover:shadow-[0_26px_70px_rgba(0,87,255,0.16)] active:scale-[0.975]"
                 >
                   <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_88%_82%,rgba(0,87,255,0.13),transparent_42%)] opacity-70 transition duration-500 group-hover:opacity-100" />
 
-                  <div className="relative z-10 max-w-[66%]">
-                    <h3 className="text-2xl font-black tracking-tight text-slate-950">{title}</h3>
+                  <div className="relative z-10 max-w-[64%] sm:max-w-[66%]">
+                    <h3 className="text-xl font-black tracking-tight text-slate-950 sm:text-2xl">{title}</h3>
                     <p className="mt-3 text-sm font-bold leading-6 text-slate-500">{description}</p>
                   </div>
 
@@ -462,7 +462,7 @@ export default function PremiumCategoryGrid({
                     src={image}
                     alt=""
                     aria-hidden="true"
-                    className="pointer-events-none absolute -bottom-4 -right-3 h-[154px] w-[154px] object-contain drop-shadow-[0_20px_22px_rgba(15,23,42,0.2)] transition duration-500 ease-out group-hover:-translate-x-1.5 group-hover:-translate-y-2 group-hover:rotate-[-1deg] group-hover:scale-[1.07]"
+                    className="pointer-events-none absolute -bottom-4 -right-3 h-[128px] w-[128px] sm:h-[154px] sm:w-[154px] object-contain drop-shadow-[0_20px_22px_rgba(15,23,42,0.2)] transition duration-500 ease-out group-hover:-translate-x-1.5 group-hover:-translate-y-2 group-hover:rotate-[-1deg] group-hover:scale-[1.07]"
                   />
                 </button>
               ))}
@@ -486,7 +486,7 @@ export default function PremiumCategoryGrid({
                       setSubcategoryPage(1);
                     }}
                     className={[
-                      "group relative min-h-[184px] overflow-hidden rounded-[28px] border p-5 text-left transition duration-500 ease-out hover:-translate-y-1.5 hover:shadow-[0_24px_60px_rgba(0,87,255,0.15)] active:scale-[0.98]",
+                      "group relative min-h-[160px] overflow-hidden rounded-[24px] border p-4 sm:min-h-[184px] sm:rounded-[28px] sm:p-5 text-left transition duration-500 ease-out hover:-translate-y-1.5 hover:shadow-[0_24px_60px_rgba(0,87,255,0.15)] active:scale-[0.98]",
                       active
                         ? "border-[#0057ff] bg-[#0057ff] text-white"
                         : "border-slate-100 bg-[#f8fbff] text-slate-950 hover:border-blue-200 hover:bg-white",
@@ -516,7 +516,7 @@ export default function PremiumCategoryGrid({
                       src={image}
                       alt=""
                       aria-hidden="true"
-                      className="pointer-events-none absolute -bottom-4 -right-2 h-[126px] w-[126px] object-contain drop-shadow-[0_16px_18px_rgba(15,23,42,0.18)] transition duration-500 ease-out group-hover:-translate-x-1 group-hover:-translate-y-2 group-hover:rotate-[-1deg] group-hover:scale-[1.08]"
+                      className="pointer-events-none absolute -bottom-4 -right-2 h-[108px] w-[108px] sm:h-[126px] sm:w-[126px] object-contain drop-shadow-[0_16px_18px_rgba(15,23,42,0.18)] transition duration-500 ease-out group-hover:-translate-x-1 group-hover:-translate-y-2 group-hover:rotate-[-1deg] group-hover:scale-[1.08]"
                     />
                   </button>
                 );
@@ -564,7 +564,7 @@ export default function PremiumCategoryGrid({
                     type="button"
                     onClick={() => setSubcategory(item)}
                     className={[
-                      "group flex min-h-16 items-center justify-between gap-3 rounded-2xl border px-5 py-3 text-left transition duration-300 ease-out hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-lg hover:shadow-blue-900/5 active:scale-[0.985]",
+                      "group flex min-h-14 items-center justify-between gap-3 rounded-2xl border px-4 py-3 sm:min-h-16 sm:px-5 text-left transition duration-300 ease-out hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-lg hover:shadow-blue-900/5 active:scale-[0.985]",
                       selectedSubcategory === item
                         ? "border-[#0057ff] bg-[#0057ff] text-white"
                         : "border-slate-200 bg-white text-slate-800",
@@ -648,7 +648,7 @@ export default function PremiumCategoryGrid({
                   key={`${action.title}-${index}`}
                   type="button"
                   onClick={() => apply(action.selection)}
-                  className="group relative min-h-[142px] overflow-hidden rounded-[28px] border border-slate-100 bg-[#f8fbff] p-5 text-left transition duration-500 ease-out hover:-translate-y-1.5 hover:border-blue-200 hover:bg-white hover:shadow-[0_24px_60px_rgba(0,87,255,0.15)] active:scale-[0.98]"
+                  className="group relative min-h-[132px] overflow-hidden rounded-[24px] sm:min-h-[142px] sm:rounded-[28px] border border-slate-100 bg-[#f8fbff] p-5 text-left transition duration-500 ease-out hover:-translate-y-1.5 hover:border-blue-200 hover:bg-white hover:shadow-[0_24px_60px_rgba(0,87,255,0.15)] active:scale-[0.98]"
                 >
                   <span className="relative z-10 block max-w-[68%]">
                     <span className="block text-lg font-black text-slate-950">{action.title}</span>

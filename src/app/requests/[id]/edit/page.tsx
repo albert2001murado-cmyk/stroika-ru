@@ -234,6 +234,10 @@ export default function EditCustomerRequestPage() {
         title: title.trim(),
         description: description.trim(),
         category,
+        moderationStatus: "pending",
+        moderationReason: "",
+        moderationSubmittedAt: serverTimestamp(),
+        moderationSource: "web",
         city: city.trim(),
         budget: from,
         budgetFrom: from,
@@ -249,7 +253,8 @@ export default function EditCustomerRequestPage() {
         if (isLocalImage(image)) URL.revokeObjectURL(image.previewUrl);
       });
 
-      router.push(`/requests/${requestId}`);
+      alert("Изменения отправлены на повторную модерацию.");
+      router.push("/profile");
     } catch (saveError) {
       console.error(saveError);
       setError(
@@ -282,9 +287,9 @@ export default function EditCustomerRequestPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f5f7fb] px-5 py-10">
+    <main className="min-h-screen bg-[#f5f7fb] px-3 py-6 sm:px-5 sm:py-10">
       <div className="mx-auto max-w-4xl">
-        <div className="flex items-center gap-4">
+        <div className="flex items-start gap-3 sm:items-center sm:gap-4">
           <Link href={`/requests/${requestId}`} className="icon-button">
             <ArrowLeft size={21} />
           </Link>
@@ -296,7 +301,7 @@ export default function EditCustomerRequestPage() {
 
         <form
           onSubmit={submit}
-          className="mt-7 space-y-6 rounded-[34px] bg-white p-6 shadow-sm ring-1 ring-gray-100 md:p-8"
+          className="mt-5 space-y-5 rounded-[24px] bg-white p-4 shadow-sm ring-1 ring-gray-100 sm:mt-7 sm:space-y-6 sm:rounded-[34px] sm:p-6 md:p-8"
         >
           <div className="grid gap-5 md:grid-cols-2">
             <label className="md:col-span-2">
@@ -306,9 +311,8 @@ export default function EditCustomerRequestPage() {
 
             <label>
               <span className="mb-2 block text-sm font-black text-gray-700">Категория</span>
-              <select className="input bg-white" value={category} onChange={(event) => setCategory(event.target.value)}>
-                {REQUEST_CATEGORIES.map((item) => <option key={item} value={item}>{item}</option>)}
-              </select>
+              <div className="rounded-2xl bg-slate-50 px-5 py-4 font-black text-slate-900 ring-1 ring-slate-200">{category}</div>
+              <span className="mt-2 block text-xs font-bold text-slate-400">Категория фиксируется при создании. Для другой категории создайте новую заявку.</span>
             </label>
 
             <label>
@@ -360,12 +364,12 @@ export default function EditCustomerRequestPage() {
           </div>
 
           <section>
-            <div className="flex flex-wrap items-end justify-between gap-3">
+            <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
               <div>
                 <h2 className="text-xl font-black text-gray-950">Фотографии</h2>
                 <p className="mt-1 text-sm text-gray-500">До {MAX_IMAGES} фотографий.</p>
               </div>
-              <label className="inline-flex cursor-pointer items-center gap-2 rounded-2xl bg-blue-50 px-4 py-3 text-sm font-black text-[#0057ff] transition hover:bg-blue-100 active:scale-95">
+              <label className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-2xl bg-blue-50 px-4 py-3 sm:inline-flex sm:w-auto text-sm font-black text-[#0057ff] transition hover:bg-blue-100 active:scale-95">
                 <ImagePlus size={19} />
                 Добавить фото
                 <input type="file" accept="image/*" multiple className="hidden" onChange={handleImages} disabled={images.length >= MAX_IMAGES} />

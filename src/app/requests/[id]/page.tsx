@@ -3,6 +3,7 @@
 import { useAuth } from "@/components/AuthProvider";
 import ReportDialog from "@/components/ReportDialog";
 import { db } from "@/lib/firebase";
+import { isPublicationApproved } from "@/lib/moderation";
 import type { CustomerRequest } from "@/types";
 import { firestoreDateToMillis } from "@/types";
 import { doc, getDoc, onSnapshot } from "firebase/firestore";
@@ -55,7 +56,7 @@ function formatDate(value: CustomerRequest["createdAt"]) {
 
 export default function CustomerRequestPage() {
   const params = useParams();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
 
   const requestId =
     typeof params?.id === "string"
@@ -79,16 +80,21 @@ export default function CustomerRequestPage() {
     return onSnapshot(
       doc(db, "customerRequests", requestId),
       (snapshot) => {
-        setRequest(
-          snapshot.exists()
-            ? ({ id: snapshot.id, ...snapshot.data() } as CustomerRequest)
-            : null
-        );
+        if (!snapshot.exists()) {
+          setRequest(null);
+          setLoading(false);
+          return;
+        }
+
+        const nextRequest = { id: snapshot.id, ...snapshot.data() } as CustomerRequest;
+        const moderator = profile?.role === "moderator" || profile?.role === "admin" || profile?.isModerator === true || profile?.isAdmin === true;
+        const canPreview = user?.uid === nextRequest.customerId || moderator;
+        setRequest(isPublicationApproved(nextRequest) || canPreview ? nextRequest : null);
         setLoading(false);
       },
       () => setLoading(false)
     );
-  }, [requestId]);
+  }, [profile, requestId, user?.uid]);
 
   useEffect(() => {
     let cancelled = false;
@@ -176,7 +182,7 @@ export default function CustomerRequestPage() {
 
   if (loading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#f2f6fd] px-5">
+      <main className="flex min-h-screen items-center justify-center bg-[#f2f6fd] px-3 sm:px-5">
         <div className="flex items-center gap-3 rounded-[24px] bg-white px-7 py-5 font-black text-slate-700 shadow-[0_18px_60px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70">
           <span className="h-5 w-5 animate-spin rounded-full border-[3px] border-blue-100 border-t-[#0057ff]" />
           Загружаем заявку...
@@ -187,12 +193,12 @@ export default function CustomerRequestPage() {
 
   if (!request) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#f2f6fd] px-5">
-        <div className="w-full max-w-lg rounded-[34px] bg-white p-9 text-center shadow-[0_24px_80px_rgba(15,23,42,0.10)] ring-1 ring-slate-200/70">
+      <main className="flex min-h-screen items-center justify-center bg-[#f2f6fd] px-3 sm:px-5">
+        <div className="w-full max-w-lg rounded-[24px] bg-white p-6 sm:rounded-[34px] sm:p-9 text-center shadow-[0_24px_80px_rgba(15,23,42,0.10)] ring-1 ring-slate-200/70">
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-50 text-[#0057ff]">
             <ImageIcon size={31} />
           </div>
-          <h1 className="mt-5 text-3xl font-black text-slate-950">Заявка не найдена</h1>
+          <h1 className="mt-5 text-2xl font-black text-slate-950 sm:text-3xl">Заявка не найдена</h1>
           <p className="mt-3 text-slate-500">Возможно, публикация была удалена или закрыта.</p>
           <Link
             href="/requests"
@@ -211,10 +217,10 @@ export default function CustomerRequestPage() {
   const currentImage = images[activeImageIndex] || "";
 
   return (
-    <main className="min-h-screen bg-[#f2f6fd] pb-16">
+    <main className="min-h-screen bg-[#f2f6fd] pb-10 sm:pb-16">
       <div className="pointer-events-none fixed inset-x-0 top-0 h-[520px] bg-[radial-gradient(circle_at_15%_10%,rgba(0,87,255,0.14),transparent_34%),radial-gradient(circle_at_85%_12%,rgba(56,189,248,0.14),transparent_30%)]" />
 
-      <div className="relative mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+      <div className="relative mx-auto max-w-7xl px-3 py-4 sm:px-6 sm:py-6 lg:px-8">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Link
             href="/requests"
@@ -235,7 +241,7 @@ export default function CustomerRequestPage() {
           ) : null}
         </div>
 
-        <section className="relative mt-5 overflow-hidden rounded-[40px] bg-gradient-to-br from-[#0864ff] via-[#0057ff] to-[#0044cf] px-6 py-8 text-white shadow-[0_28px_90px_rgba(0,87,255,0.20)] sm:px-8 md:py-10 lg:px-11">
+        <section className="relative mt-4 overflow-hidden rounded-[26px] bg-gradient-to-br from-[#0864ff] via-[#0057ff] to-[#0044cf] px-4 py-6 text-white shadow-[0_28px_90px_rgba(0,87,255,0.20)] sm:mt-5 sm:rounded-[40px] sm:px-8 sm:py-8 md:py-10 lg:px-11">
           <div className="pointer-events-none absolute -right-24 -top-28 h-80 w-80 rounded-full bg-white/10 blur-2xl" />
           <div className="pointer-events-none absolute -bottom-32 left-1/3 h-72 w-72 rounded-full bg-cyan-300/10 blur-3xl" />
 
@@ -262,7 +268,7 @@ export default function CustomerRequestPage() {
                 </span>
               </div>
 
-              <h1 className="mt-6 max-w-4xl text-4xl font-black leading-[1.04] tracking-[-0.035em] sm:text-5xl lg:text-6xl">
+              <h1 className="mt-5 max-w-4xl text-3xl font-black leading-[1.06] tracking-[-0.035em] sm:mt-6 sm:text-5xl lg:text-6xl">
                 {request.title}
               </h1>
 
@@ -278,7 +284,7 @@ export default function CustomerRequestPage() {
               </div>
             </div>
 
-            <div className="rounded-[28px] bg-white/12 p-4 ring-1 ring-white/15 backdrop-blur-md">
+            <div className="rounded-[22px] bg-white/12 p-4 sm:rounded-[28px] ring-1 ring-white/15 backdrop-blur-md">
               <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-100">Заказчик</p>
               <div className="mt-3 flex items-center gap-4">
                 <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-[22px] bg-white/15 ring-1 ring-white/20">
@@ -307,15 +313,15 @@ export default function CustomerRequestPage() {
           </div>
         </section>
 
-        <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
+        <div className="mt-5 grid gap-5 sm:mt-6 sm:gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
           <div className="space-y-6">
-            <section className="overflow-hidden rounded-[34px] bg-white p-4 shadow-[0_22px_70px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 sm:p-5">
+            <section className="overflow-hidden rounded-[24px] bg-white p-3 shadow-[0_22px_70px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 sm:rounded-[34px] sm:p-5">
               {images.length ? (
                 <>
                   <button
                     type="button"
                     onClick={() => setGalleryOpen(true)}
-                    className="group relative block aspect-[16/10] w-full overflow-hidden rounded-[28px] bg-slate-100 text-left"
+                    className="group relative block aspect-[4/3] w-full overflow-hidden rounded-[20px] sm:aspect-[16/10] sm:rounded-[28px] bg-slate-100 text-left"
                   >
                     <img
                       src={currentImage}
@@ -370,7 +376,7 @@ export default function CustomerRequestPage() {
               )}
             </section>
 
-            <section className="rounded-[34px] bg-white p-6 shadow-[0_22px_70px_rgba(15,23,42,0.07)] ring-1 ring-slate-200/70 sm:p-8">
+            <section className="rounded-[24px] bg-white p-4 shadow-[0_22px_70px_rgba(15,23,42,0.07)] ring-1 ring-slate-200/70 sm:rounded-[34px] sm:p-8">
               <div className="flex items-center gap-3">
                 <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-50 text-[#0057ff]">
                   <MessageCircle size={21} />
@@ -381,14 +387,14 @@ export default function CustomerRequestPage() {
                 </div>
               </div>
 
-              <p className="mt-6 whitespace-pre-wrap text-base leading-8 text-slate-600">
+              <p className="mt-5 whitespace-pre-wrap text-base leading-7 text-slate-600 sm:mt-6 sm:leading-8">
                 {request.description}
               </p>
             </section>
           </div>
 
           <aside className="space-y-5 lg:sticky lg:top-28">
-            <section className="rounded-[34px] bg-white p-5 shadow-[0_22px_70px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 sm:p-6">
+            <section className="rounded-[24px] bg-white p-4 shadow-[0_22px_70px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 sm:rounded-[34px] sm:p-6">
               <p className="text-xs font-black uppercase tracking-[0.15em] text-[#0057ff]">Условия заказа</p>
 
               <div className="mt-5 space-y-3">

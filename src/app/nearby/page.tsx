@@ -1,6 +1,7 @@
 "use client";
 
 import { db } from "@/lib/firebase";
+import { isPublicationApproved } from "@/lib/moderation";
 import {
   AlertCircle,
   ArrowLeft,
@@ -94,6 +95,7 @@ type ListingLike = {
   isUrgent?: boolean;
   verified?: boolean;
   accountType?: string;
+  moderationStatus?: unknown;
 };
 
 const defaultCenter: Coordinates = {
@@ -362,10 +364,12 @@ export default function NearbyPage() {
       try {
         const snapshot = await getDocs(query(collection(db, "listings"), limit(250)));
 
-        const data = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...(doc.data() as Omit<ListingLike, "id">),
-        }));
+        const data = snapshot.docs
+          .map((doc) => ({
+            id: doc.id,
+            ...(doc.data() as Omit<ListingLike, "id">),
+          }))
+          .filter(isPublicationApproved);
 
         setItems(data);
         setActiveId(data[0]?.id || "");
@@ -774,7 +778,7 @@ export default function NearbyPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f5f7fb] px-4 py-8 text-slate-950 md:px-6">
+    <main className="min-h-screen bg-[#f5f7fb] px-3 py-5 sm:px-4 sm:py-8 text-slate-950 md:px-6">
       <div className="mx-auto max-w-7xl">
         <Link
           href="/"
@@ -784,7 +788,7 @@ export default function NearbyPage() {
           На главную
         </Link>
 
-        <section className="mt-7 overflow-hidden rounded-[42px] bg-[#0057ff] p-6 text-white shadow-2xl shadow-blue-500/20 md:p-10">
+        <section className="mt-5 overflow-hidden rounded-[26px] bg-[#0057ff] p-4 sm:mt-7 sm:rounded-[42px] sm:p-6 text-white shadow-2xl shadow-blue-500/20 md:p-10">
           <div className="relative grid gap-8 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
             <div className="absolute -right-24 -top-24 h-72 w-72 rounded-full bg-white/10 blur-3xl" />
             <div className="absolute -bottom-28 left-1/4 h-72 w-72 rounded-full bg-blue-200/20 blur-3xl" />
@@ -795,7 +799,7 @@ export default function NearbyPage() {
                 Карта исполнителей
               </div>
 
-              <h1 className="mt-6 max-w-3xl text-4xl font-black leading-tight md:text-6xl">
+              <h1 className="mt-5 max-w-3xl text-3xl font-black leading-tight sm:mt-6 sm:text-4xl md:text-6xl">
                 Исполнитель рядом
               </h1>
 
@@ -849,7 +853,7 @@ export default function NearbyPage() {
               )}
             </div>
 
-            <div className="relative z-10 rounded-[34px] bg-white p-5 text-slate-950 shadow-2xl md:p-6">
+            <div className="relative z-10 rounded-[24px] bg-white p-4 sm:rounded-[34px] sm:p-5 text-slate-950 shadow-2xl md:p-6">
               <div className="flex items-center gap-3">
                 <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-[#0057ff] ring-1 ring-blue-100">
                   <Filter size={26} />
@@ -930,26 +934,26 @@ export default function NearbyPage() {
           </div>
         </section>
 
-        <section className="mt-7 grid gap-4 md:grid-cols-4">
-          <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-blue-100">
+        <section className="mt-5 grid grid-cols-2 gap-3 sm:mt-7 sm:gap-4 md:grid-cols-4">
+          <div className="rounded-[22px] bg-white p-4 shadow-sm ring-1 ring-blue-100 sm:rounded-3xl sm:p-5">
             <UsersRound className="text-blue-600" size={28} />
             <p className="mt-3 text-2xl font-black">{items.length}</p>
             <p className="text-sm font-bold text-slate-500">профилей и объявлений</p>
           </div>
 
-          <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-blue-100">
+          <div className="rounded-[22px] bg-white p-4 shadow-sm ring-1 ring-blue-100 sm:rounded-3xl sm:p-5">
             <MapPin className="text-blue-600" size={28} />
             <p className="mt-3 text-2xl font-black">{cities.length}</p>
             <p className="text-sm font-bold text-slate-500">городов в базе</p>
           </div>
 
-          <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-blue-100">
+          <div className="rounded-[22px] bg-white p-4 shadow-sm ring-1 ring-blue-100 sm:rounded-3xl sm:p-5">
             <Layers3 className="text-blue-600" size={28} />
             <p className="mt-3 truncate text-2xl font-black">{category}</p>
             <p className="text-sm font-bold text-slate-500">выбранная категория</p>
           </div>
 
-          <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-blue-100">
+          <div className="rounded-[22px] bg-white p-4 shadow-sm ring-1 ring-blue-100 sm:rounded-3xl sm:p-5">
             <Crosshair className="text-blue-600" size={28} />
             <p className="mt-3 text-2xl font-black">{filteredItems.length}</p>
             <p className="text-sm font-bold text-slate-500">показано на карте</p>
@@ -963,8 +967,8 @@ export default function NearbyPage() {
           </div>
         )}
 
-        <section className="mt-7 grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
-          <div className="overflow-hidden rounded-[38px] bg-white p-4 shadow-sm ring-1 ring-blue-100 md:p-5">
+        <section className="mt-5 grid gap-5 sm:mt-7 sm:gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]">
+          <div className="overflow-hidden rounded-[24px] bg-white p-3 sm:rounded-[38px] sm:p-4 shadow-sm ring-1 ring-blue-100 md:p-5">
             <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
                 <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-4 py-2 text-sm font-black text-blue-700 ring-1 ring-blue-100">
@@ -987,7 +991,7 @@ export default function NearbyPage() {
               </button>
             </div>
 
-            <div className="relative h-[620px] overflow-hidden rounded-[32px] border border-blue-100 bg-slate-100">
+            <div className="relative h-[420px] overflow-hidden rounded-[22px] sm:h-[520px] sm:rounded-[32px] lg:h-[620px] border border-blue-100 bg-slate-100">
               <div ref={mapNodeRef} className="absolute inset-0" />
 
               {(mapStatus || isLoading) && (
@@ -1030,7 +1034,7 @@ export default function NearbyPage() {
           </div>
 
           <aside className="space-y-5">
-            <div className="rounded-[34px] bg-white p-5 shadow-sm ring-1 ring-blue-100">
+            <div className="rounded-[24px] bg-white p-4 shadow-sm ring-1 ring-blue-100 sm:rounded-[34px] sm:p-5">
               <div className="flex items-center gap-3">
                 <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 ring-1 ring-blue-100">
                   <ShieldCheck size={28} />
@@ -1049,10 +1053,10 @@ export default function NearbyPage() {
                     <img
                       src={getListingImage(activeItem)}
                       alt={activeItem.title || "Профиль"}
-                      className="h-56 w-full rounded-[26px] object-cover"
+                      className="h-48 w-full rounded-[20px] object-cover sm:h-56 sm:rounded-[26px]"
                     />
                   ) : (
-                    <div className="flex h-56 w-full items-center justify-center rounded-[26px] bg-blue-50 text-blue-300">
+                    <div className="flex h-48 w-full items-center justify-center rounded-[20px] sm:h-56 sm:rounded-[26px] bg-blue-50 text-blue-300">
                       <Building2 size={72} />
                     </div>
                   )}
@@ -1137,13 +1141,13 @@ export default function NearbyPage() {
               )}
             </div>
 
-            <div className="rounded-[34px] bg-white p-5 shadow-sm ring-1 ring-blue-100">
+            <div className="rounded-[24px] bg-white p-4 shadow-sm ring-1 ring-blue-100 sm:rounded-[34px] sm:p-5">
               <h3 className="text-xl font-black">Список рядом</h3>
               <p className="mt-1 text-sm font-medium text-slate-500">
                 Те же результаты, что на карте.
               </p>
 
-              <div className="mt-4 max-h-[520px] space-y-3 overflow-y-auto pr-1">
+              <div className="mt-4 max-h-[420px] space-y-3 overflow-y-auto pr-1 sm:max-h-[520px]">
                 {filteredItems.map((item) => (
                   <button
                     key={item.id}

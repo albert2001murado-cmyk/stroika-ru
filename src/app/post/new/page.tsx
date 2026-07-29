@@ -407,10 +407,15 @@ export default function NewListingPage() {
         viewsCount: 0,
         favoritesCount: 0,
 
+        moderationStatus: "pending",
+        moderationReason: "",
+        moderationSubmittedAt: serverTimestamp(),
+        moderationSource: "web",
         createdAt: serverTimestamp(),
       });
 
-      router.push(`/listing/${listingRef.id}`);
+      alert("Анкета отправлена на модерацию и появится после одобрения.");
+      router.push("/profile");
     } catch (uploadError) {
       console.error(uploadError);
 
@@ -425,7 +430,7 @@ export default function NewListingPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f5f7fb] px-5 py-10">
+    <main className="min-h-screen bg-[#f5f7fb] px-3 py-6 sm:px-5 sm:py-10">
       <div className="mx-auto max-w-7xl">
         <Link
           href="/"
@@ -435,17 +440,17 @@ export default function NewListingPage() {
           Назад
         </Link>
 
-        <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_360px]">
+        <div className="mt-5 grid gap-5 sm:mt-8 sm:gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
           <form
             onSubmit={handleSubmit}
-            className="rounded-[36px] bg-white p-6 shadow-sm ring-1 ring-gray-100 md:p-8"
+            className="rounded-[26px] bg-white p-4 shadow-sm ring-1 ring-gray-100 sm:rounded-[36px] sm:p-6 md:p-8"
           >
             <div>
               <p className="text-sm font-black uppercase tracking-[0.2em] text-[#0057ff]">
                 Новая анкета
               </p>
 
-              <h1 className="mt-3 text-4xl font-black text-gray-950">
+              <h1 className="mt-3 text-3xl font-black text-gray-950 sm:text-4xl">
                 Разместить услугу
               </h1>
 
@@ -546,7 +551,7 @@ export default function NewListingPage() {
             </section>
 
 
-            <section className="mt-8 rounded-[30px] border border-blue-100 bg-[linear-gradient(135deg,#eff6ff_0%,#ffffff_58%,#f8fbff_100%)] p-5 md:p-6">
+            <section className="mt-6 rounded-[24px] sm:mt-8 sm:rounded-[30px] border border-blue-100 bg-[linear-gradient(135deg,#eff6ff_0%,#ffffff_58%,#f8fbff_100%)] p-5 md:p-6">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <p className="text-xs font-black uppercase tracking-[0.18em] text-[#0057ff]">
@@ -673,7 +678,7 @@ export default function NewListingPage() {
               </div>
             </section>
 
-            <section className="mt-8 rounded-[28px] border border-gray-100 bg-gray-50 p-5">
+            <section className="mt-6 rounded-[24px] sm:mt-8 sm:rounded-[28px] border border-gray-100 bg-gray-50 p-5">
               <h2 className="text-2xl font-black text-gray-950">Фото и видео</h2>
 
               <p className="mt-2 text-sm font-medium text-gray-500">
@@ -692,7 +697,7 @@ export default function NewListingPage() {
 
               <label
                 htmlFor="listing-media-input"
-                className="mt-5 inline-flex cursor-pointer items-center gap-2 rounded-2xl bg-[#0057ff] px-5 py-3 font-black text-white shadow-lg shadow-blue-500/20 transition hover:-translate-y-0.5"
+                className="mt-5 flex w-full cursor-pointer items-center justify-center gap-2 rounded-2xl bg-[#0057ff] px-5 py-3 sm:inline-flex sm:w-auto font-black text-white shadow-lg shadow-blue-500/20 transition hover:-translate-y-0.5"
               >
                 <Plus size={18} />
                 Добавить фото/видео
@@ -744,7 +749,7 @@ export default function NewListingPage() {
               )}
             </section>
 
-            <section className="mt-8 rounded-[28px] border border-gray-100 bg-white p-5">
+            <section className="mt-6 rounded-[24px] sm:mt-8 sm:rounded-[28px] border border-gray-100 bg-white p-5">
               <h2 className="text-2xl font-black text-gray-950">Цена и оплата</h2>
 
               <div className="mt-5 grid gap-5 md:grid-cols-2">
@@ -790,7 +795,7 @@ export default function NewListingPage() {
             <button
               type="submit"
               disabled={isSaving}
-              className="mt-8 flex w-full items-center justify-center gap-3 rounded-3xl bg-[#0057ff] px-6 py-5 text-lg font-black text-white shadow-xl shadow-blue-500/20 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+              className="mt-6 flex w-full items-center justify-center gap-3 rounded-2xl sm:mt-8 sm:rounded-3xl bg-[#0057ff] px-6 py-5 text-lg font-black text-white shadow-xl shadow-blue-500/20 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isSaving ? (
                 <>
@@ -806,7 +811,7 @@ export default function NewListingPage() {
             </button>
           </form>
 
-          <aside className="h-fit rounded-[36px] bg-white p-6 shadow-sm ring-1 ring-gray-100">
+          <aside className="h-fit rounded-[26px] bg-white p-4 shadow-sm ring-1 ring-gray-100 sm:rounded-[36px] sm:p-6 lg:sticky lg:top-[102px]">
             <h2 className="text-2xl font-black text-gray-950">Публикация</h2>
 
             <div className="mt-6 space-y-4 text-sm font-bold text-gray-500">

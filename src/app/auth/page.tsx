@@ -11,6 +11,7 @@ import {
   ArrowLeft,
   BadgeCheck,
   Building2,
+  Check,
   CheckCircle2,
   HardHat,
   Loader2,
@@ -46,6 +47,7 @@ export default function AuthPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
+  const [legalAccepted, setLegalAccepted] = useState(false);
 
   const isBusiness = accountType === "ip" || accountType === "ooo";
   const innLength = useMemo(() => expectedInnLength(accountType), [accountType]);
@@ -130,6 +132,11 @@ export default function AuthPage() {
     event.preventDefault();
     setError("");
 
+    if (mode === "register" && !legalAccepted) {
+      setError("Подтвердите согласие с документами сервиса.");
+      return;
+    }
+
     if (mode === "register" && isBusiness) {
       if (!company || lookupState !== "success") {
         setError("Сначала укажите действующий ИНН и дождитесь проверки.");
@@ -174,7 +181,7 @@ export default function AuthPage() {
   }
 
   const registrationBlocked =
-    mode === "register" && isBusiness && lookupState !== "success";
+    mode === "register" && (!legalAccepted || (isBusiness && lookupState !== "success"));
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#f4f7fc] px-4 py-5 sm:px-6 sm:py-7 lg:px-8">
@@ -535,10 +542,24 @@ export default function AuthPage() {
                   : "Войти"}
               </button>
 
-              <p className="mt-5 text-center text-xs font-bold leading-5 text-slate-400">
-                Продолжая, вы подтверждаете согласие с правилами сервиса и
-                обработкой персональных данных.
-              </p>
+              {mode === "register" ? (
+                <div className="mt-5 flex items-start gap-3 rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setLegalAccepted((current) => !current)}
+                    className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border-2 transition ${legalAccepted ? "border-[#0057ff] bg-[#0057ff] text-white" : "border-slate-300 bg-white"}`}
+                    aria-pressed={legalAccepted}
+                  >
+                    {legalAccepted ? <Check size={15} strokeWidth={3} /> : null}
+                  </button>
+                  <p className="text-xs font-bold leading-5 text-slate-500">
+                    Я принимаю <Link href="/terms" className="text-[#0057ff] underline">Пользовательское соглашение</Link>,{" "}
+                    <Link href="/platform-rules" className="text-[#0057ff] underline">Правила платформы</Link>,{" "}
+                    <Link href="/publication-rules" className="text-[#0057ff] underline">Правила публикации</Link> и ознакомился с{" "}
+                    <Link href="/privacy" className="text-[#0057ff] underline">Политикой конфиденциальности</Link>.
+                  </p>
+                </div>
+              ) : null}
             </form>
           </div>
         </section>

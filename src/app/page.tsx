@@ -6,6 +6,7 @@ import NearbyWorkerButton from "@/components/NearbyWorkerButton";
 import PremiumCategoryGrid from "@/components/PremiumCategoryGrid";
 import { categories } from "@/data/categories";
 import { db } from "@/lib/firebase";
+import { isPublicationApproved } from "@/lib/moderation";
 import {
   matchesListingSearch,
   type SearchableListingFields,
@@ -148,7 +149,7 @@ function requestMatches(
     ? request.subcategory === subcategory || haystack.includes(normalize(subcategory))
     : true;
 
-  return request.status === "active" && matchesText && matchesCategory && matchesSubcategory;
+  return isPublicationApproved(request) && request.status === "active" && matchesText && matchesCategory && matchesSubcategory;
 }
 
 function formatPrice(value: number) {
@@ -394,6 +395,7 @@ export default function HomePage() {
 
   const filteredListings = useMemo(() => {
     return listings.filter((listing) => {
+      if (!isPublicationApproved(listing)) return false;
       const matchesSearch = matchesListingSearch(
         listing as Record<string, any>,
         search,
@@ -529,7 +531,7 @@ export default function HomePage() {
 
   return (
     <main className="min-h-screen bg-[#f5f7fb]">
-      <section className="relative z-40 border-b border-gray-200 bg-white px-5 py-5">
+      <section className="relative z-40 border-b border-gray-200 bg-white px-3 py-4 sm:px-5 sm:py-5">
         <div className="mx-auto max-w-7xl">
           <div className="relative flex flex-col gap-3 lg:flex-row lg:items-stretch">
             <button
@@ -562,12 +564,12 @@ export default function HomePage() {
             <div className="flex min-w-0 flex-1 overflow-hidden rounded-2xl border-2 border-[#00aaff] bg-white shadow-sm transition focus-within:border-[#0057ff] focus-within:shadow-[0_0_0_4px_rgba(0,87,255,0.10)]">
               <div className="relative min-w-0 flex-1">
                 <Search
-                  className="pointer-events-none absolute left-5 top-1/2 -translate-y-1/2 text-gray-400"
+                  className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 sm:left-5"
                   size={21}
                 />
 
                 <input
-                  className="h-full min-h-14 w-full border-0 bg-transparent py-3 pl-14 pr-4 text-base font-bold text-gray-950 outline-none placeholder:font-medium placeholder:text-gray-400"
+                  className="h-full min-h-14 w-full border-0 bg-transparent py-3 pl-12 pr-2 text-base font-bold text-gray-950 outline-none placeholder:font-medium placeholder:text-gray-400 sm:pl-14 sm:pr-4"
                   placeholder={
                     feedMode === "contractors"
                       ? "Поиск по анкетам исполнителей"
@@ -584,7 +586,7 @@ export default function HomePage() {
               <button
                 type="button"
                 onClick={scrollToFeed}
-                className="min-h-14 shrink-0 bg-[#00aaff] px-7 text-sm font-black text-white transition duration-200 hover:bg-[#0097e6] active:scale-[0.98] md:px-10"
+                className="min-h-14 shrink-0 bg-[#00aaff] px-4 text-sm font-black text-white transition duration-200 hover:bg-[#0097e6] active:scale-[0.98] sm:px-7 md:px-10"
               >
                 Найти
               </button>
@@ -615,7 +617,7 @@ export default function HomePage() {
             </label>
 
             {filtersOpen ? (
-              <div className="absolute left-0 right-0 top-[calc(100%+12px)] z-50 max-h-[78vh] overflow-y-auto rounded-[30px] border border-blue-100 bg-white p-5 shadow-[0_28px_85px_rgba(15,23,42,0.22)] sm:p-6">
+              <div className="absolute -left-1 -right-1 top-[calc(100%+10px)] z-50 max-h-[76dvh] overflow-y-auto rounded-[24px] border border-blue-100 bg-white p-4 shadow-[0_28px_85px_rgba(15,23,42,0.22)] sm:left-0 sm:right-0 sm:top-[calc(100%+12px)] sm:rounded-[30px] sm:p-6">
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <p className="text-xs font-black uppercase tracking-[0.16em] text-[#0057ff]">
@@ -887,7 +889,7 @@ export default function HomePage() {
 
       <section
         id="premium-catalog"
-        className="mx-auto max-w-7xl scroll-mt-28 px-5 pt-5"
+        className="mx-auto max-w-7xl scroll-mt-28 px-3 pt-4 sm:px-5 sm:pt-5"
       >
         <PremiumCategoryGrid
           categories={categories}
@@ -909,13 +911,13 @@ export default function HomePage() {
         />
       </section>
 
-      <section className="mx-auto max-w-7xl px-5 pb-8 pt-5">
+      <section className="mx-auto max-w-7xl px-3 pb-8 pt-4 sm:px-5 sm:pt-5">
         <div
           id="recommended-listings"
           className="mt-8 scroll-mt-28 flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between"
         >
           <div>
-            <h2 className="text-4xl font-black text-gray-950">Для вас</h2>
+            <h2 className="text-3xl font-black text-gray-950 sm:text-4xl">Для вас</h2>
             <p className="mt-2 font-medium text-gray-500">
               Найдено публикаций: {shownCount}
               {city ? ` · ${city}` : ""}
@@ -956,12 +958,12 @@ export default function HomePage() {
         </div>
 
         {shownCount === 0 ? (
-          <div className="mt-8 rounded-[30px] border border-dashed border-blue-200 bg-white p-12 text-center">
+          <div className="mt-8 rounded-[24px] border border-dashed border-blue-200 bg-white p-7 text-center sm:rounded-[30px] sm:p-12">
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-blue-50 text-[#0057ff]">
               <Search size={30} />
             </div>
 
-            <h3 className="mt-5 text-3xl font-black text-gray-950">
+            <h3 className="mt-5 text-2xl font-black text-gray-950 sm:text-3xl">
               Ничего не найдено
             </h3>
 

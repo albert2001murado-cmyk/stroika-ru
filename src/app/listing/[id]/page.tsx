@@ -3,6 +3,7 @@
 import { useAuth } from "@/components/AuthProvider";
 import ReportDialog from "@/components/ReportDialog";
 import { db } from "@/lib/firebase";
+import { isPublicationApproved } from "@/lib/moderation";
 import type { Listing, Review, UserProfile } from "@/types";
 import {
   Banknote,
@@ -92,6 +93,14 @@ export default function ListingPage() {
           ...snap.data(),
         } as Listing;
 
+        const moderator = profile?.role === "moderator" || profile?.role === "admin" || profile?.isModerator === true || profile?.isAdmin === true;
+        const canPreview = user?.uid === data.authorId || moderator;
+        if (!isPublicationApproved(data) && !canPreview) {
+          setListing(null);
+          setLoading(false);
+          return;
+        }
+
         setListing(data);
         setAuthorAvatar(data.authorAvatarUrl || "");
 
@@ -120,7 +129,7 @@ export default function ListingPage() {
     }
 
     loadListing();
-  }, [id]);
+  }, [id, profile, user?.uid]);
 
   useEffect(() => {
     const q = query(collection(db, "reviews"), where("listingId", "==", id));
@@ -343,7 +352,7 @@ export default function ListingPage() {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-[#f5f7fb] px-5 py-10">
+      <main className="min-h-screen bg-[#f5f7fb] px-3 py-6 sm:px-5 sm:py-10">
         <div className="mx-auto max-w-6xl">Загрузка...</div>
       </main>
     );
@@ -351,7 +360,7 @@ export default function ListingPage() {
 
   if (!listing) {
     return (
-      <main className="min-h-screen bg-[#f5f7fb] px-5 py-10">
+      <main className="min-h-screen bg-[#f5f7fb] px-3 py-6 sm:px-5 sm:py-10">
         <div className="mx-auto max-w-6xl rounded-[30px] bg-white p-8 text-center shadow-sm">
           <h1 className="text-3xl font-black text-gray-950">
             Объявление не найдено
@@ -370,14 +379,14 @@ export default function ListingPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f5f7fb] px-5 py-8">
+    <main className="min-h-screen bg-[#f5f7fb] px-3 py-5 sm:px-5 sm:py-8">
       <div className="mx-auto max-w-6xl">
-        <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
+        <div className="grid gap-5 sm:gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
           <section className="space-y-6">
-            <div className="overflow-hidden rounded-[34px] bg-white shadow-sm">
+            <div className="overflow-hidden rounded-[24px] bg-white shadow-sm sm:rounded-[34px]">
               {allMedia.length > 0 ? (
                 <>
-                  <div className="relative flex min-h-[420px] items-center justify-center bg-gray-100">
+                  <div className="relative flex min-h-[240px] items-center justify-center bg-gray-100 sm:min-h-[420px]">
                     {activeMedia?.type === "video" ? (
                       <video
                         src={activeMedia.url}
@@ -390,7 +399,7 @@ export default function ListingPage() {
                         onClick={() =>
                           activeMedia?.url && openImageGallery(activeMedia.url)
                         }
-                        className="group relative flex min-h-[420px] w-full cursor-zoom-in items-center justify-center overflow-hidden"
+                        className="group relative flex min-h-[240px] w-full sm:min-h-[420px] cursor-zoom-in items-center justify-center overflow-hidden"
                         aria-label="Открыть фотографию на весь экран"
                       >
                         <img
@@ -407,7 +416,7 @@ export default function ListingPage() {
                   </div>
 
                   {allMedia.length > 1 && (
-                    <div className="grid grid-cols-4 gap-3 p-4 sm:grid-cols-6">
+                    <div className="grid grid-cols-4 gap-2 p-3 sm:grid-cols-6 sm:gap-3 sm:p-4">
                       {allMedia.map((item) => (
                         <button
                           key={item.url}
@@ -442,20 +451,20 @@ export default function ListingPage() {
               )}
             </div>
 
-            <div className="rounded-[34px] bg-white p-8 shadow-sm">
+            <div className="rounded-[24px] bg-white p-4 shadow-sm sm:rounded-[34px] sm:p-8">
               <p className="font-black text-[#0057ff]">
                 {listing.category} · {listing.subcategory}
               </p>
 
-              <h1 className="mt-3 text-4xl font-black text-gray-950">
+              <h1 className="mt-3 text-3xl font-black text-gray-950 sm:text-4xl">
                 {listing.title}
               </h1>
 
-              <p className="mt-5 whitespace-pre-wrap text-lg leading-8 text-gray-600">
+              <p className="mt-4 whitespace-pre-wrap text-base leading-7 text-gray-600 sm:mt-5 sm:text-lg sm:leading-8">
                 {listing.description}
               </p>
 
-              <div className="mt-8 grid gap-4 rounded-[28px] bg-[#f5f7fb] p-5 md:grid-cols-2">
+              <div className="mt-6 grid gap-4 rounded-[22px] bg-[#f5f7fb] p-4 sm:mt-8 sm:rounded-[28px] sm:p-5 md:grid-cols-2">
                 <div>
                   <p className="text-sm font-bold text-gray-500">Город</p>
                   <p className="mt-1 flex items-center gap-2 font-black text-gray-950">
@@ -508,8 +517,8 @@ export default function ListingPage() {
               </div>
             </div>
 
-            <div className="rounded-[34px] bg-white p-8 shadow-sm">
-              <h2 className="text-3xl font-black text-gray-950">Отзывы</h2>
+            <div className="rounded-[24px] bg-white p-4 shadow-sm sm:rounded-[34px] sm:p-8">
+              <h2 className="text-2xl font-black text-gray-950 sm:text-3xl">Отзывы</h2>
 
               <form onSubmit={handleReview} className="mt-5 space-y-4">
                 <select
@@ -541,7 +550,7 @@ export default function ListingPage() {
                   reviews.map((review) => (
                     <div
                       key={review.id}
-                      className="rounded-3xl border border-gray-100 bg-gray-50 p-5"
+                      className="rounded-2xl border border-gray-100 bg-gray-50 p-4 sm:rounded-3xl sm:p-5"
                     >
                       <div className="flex items-center justify-between gap-4">
                         <p className="font-black text-gray-950">
@@ -562,7 +571,7 @@ export default function ListingPage() {
             </div>
           </section>
 
-          <aside className="h-fit rounded-[34px] bg-white p-6 shadow-sm lg:sticky lg:top-24">
+          <aside className="h-fit rounded-[24px] bg-white p-4 shadow-sm sm:rounded-[34px] sm:p-6 lg:sticky lg:top-24">
             <Link
               href={`/user/${listing.authorId}`}
               className="flex items-center gap-4 rounded-3xl transition hover:bg-blue-50"
@@ -580,7 +589,7 @@ export default function ListingPage() {
               </div>
 
               <div>
-                <h2 className="text-2xl font-black text-gray-950">
+                <h2 className="text-xl font-black text-gray-950 sm:text-2xl">
                   {authorProfile?.displayName || listing.authorName}
                 </h2>
 

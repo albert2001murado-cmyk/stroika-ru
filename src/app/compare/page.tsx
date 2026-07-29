@@ -2,6 +2,7 @@
 
 import { useAuth } from "@/components/AuthProvider";
 import { db } from "@/lib/firebase";
+import { isPublicationApproved } from "@/lib/moderation";
 import type { UserProfile } from "@/types";
 import {
   collection,
@@ -63,7 +64,7 @@ export default function ComparePage() {
         result.push({
           uid: userSnap.id,
           ...userSnap.data(),
-          listingCount: listingSnap.size,
+          listingCount: listingSnap.docs.filter((item: any) => isPublicationApproved(item.data())).length,
           portfolioCount: portfolioSnap.size,
           freeDays: daysSnap.docs.filter((item: any) => item.data().status === "free").length,
         } as ComparedUser);

@@ -33,9 +33,9 @@ export default function CustomerRequestCard({ request }: CustomerRequestCardProp
   const isNew = isCreatedWithinHours(request.createdAt, 72);
 
   return (
-    <article className="group relative overflow-hidden rounded-[26px] bg-white shadow-sm ring-1 ring-gray-100 transition duration-300 hover:-translate-y-1 hover:shadow-xl">
+    <article className="group relative overflow-hidden rounded-[22px] bg-white sm:rounded-[26px] shadow-sm ring-1 ring-gray-100 transition duration-300 hover:-translate-y-1 hover:shadow-xl">
       <Link href={`/requests/${request.id}`} className="block">
-        <div className="relative h-44 overflow-hidden bg-gradient-to-br from-blue-50 to-slate-100">
+        <div className="relative h-40 overflow-hidden sm:h-44 bg-gradient-to-br from-blue-50 to-slate-100">
           {imageUrl ? (
             <img
               src={imageUrl}
@@ -61,18 +61,18 @@ export default function CustomerRequestCard({ request }: CustomerRequestCardProp
           ) : null}
         </div>
 
-        <div className="p-4">
-          <div className="flex items-start justify-between gap-3">
+        <div className="p-3.5 sm:p-4">
+          <div className="flex flex-col items-start gap-3 sm:flex-row sm:justify-between">
             <div className="min-w-0">
               <p className="text-xs font-black uppercase tracking-[0.12em] text-[#0057ff]">
                 Заказчик ищет исполнителя
               </p>
-              <h3 className="mt-2 line-clamp-2 text-xl font-black leading-tight text-gray-950">
+              <h3 className="mt-2 line-clamp-2 text-lg font-black leading-tight text-gray-950 sm:text-xl">
                 {request.title}
               </h3>
             </div>
 
-            <span className="shrink-0 rounded-2xl bg-blue-50 px-3 py-2 text-right text-sm font-black text-[#0057ff]">
+            <span className="max-w-full rounded-2xl bg-blue-50 px-3 py-2 text-left text-sm font-black text-[#0057ff] sm:shrink-0 sm:text-right">
               {formatBudget(request)}
             </span>
           </div>
@@ -100,7 +100,7 @@ export default function CustomerRequestCard({ request }: CustomerRequestCardProp
             )}
           </div>
 
-          <div className="mt-4 flex items-center justify-between gap-3 border-t border-gray-100 pt-4">
+          <div className="mt-4 flex flex-col items-start gap-3 border-t border-gray-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex min-w-0 items-center gap-2">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-blue-50 text-[#0057ff]">
                 {request.customerAvatar ? (

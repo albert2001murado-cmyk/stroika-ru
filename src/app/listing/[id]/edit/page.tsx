@@ -198,6 +198,8 @@ export default function EditListingPage() {
 
   const [mediaFiles, setMediaFiles] = useState<MediaItem[]>([]);
   const [authorId, setAuthorId] = useState("");
+  const [originalCategory, setOriginalCategory] = useState("");
+  const [originalSubcategory, setOriginalSubcategory] = useState("");
 
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -232,8 +234,12 @@ export default function EditListingPage() {
 
         setTitle(data.title || "");
         setDescription(data.description || "");
-        setCategory(data.category || firstCategory);
-        setSubcategory(data.subcategory || firstSubcategory);
+        const loadedCategory = data.category || firstCategory;
+        const loadedSubcategory = data.subcategory || firstSubcategory;
+        setCategory(loadedCategory);
+        setSubcategory(loadedSubcategory);
+        setOriginalCategory(loadedCategory);
+        setOriginalSubcategory(loadedSubcategory);
         setCity(data.city || "");
         setPhone(data.phone || "");
         setPriceFrom(
@@ -415,8 +421,8 @@ export default function EditListingPage() {
       await updateDoc(doc(db, "listings", listingId), {
         title: title.trim(),
         description: description.trim(),
-        category,
-        subcategory,
+        category: originalCategory || category,
+        subcategory: originalSubcategory || subcategory,
         city: city.trim(),
         phone: phone.trim(),
         priceFrom: priceFrom.trim() ? Number(priceFrom) : null,
@@ -425,7 +431,10 @@ export default function EditListingPage() {
         media: finalMedia,
         imageUrls,
         videoUrls,
-
+        moderationStatus: "pending",
+        moderationReason: "",
+        moderationSubmittedAt: serverTimestamp(),
+        moderationSource: "web",
         updatedAt: serverTimestamp(),
       });
 
@@ -435,7 +444,8 @@ export default function EditListingPage() {
         }
       });
 
-      router.push(`/listing/${listingId}`);
+      alert("Изменения отправлены на повторную модерацию.");
+      router.push("/profile");
     } catch (saveError) {
       console.error(saveError);
 
@@ -451,7 +461,7 @@ export default function EditListingPage() {
 
   if (isLoading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#f5f7fb] px-5">
+      <main className="flex min-h-screen items-center justify-center bg-[#f5f7fb] px-3 sm:px-5">
         <div className="rounded-[32px] bg-white p-8 text-center shadow-sm ring-1 ring-gray-100">
           <Loader2 className="mx-auto animate-spin text-[#0057ff]" size={36} />
           <p className="mt-4 font-black text-gray-950">
@@ -463,7 +473,7 @@ export default function EditListingPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f5f7fb] px-5 py-10">
+    <main className="min-h-screen bg-[#f5f7fb] px-3 py-6 sm:px-5 sm:py-10">
       <div className="mx-auto max-w-7xl">
         <Link
           href={listingId ? `/listing/${listingId}` : "/profile"}
@@ -473,17 +483,17 @@ export default function EditListingPage() {
           Назад
         </Link>
 
-        <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_360px]">
+        <div className="mt-5 grid gap-5 sm:mt-8 sm:gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
           <form
             onSubmit={handleSubmit}
-            className="rounded-[36px] bg-white p-6 shadow-sm ring-1 ring-gray-100 md:p-8"
+            className="rounded-[26px] bg-white p-4 shadow-sm ring-1 ring-gray-100 sm:rounded-[36px] sm:p-6 md:p-8"
           >
             <div>
               <p className="text-sm font-black uppercase tracking-[0.2em] text-[#0057ff]">
                 Редактирование
               </p>
 
-              <h1 className="mt-3 text-4xl font-black text-gray-950">
+              <h1 className="mt-3 text-3xl font-black text-gray-950 sm:text-4xl">
                 Изменить объявление
               </h1>
 
@@ -515,29 +525,15 @@ export default function EditListingPage() {
               />
 
               <div className="grid gap-5 md:grid-cols-2">
-                <select
-                  value={category}
-                  onChange={(event) => handleCategoryChange(event.target.value)}
-                  className="input"
-                >
-                  {categories.map((item) => (
-                    <option key={item.name} value={item.name}>
-                      {item.name}
-                    </option>
-                  ))}
-                </select>
+                <div className="rounded-2xl bg-slate-50 px-5 py-4 ring-1 ring-slate-200">
+                  <div className="text-xs font-black uppercase tracking-wider text-slate-400">Категория зафиксирована</div>
+                  <div className="mt-1 font-black text-slate-900">{category}</div>
+                </div>
 
-                <select
-                  value={subcategory}
-                  onChange={(event) => setSubcategory(event.target.value)}
-                  className="input"
-                >
-                  {(selectedCategory?.subcategories || []).map((item) => (
-                    <option key={item} value={item}>
-                      {item}
-                    </option>
-                  ))}
-                </select>
+                <div className="rounded-2xl bg-slate-50 px-5 py-4 ring-1 ring-slate-200">
+                  <div className="text-xs font-black uppercase tracking-wider text-slate-400">Подкатегория зафиксирована</div>
+                  <div className="mt-1 font-black text-slate-900">{subcategory}</div>
+                </div>
 
                 <div className="relative">
                   <MapPin
@@ -569,7 +565,7 @@ export default function EditListingPage() {
               </div>
             </section>
 
-            <section className="mt-8 rounded-[28px] border border-gray-100 bg-gray-50 p-5">
+            <section className="mt-6 rounded-[24px] sm:mt-8 sm:rounded-[28px] border border-gray-100 bg-gray-50 p-5">
               <h2 className="text-2xl font-black text-gray-950">Фото и видео</h2>
 
               <p className="mt-2 text-sm font-medium text-gray-500">
@@ -587,7 +583,7 @@ export default function EditListingPage() {
 
               <label
                 htmlFor="listing-edit-media-input"
-                className="mt-5 inline-flex cursor-pointer items-center gap-2 rounded-2xl bg-[#0057ff] px-5 py-3 font-black text-white shadow-lg shadow-blue-500/20 transition hover:-translate-y-0.5"
+                className="mt-5 flex w-full cursor-pointer items-center justify-center gap-2 rounded-2xl bg-[#0057ff] px-5 py-3 sm:inline-flex sm:w-auto font-black text-white shadow-lg shadow-blue-500/20 transition hover:-translate-y-0.5"
               >
                 <Plus size={18} />
                 Добавить фото/видео
@@ -651,7 +647,7 @@ export default function EditListingPage() {
               )}
             </section>
 
-            <section className="mt-8 rounded-[28px] border border-gray-100 bg-white p-5">
+            <section className="mt-6 rounded-[24px] sm:mt-8 sm:rounded-[28px] border border-gray-100 bg-white p-5">
               <h2 className="text-2xl font-black text-gray-950">Цена и оплата</h2>
 
               <div className="mt-5 grid gap-5 md:grid-cols-2">
@@ -697,7 +693,7 @@ export default function EditListingPage() {
             <button
               type="submit"
               disabled={isSaving}
-              className="mt-8 flex w-full items-center justify-center gap-3 rounded-3xl bg-[#0057ff] px-6 py-5 text-lg font-black text-white shadow-xl shadow-blue-500/20 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+              className="mt-6 flex w-full items-center justify-center gap-3 rounded-2xl sm:mt-8 sm:rounded-3xl bg-[#0057ff] px-6 py-5 text-lg font-black text-white shadow-xl shadow-blue-500/20 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isSaving ? (
                 <>
@@ -713,7 +709,7 @@ export default function EditListingPage() {
             </button>
           </form>
 
-          <aside className="h-fit rounded-[36px] bg-white p-6 shadow-sm ring-1 ring-gray-100">
+          <aside className="h-fit rounded-[26px] bg-white p-4 shadow-sm ring-1 ring-gray-100 sm:rounded-[36px] sm:p-6 lg:sticky lg:top-[102px]">
             <h2 className="text-2xl font-black text-gray-950">Медиа</h2>
 
             <div className="mt-6 space-y-4 text-sm font-bold text-gray-500">

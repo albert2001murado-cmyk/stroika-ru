@@ -2,8 +2,9 @@
 
 import { useAuth } from "@/components/AuthProvider";
 import { db } from "@/lib/firebase";
+import { isPublicationApproved } from "@/lib/moderation";
 import type { Timestamp } from "firebase/firestore";
-import { collection, deleteDoc, doc, onSnapshot } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDoc, onSnapshot } from "firebase/firestore";
 import { Heart, MapPin, Search, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -36,14 +37,22 @@ export default function FavoritesPage() {
 
     const favoritesRef = collection(db, "users", user.uid, "favorites");
 
-    const unsub = onSnapshot(favoritesRef, (snapshot) => {
-      const data = snapshot.docs.map((docItem) => ({
+    const unsub = onSnapshot(favoritesRef, async (snapshot) => {
+      const candidates = snapshot.docs.map((docItem) => ({
         id: docItem.id,
         ...docItem.data(),
       })) as FavoriteItem[];
 
-      data.sort((a, b) => getFavoriteTime(b) - getFavoriteTime(a));
+      const checked = await Promise.all(
+        candidates.map(async (item) => {
+          const listingSnap = await getDoc(doc(db, "listings", item.listingId));
+          if (!listingSnap.exists() || !isPublicationApproved(listingSnap.data())) return null;
+          return item;
+        })
+      );
 
+      const data = checked.filter(Boolean) as FavoriteItem[];
+      data.sort((a, b) => getFavoriteTime(b) - getFavoriteTime(a));
       setFavorites(data);
     });
 
@@ -71,7 +80,7 @@ export default function FavoritesPage() {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-[#f5f7fb] px-5 py-10">
+      <main className="min-h-screen bg-[#f5f7fb] px-3 py-6 sm:px-5 sm:py-10">
         <div className="mx-auto max-w-6xl">Загрузка...</div>
       </main>
     );
@@ -79,13 +88,13 @@ export default function FavoritesPage() {
 
   if (!user) {
     return (
-      <main className="min-h-screen bg-[#f5f7fb] px-5 py-10">
-        <div className="mx-auto max-w-xl rounded-[30px] bg-white p-8 text-center shadow-sm">
+      <main className="min-h-screen bg-[#f5f7fb] px-3 py-6 sm:px-5 sm:py-10">
+        <div className="mx-auto max-w-xl rounded-[24px] bg-white p-6 sm:rounded-[30px] sm:p-8 text-center shadow-sm">
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-red-50 text-red-500">
             <Heart className="fill-red-500" size={30} />
           </div>
 
-          <h1 className="mt-5 text-3xl font-black text-gray-950">
+          <h1 className="mt-5 text-2xl font-black text-gray-950 sm:text-3xl">
             Войдите, чтобы сохранять объявления
           </h1>
 
@@ -102,19 +111,19 @@ export default function FavoritesPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f5f7fb] px-5 py-8">
+    <main className="min-h-screen bg-[#f5f7fb] px-3 py-5 sm:px-5 sm:py-8">
       <div className="mx-auto max-w-6xl">
-        <section className="rounded-[34px] bg-[#0057ff] p-8 text-white">
+        <section className="rounded-[26px] bg-[#0057ff] p-5 sm:rounded-[34px] sm:p-8 text-white">
           <p className="font-black text-[#ffd233]">Стройка.ру</p>
 
-          <h1 className="mt-3 text-4xl font-black">Избранные анкеты</h1>
+          <h1 className="mt-3 text-3xl font-black sm:text-4xl">Избранные анкеты</h1>
 
           <p className="mt-3 max-w-2xl text-blue-50">
             Здесь хранятся все услуги и исполнители, которые вы сохранили.
           </p>
         </section>
 
-        <section className="mt-6 rounded-[30px] bg-white p-5 shadow-sm">
+        <section className="mt-5 rounded-[24px] bg-white p-4 sm:mt-6 sm:rounded-[30px] sm:p-5 shadow-sm">
           <div className="relative">
             <Search
               className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400"
@@ -133,7 +142,7 @@ export default function FavoritesPage() {
 
         <section className="mt-6">
           {filteredFavorites.length === 0 ? (
-            <div className="rounded-[30px] bg-white p-10 text-center shadow-sm">
+            <div className="rounded-[24px] bg-white p-6 text-center sm:rounded-[30px] sm:p-10 shadow-sm">
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-red-50 text-red-500">
                 <Heart className="fill-red-500" size={30} />
               </div>
@@ -155,10 +164,10 @@ export default function FavoritesPage() {
               {filteredFavorites.map((item) => (
                 <article
                   key={item.id}
-                  className="group overflow-hidden rounded-[30px] bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-xl"
+                  className="group overflow-hidden rounded-[24px] bg-white sm:rounded-[30px] shadow-sm transition hover:-translate-y-1 hover:shadow-xl"
                 >
                   <Link href={`/listing/${item.listingId}`} className="block">
-                    <div className="relative h-52 bg-blue-50">
+                    <div className="relative h-44 bg-blue-50 sm:h-52">
                       {item.imageUrl ? (
                         <img
                           src={item.imageUrl}
@@ -176,7 +185,7 @@ export default function FavoritesPage() {
                       </div>
                     </div>
 
-                    <div className="p-5">
+                    <div className="p-4 sm:p-5">
                       <h2 className="line-clamp-2 text-xl font-black text-gray-950 group-hover:text-[#0057ff]">
                         {item.title}
                       </h2>
@@ -196,7 +205,7 @@ export default function FavoritesPage() {
                     </div>
                   </Link>
 
-                  <div className="px-5 pb-5">
+                  <div className="px-4 pb-4 sm:px-5 sm:pb-5">
                     <button
                       type="button"
                       onClick={() => removeFavorite(item.listingId)}

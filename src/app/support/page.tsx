@@ -165,7 +165,7 @@ export default function SupportPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f5f7fb] px-5 py-10">
+    <main className="min-h-screen bg-[#f5f7fb] px-3 py-6 sm:px-5 sm:py-10">
       <div className="mx-auto max-w-7xl">
         <Link
           href="/"
@@ -175,8 +175,8 @@ export default function SupportPage() {
           На главную
         </Link>
 
-        <section className="mt-8 overflow-hidden rounded-[42px] bg-[#0057ff] text-white shadow-2xl shadow-blue-500/20">
-          <div className="relative grid gap-8 px-6 py-10 md:px-10 lg:grid-cols-[1.1fr_0.9fr] lg:px-14 lg:py-14">
+        <section className="mt-5 overflow-hidden rounded-[26px] sm:mt-8 sm:rounded-[42px] bg-[#0057ff] text-white shadow-2xl shadow-blue-500/20">
+          <div className="relative grid gap-6 px-4 py-6 sm:px-6 sm:py-10 md:px-10 lg:grid-cols-[1.1fr_0.9fr] lg:px-14 lg:py-14">
             <div className="absolute -right-24 -top-24 h-72 w-72 rounded-full bg-white/10 blur-3xl" />
             <div className="absolute -bottom-28 left-1/4 h-72 w-72 rounded-full bg-[#ffde3d]/20 blur-3xl" />
 
@@ -186,11 +186,11 @@ export default function SupportPage() {
                 Поддержка Стройка.ру
               </div>
 
-              <h1 className="mt-7 max-w-3xl text-4xl font-black leading-tight md:text-6xl">
+              <h1 className="mt-5 max-w-3xl text-3xl font-black leading-tight sm:mt-7 sm:text-4xl md:text-6xl">
                 Поможем решить проблему на сайте
               </h1>
 
-              <p className="mt-6 max-w-2xl text-lg font-medium leading-8 text-white/80">
+              <p className="mt-4 max-w-2xl text-base font-medium leading-7 text-white/80 sm:mt-6 sm:text-lg sm:leading-8">
                 Напиши, что случилось: проблема с объявлением, фото, сообщениями,
                 входом или пользователем. Обращение придёт на рабочую почту
                 поддержки.
@@ -223,7 +223,7 @@ export default function SupportPage() {
               </div>
             </div>
 
-            <div className="relative z-10 rounded-[34px] bg-white p-6 text-gray-950 shadow-2xl md:p-8">
+            <div className="relative z-10 rounded-[24px] bg-white p-4 sm:rounded-[34px] sm:p-6 text-gray-950 shadow-2xl md:p-8">
               <div className="flex items-start gap-4">
                 <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[#ffde3d] text-[#0057ff]">
                   <Headphones size={30} strokeWidth={2.7} />
@@ -355,7 +355,7 @@ export default function SupportPage() {
                 <button
                   type="submit"
                   disabled={isSending}
-                  className="flex w-full items-center justify-center gap-3 rounded-3xl bg-[#0057ff] px-6 py-5 text-lg font-black text-white shadow-xl shadow-blue-500/20 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="flex w-full items-center justify-center gap-3 rounded-2xl sm:rounded-3xl bg-[#0057ff] px-6 py-5 text-lg font-black text-white shadow-xl shadow-blue-500/20 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {isSending ? (
                     <>
@@ -375,7 +375,7 @@ export default function SupportPage() {
         </section>
 
         <section className="mt-8 grid gap-5 md:grid-cols-3">
-          <div className="rounded-[30px] bg-white p-6 shadow-sm ring-1 ring-gray-100">
+          <div className="rounded-[24px] bg-white p-4 sm:rounded-[30px] sm:p-6 shadow-sm ring-1 ring-gray-100">
             <Mail className="text-[#0057ff]" size={30} />
             <h3 className="mt-4 text-xl font-black text-gray-950">
               Ответ на почту
@@ -386,7 +386,7 @@ export default function SupportPage() {
             </p>
           </div>
 
-          <div className="rounded-[30px] bg-white p-6 shadow-sm ring-1 ring-gray-100">
+          <div className="rounded-[24px] bg-white p-4 sm:rounded-[30px] sm:p-6 shadow-sm ring-1 ring-gray-100">
             <MessageSquare className="text-[#0057ff]" size={30} />
             <h3 className="mt-4 text-xl font-black text-gray-950">
               Подробное описание
@@ -397,7 +397,7 @@ export default function SupportPage() {
             </p>
           </div>
 
-          <div className="rounded-[30px] bg-white p-6 shadow-sm ring-1 ring-gray-100">
+          <div className="rounded-[24px] bg-white p-4 sm:rounded-[30px] sm:p-6 shadow-sm ring-1 ring-gray-100">
             <ShieldCheck className="text-[#0057ff]" size={30} />
             <h3 className="mt-4 text-xl font-black text-gray-950">
               Без паролей

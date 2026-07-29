@@ -49,7 +49,7 @@ function ListingCard({ listing }: ListingCardProps) {
   const isNew = isCreatedWithinHours(listing.createdAt, 72);
 
   return (
-    <article className="group relative overflow-hidden rounded-[26px] bg-white shadow-sm ring-1 ring-gray-100 transition duration-300 hover:-translate-y-1 hover:shadow-xl">
+    <article className="group relative overflow-hidden rounded-[22px] bg-white sm:rounded-[26px] shadow-sm ring-1 ring-gray-100 transition duration-300 hover:-translate-y-1 hover:shadow-xl">
       <FavoriteButton
         listingId={listing.id}
         title={listing.title}
@@ -61,7 +61,7 @@ function ListingCard({ listing }: ListingCardProps) {
       />
 
       <Link href={`/listing/${listing.id}`} className="block">
-        <div className="relative h-44 overflow-hidden bg-blue-50">
+        <div className="relative h-40 overflow-hidden bg-blue-50 sm:h-44">
           {imageUrl ? (
             <img
               src={imageUrl}
@@ -79,7 +79,7 @@ function ListingCard({ listing }: ListingCardProps) {
           </div>
         </div>
 
-        <div className="p-4">
+        <div className="p-3.5 sm:p-4">
           <div className="flex flex-wrap items-center gap-2 text-[11px] font-black">
             <span className="rounded-full bg-green-50 px-2.5 py-1 text-green-700">
               {listing.accountType === "ip"
@@ -95,7 +95,7 @@ function ListingCard({ listing }: ListingCardProps) {
             </span>
           </div>
 
-          <h3 className="mt-3 line-clamp-2 text-xl font-black leading-tight text-gray-950">
+          <h3 className="mt-3 line-clamp-2 text-lg font-black leading-tight text-gray-950 sm:text-xl">
             {listing.title}
           </h3>
 
@@ -108,7 +108,7 @@ function ListingCard({ listing }: ListingCardProps) {
             <span className="truncate">{listing.city || "Город не указан"}</span>
           </p>
 
-          <div className="mt-4 flex items-end justify-between gap-3 border-t border-gray-100 pt-4">
+          <div className="mt-4 flex items-end justify-between gap-2 border-t border-gray-100 pt-4 sm:gap-3">
             <div className="min-w-0">
               <p className="text-[11px] font-bold text-gray-400">Исполнитель</p>
 
@@ -143,7 +143,7 @@ function ListingCard({ listing }: ListingCardProps) {
 
             <div className="shrink-0 text-right">
               <p className="text-[11px] font-bold text-gray-400">Цена от</p>
-              <p className="mt-1 text-xl font-black text-[#0057ff]">
+              <p className="mt-1 text-lg font-black text-[#0057ff] sm:text-xl">
                 {listing.priceFrom
                   ? `${listing.priceFrom.toLocaleString("ru-RU")} ₽`
                   : "Договорная"}
