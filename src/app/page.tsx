@@ -8,7 +8,12 @@ import { categories } from "@/data/categories";
 import { db } from "@/lib/firebase";
 import { isPublicationApproved } from "@/lib/moderation";
 import {
+  getOfferActions,
+  getOfferFeatures,
+  getOfferGroup,
+  getOfferGroupInfo,
   matchesListingSearch,
+  matchesOfferSelection,
   type SearchableListingFields,
 } from "@/lib/listingOffer";
 import type { CustomerRequest, Listing } from "@/types";
@@ -55,6 +60,15 @@ function normalize(value: unknown) {
     .trim()
     .toLocaleLowerCase("ru-RU")
     .replace(/^г\.?\s*/i, "");
+}
+
+function normalizeCatalogValue(value: unknown) {
+  return String(value || "")
+    .toLocaleLowerCase("ru-RU")
+    .replaceAll("ё", "е")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function toFiniteNumber(value: unknown): number | null {
@@ -143,10 +157,11 @@ function requestMatches(
 
   const matchesText = normalizedSearch ? haystack.includes(normalizedSearch) : true;
   const matchesCategory = category
-    ? request.category === category || haystack.includes(normalize(category))
+    ? normalizeCatalogValue(request.category) === normalizeCatalogValue(category)
     : true;
   const matchesSubcategory = subcategory
-    ? request.subcategory === subcategory || haystack.includes(normalize(subcategory))
+    ? normalizeCatalogValue(request.subcategory) ===
+      normalizeCatalogValue(subcategory)
     : true;
 
   return isPublicationApproved(request) && request.status === "active" && matchesText && matchesCategory && matchesSubcategory;
@@ -320,6 +335,7 @@ export default function HomePage() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
   const [subcategory, setSubcategory] = useState("");
+  const [subcategoryQuery, setSubcategoryQuery] = useState("");
   const [city, setCity] = useState("");
   const [priceFrom, setPriceFrom] = useState(0);
   const [priceTo, setPriceTo] = useState<number | null>(null);
@@ -328,6 +344,9 @@ export default function HomePage() {
   const [verifiedOnly, setVerifiedOnly] = useState(false);
   const [urgentOnly, setUrgentOnly] = useState(false);
   const [withPhotosOnly, setWithPhotosOnly] = useState(false);
+  const [selectedOfferAction, setSelectedOfferAction] = useState("");
+  const [requiredOfferFeatures, setRequiredOfferFeatures] = useState<string[]>([]);
+  const [sourceMaterial, setSourceMaterial] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   useEffect(() => {
@@ -369,6 +388,31 @@ export default function HomePage() {
   }, []);
 
   const selectedCategory = categories.find((item) => item.name === category);
+  const filteredSubcategoryOptions = useMemo(() => {
+    const options = selectedCategory?.subcategories || [];
+    const value = normalizeCatalogValue(subcategoryQuery);
+
+    if (!value) return options.slice(0, 12);
+    return options
+      .filter((item) => normalizeCatalogValue(item).includes(value))
+      .slice(0, 30);
+  }, [selectedCategory, subcategoryQuery]);
+  const selectedOfferGroup = useMemo(
+    () => (category ? getOfferGroup(category) : null),
+    [category]
+  );
+  const offerActionOptions = useMemo(
+    () => (selectedOfferGroup ? getOfferActions(selectedOfferGroup) : []),
+    [selectedOfferGroup]
+  );
+  const offerFeatureOptions = useMemo(
+    () => (selectedOfferGroup ? getOfferFeatures(selectedOfferGroup) : []),
+    [selectedOfferGroup]
+  );
+  const selectedOfferGroupInfo = useMemo(
+    () => (selectedOfferGroup ? getOfferGroupInfo(selectedOfferGroup) : null),
+    [selectedOfferGroup]
+  );
 
   const availableCities = useMemo(() => {
     const source = feedMode === "contractors" ? listings : requests;
@@ -402,10 +446,18 @@ export default function HomePage() {
         category,
         subcategory
       );
-      const matchesCategory = category ? listing.category === category : true;
-      const matchesSubcategory = subcategory
-        ? listing.subcategory === subcategory
+      const matchesCategory = category
+        ? normalizeCatalogValue(listing.category) === normalizeCatalogValue(category)
         : true;
+      const matchesSubcategory = subcategory
+        ? normalizeCatalogValue(listing.subcategory) ===
+          normalizeCatalogValue(subcategory)
+        : true;
+      const matchesOffer = matchesOfferSelection(
+        listing,
+        selectedOfferAction,
+        requiredOfferFeatures
+      );
       const matchesCity = cityMatches(listing.city, city);
       const range = listingPriceRange(listing);
       const matchesPrice = overlapsPriceRange(
@@ -428,6 +480,7 @@ export default function HomePage() {
         matchesSearch &&
         matchesCategory &&
         matchesSubcategory &&
+        matchesOffer &&
         matchesCity &&
         matchesPrice &&
         matchesAccount &&
@@ -441,6 +494,8 @@ export default function HomePage() {
     search,
     category,
     subcategory,
+    selectedOfferAction,
+    requiredOfferFeatures,
     city,
     priceFrom,
     priceTo,
@@ -504,7 +559,9 @@ export default function HomePage() {
     Number(priceFilterActive) +
     Number(withPhotosOnly) +
     (feedMode === "contractors"
-      ? Number(Boolean(accountType)) +
+      ? Number(Boolean(selectedOfferAction)) +
+        Number(requiredOfferFeatures.length > 0) +
+        Number(Boolean(accountType)) +
         Number(Boolean(paymentMethod)) +
         Number(verifiedOnly)
       : Number(urgentOnly));
@@ -519,6 +576,7 @@ export default function HomePage() {
     setSearch("");
     setCategory("");
     setSubcategory("");
+    setSubcategoryQuery("");
     setCity("");
     setPriceFrom(0);
     setPriceTo(null);
@@ -527,6 +585,17 @@ export default function HomePage() {
     setVerifiedOnly(false);
     setUrgentOnly(false);
     setWithPhotosOnly(false);
+    setSelectedOfferAction("");
+    setRequiredOfferFeatures([]);
+    setSourceMaterial("");
+  }
+
+  function toggleRequiredOfferFeature(featureId: string) {
+    setRequiredOfferFeatures((current) =>
+      current.includes(featureId)
+        ? current.filter((id) => id !== featureId)
+        : [...current, featureId]
+    );
   }
 
   return (
@@ -658,6 +727,10 @@ export default function HomePage() {
                       onChange={(event) => {
                         setCategory(event.target.value);
                         setSubcategory("");
+                        setSubcategoryQuery("");
+                        setSelectedOfferAction("");
+                        setRequiredOfferFeatures([]);
+                        setSourceMaterial("");
                       }}
                     >
                       <option value="">Все категории</option>
@@ -669,24 +742,69 @@ export default function HomePage() {
                     </select>
                   </label>
 
-                  <label>
+                  <div>
                     <span className="mb-2 block text-xs font-black uppercase tracking-wide text-gray-500">
                       Подкатегория
                     </span>
-                    <select
-                      className="input bg-white font-bold text-gray-950 disabled:bg-gray-50 disabled:text-gray-400"
-                      value={subcategory}
-                      onChange={(event) => setSubcategory(event.target.value)}
-                      disabled={!category}
-                    >
-                      <option value="">Все подкатегории</option>
-                      {selectedCategory?.subcategories.map((item) => (
-                        <option key={item} value={item}>
-                          {item}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                    <div className="relative">
+                      <Search
+                        size={18}
+                        className="pointer-events-none absolute left-4 top-7 -translate-y-1/2 text-[#0057ff]"
+                      />
+                      <input
+                        value={subcategoryQuery}
+                        onChange={(event) => setSubcategoryQuery(event.target.value)}
+                        disabled={!category}
+                        placeholder={category ? "Найти подкатегорию" : "Сначала выберите категорию"}
+                        className="input bg-white font-bold text-gray-950 disabled:bg-gray-50 disabled:text-gray-400"
+                        style={{ paddingLeft: 48 }}
+                      />
+                    </div>
+
+                    {category ? (
+                      <div className="mt-2 max-h-44 overflow-y-auto rounded-2xl border border-gray-200 bg-white p-2 shadow-sm">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSubcategory("");
+                            setSubcategoryQuery("");
+                          }}
+                          className={`w-full rounded-xl px-3 py-2 text-left text-sm font-black transition ${
+                            !subcategory
+                              ? "bg-blue-50 text-[#0057ff]"
+                              : "text-gray-500 hover:bg-gray-50"
+                          }`}
+                        >
+                          Все подкатегории
+                        </button>
+
+                        {filteredSubcategoryOptions.map((item) => (
+                          <button
+                            key={item}
+                            type="button"
+                            onClick={() => {
+                              setSubcategory(item);
+                              setSubcategoryQuery(item);
+                            }}
+                            className={`mt-1 flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm font-bold transition ${
+                              subcategory === item
+                                ? "bg-[#0057ff] text-white"
+                                : "text-gray-800 hover:bg-blue-50 hover:text-[#0057ff]"
+                            }`}
+                          >
+                            <span>{item}</span>
+                            {subcategory === item ? <span aria-hidden="true">✓</span> : null}
+                          </button>
+                        ))}
+
+                        {filteredSubcategoryOptions.length === 0 ? (
+                          <p className="px-3 py-4 text-sm font-bold text-gray-400">
+                            Ничего не найдено
+                          </p>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
 
                   <label>
                     <span className="mb-2 block text-xs font-black uppercase tracking-wide text-gray-500">
@@ -702,7 +820,8 @@ export default function HomePage() {
                         value={city}
                         onChange={(event) => setCity(event.target.value)}
                         placeholder="Выберите или напишите город"
-                        className="input bg-white pl-11 font-bold text-gray-950"
+                        className="input bg-white font-bold text-gray-950"
+                        style={{ paddingLeft: 48 }}
                       />
                     </div>
                   </label>
@@ -718,6 +837,102 @@ export default function HomePage() {
                     onChangeTo={setPriceTo}
                   />
                 </div>
+
+                {feedMode === "contractors" && selectedOfferGroup && selectedOfferGroupInfo ? (
+                  <div className="mt-5 overflow-hidden rounded-[24px] border border-blue-100 bg-[linear-gradient(135deg,#eff6ff_0%,#ffffff_62%,#f8fbff_100%)] p-4 sm:p-5">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-[0.14em] text-[#0057ff]">
+                          Точный тип предложения
+                        </p>
+                        <h3 className="mt-1 text-lg font-black text-gray-950">
+                          Что должен предлагать исполнитель?
+                        </h3>
+                        <p className="mt-1 text-sm font-bold leading-5 text-gray-500">
+                          Эти параметры одинаково работают для объявлений с сайта и из приложения.
+                        </p>
+                      </div>
+
+                      <span className="inline-flex w-fit shrink-0 items-center gap-2 rounded-2xl bg-white px-3 py-2 text-xs font-black text-[#0057ff] shadow-sm ring-1 ring-blue-100">
+                        <span className="text-base">{selectedOfferGroupInfo.emoji}</span>
+                        {selectedOfferGroupInfo.title}
+                      </span>
+                    </div>
+
+                    <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedOfferAction("")}
+                        className={`min-h-[76px] rounded-2xl border px-4 py-3 text-left transition duration-300 hover:-translate-y-0.5 active:scale-[0.98] ${
+                          !selectedOfferAction
+                            ? "border-[#0057ff] bg-[#0057ff] text-white shadow-lg shadow-blue-600/15"
+                            : "border-white bg-white text-gray-800 shadow-sm hover:border-blue-200"
+                        }`}
+                      >
+                        <span className="block text-sm font-black">Любое предложение</span>
+                        <span className={`mt-1 block text-xs font-bold ${!selectedOfferAction ? "text-blue-100" : "text-gray-400"}`}>
+                          Без ограничения по типу
+                        </span>
+                      </button>
+
+                      {offerActionOptions.map((action) => {
+                        const active = selectedOfferAction === action.id;
+
+                        return (
+                          <button
+                            key={action.id}
+                            type="button"
+                            onClick={() => setSelectedOfferAction(active ? "" : action.id)}
+                            className={`min-h-[76px] rounded-2xl border px-4 py-3 text-left transition duration-300 hover:-translate-y-0.5 active:scale-[0.98] ${
+                              active
+                                ? "border-[#0057ff] bg-[#0057ff] text-white shadow-lg shadow-blue-600/15"
+                                : "border-white bg-white text-gray-800 shadow-sm hover:border-blue-200"
+                            }`}
+                          >
+                            <span className="block text-sm font-black">{action.label}</span>
+                            <span className={`mt-1 line-clamp-2 block text-xs font-bold leading-4 ${active ? "text-blue-100" : "text-gray-400"}`}>
+                              {action.description}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <p className="mt-5 text-xs font-black uppercase tracking-[0.13em] text-gray-500">
+                      Дополнительные возможности
+                    </p>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                      {offerFeatureOptions.map((feature) => {
+                        const active = requiredOfferFeatures.includes(feature.id);
+
+                        return (
+                          <button
+                            key={feature.id}
+                            type="button"
+                            onClick={() => toggleRequiredOfferFeature(feature.id)}
+                            className={`flex min-h-[70px] items-center gap-3 rounded-2xl border p-3 text-left transition duration-300 hover:-translate-y-0.5 active:scale-[0.98] ${
+                              active
+                                ? "border-[#0057ff] bg-white shadow-md shadow-blue-500/10"
+                                : "border-white bg-white/75 hover:border-blue-200"
+                            }`}
+                          >
+                            <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border text-sm font-black transition ${
+                              active
+                                ? "border-[#0057ff] bg-[#0057ff] text-white"
+                                : "border-gray-200 bg-gray-50 text-gray-300"
+                            }`}>
+                              ✓
+                            </span>
+                            <span>
+                              <span className="block text-sm font-black text-gray-950">{feature.label}</span>
+                              <span className="mt-0.5 line-clamp-2 block text-xs font-bold leading-4 text-gray-400">{feature.description}</span>
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
 
                 <div className="mt-5 rounded-[24px] border border-gray-200 bg-gray-50/80 p-4 sm:p-5">
                   <p className="text-xs font-black uppercase tracking-[0.13em] text-gray-500">
@@ -898,15 +1113,26 @@ export default function HomePage() {
           onSelectCategory={(value) => {
             setCategory(value);
             setSubcategory("");
+            setSubcategoryQuery("");
+            setSelectedOfferAction("");
+            setRequiredOfferFeatures([]);
+            setSourceMaterial("");
           }}
           onApplySelection={({
             category: nextCategory,
             subcategory: nextSubcategory,
             search: nextSearch,
+            offerAction: nextOfferAction,
+            offerFeatures: nextOfferFeatures,
+            sourceMaterial: nextSourceMaterial,
           }) => {
             setCategory(nextCategory || "");
             setSubcategory(nextSubcategory || "");
+            setSubcategoryQuery(nextSubcategory || "");
             setSearch(nextSearch || "");
+            setSelectedOfferAction(nextOfferAction || "");
+            setRequiredOfferFeatures(nextOfferFeatures || []);
+            setSourceMaterial(nextSourceMaterial || "");
           }}
         />
       </section>
@@ -922,6 +1148,15 @@ export default function HomePage() {
               Найдено публикаций: {shownCount}
               {city ? ` · ${city}` : ""}
             </p>
+            {sourceMaterial && feedMode === "contractors" ? (
+              <div className="mt-3 inline-flex max-w-full flex-wrap items-center gap-2 rounded-2xl border border-blue-100 bg-white px-3.5 py-2 text-sm font-bold text-gray-600 shadow-sm">
+                <span className="font-black text-[#0057ff]">
+                  Специалист для материала: {sourceMaterial}
+                </span>
+                <span className="text-gray-300">•</span>
+                <span>{[category, subcategory].filter(Boolean).join(" · ")}</span>
+              </div>
+            ) : null}
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
@@ -941,7 +1176,12 @@ export default function HomePage() {
 
               <button
                 type="button"
-                onClick={() => setFeedMode("customers")}
+                onClick={() => {
+                  setFeedMode("customers");
+                  setSelectedOfferAction("");
+                  setRequiredOfferFeatures([]);
+                  setSourceMaterial("");
+                }}
                 className={`flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-black transition duration-300 ${
                   feedMode === "customers"
                     ? "bg-[#0057ff] text-white shadow-lg shadow-blue-600/20"

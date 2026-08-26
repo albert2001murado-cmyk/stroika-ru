@@ -1,5 +1,6 @@
 "use client";
 
+import { getMaterialServiceLink } from "@/data/materialServices";
 import { ArrowLeft, ArrowRight, Search, ShieldCheck } from "lucide-react";
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
@@ -18,6 +19,9 @@ type CategorySelection = {
   category: string;
   subcategory?: string;
   search?: string;
+  offerAction?: string;
+  offerFeatures?: string[];
+  sourceMaterial?: string;
 };
 
 type Props = {
@@ -126,6 +130,15 @@ function getCount(category: CategoryLike) {
   return typeof category.count === "number" ? category.count : category.subcategories?.length || 0;
 }
 
+function resolveCategoryName(categories: CategoryLike[], target: string) {
+  const normalizedTarget = normalize(target);
+  const matched = categories.find(
+    (item) => normalize(cleanTitle(getTitle(item))) === normalizedTarget
+  );
+
+  return matched ? getTitle(matched) : target;
+}
+
 const SUBCATEGORY_PAGE_SIZE = 18;
 
 function getOrderedSubcategories(category: CategoryLike) {
@@ -170,7 +183,11 @@ function getOrderedSubcategories(category: CategoryLike) {
   return [...found, ...all.filter((item) => !found.includes(item))];
 }
 
-function buildActions(category: CategoryLike, subcategory: string): Array<{
+function buildActions(
+  category: CategoryLike,
+  subcategory: string,
+  categories: CategoryLike[]
+): Array<{
   title: string;
   description: string;
   image: string;
@@ -181,25 +198,46 @@ function buildActions(category: CategoryLike, subcategory: string): Array<{
   const subject = subcategory || cleanTitle(categoryName);
 
   if (normalized.includes("материал")) {
+    const serviceLink = getMaterialServiceLink(subcategory);
+    const specialistActions = serviceLink
+      ? [
+          {
+            title: serviceLink.actionTitle,
+            description: `${serviceLink.category} · ${serviceLink.subcategory}`,
+            image: getCategoryImage(serviceLink.category),
+            selection: {
+              category: resolveCategoryName(categories, serviceLink.category),
+              subcategory: serviceLink.subcategory,
+              search: "",
+              sourceMaterial: subcategory,
+            },
+          },
+        ]
+      : [];
+
     return [
       {
         title: `Купить ${subject.toLowerCase()}`,
         description: "Продавцы и производители",
         image: CATEGORY_IMAGES.materials,
-        selection: { category: categoryName, subcategory },
+        selection: {
+          category: categoryName,
+          subcategory,
+          offerAction: "material_sale",
+        },
       },
       {
         title: "Заказать доставку",
         description: `Доставка: ${subject.toLowerCase()}`,
         image: CATEGORY_IMAGES.extra,
-        selection: { category: categoryName, subcategory, search: `${subject} доставка` },
+        selection: {
+          category: categoryName,
+          subcategory,
+          search: `${subject} доставка`,
+          offerFeatures: ["deliveryAvailable"],
+        },
       },
-      {
-        title: "Найти специалистов",
-        description: `Исполнители, которые работают с «${subject}»`,
-        image: CATEGORY_IMAGES.repair,
-        selection: { category: "", search: subject },
-      },
+      ...specialistActions,
       {
         title: "Показать все предложения",
         description: "Все объявления по выбранному материалу",
@@ -215,13 +253,22 @@ function buildActions(category: CategoryLike, subcategory: string): Array<{
         title: `Арендовать ${subject.toLowerCase()}`,
         description: "Предложения техники рядом",
         image: CATEGORY_IMAGES.equipment,
-        selection: { category: categoryName, subcategory },
+        selection: {
+          category: categoryName,
+          subcategory,
+          offerAction: "equipment_rent",
+        },
       },
       {
         title: "Заказать с оператором",
         description: "Работа на объекте с опытным специалистом",
         image: CATEGORY_IMAGES.repair,
-        selection: { category: categoryName, subcategory, search: `${subject} оператор` },
+        selection: {
+          category: categoryName,
+          subcategory,
+          search: `${subject} оператор`,
+          offerFeatures: ["operatorIncluded"],
+        },
       },
     ];
   }
@@ -244,7 +291,11 @@ function buildActions(category: CategoryLike, subcategory: string): Array<{
         title: "Электромонтаж под ключ",
         description: "Полный комплекс работ на объекте",
         image: CATEGORY_IMAGES.construction,
-        selection: { category: categoryName, search: "под ключ" },
+        selection: {
+          category: categoryName,
+          search: "под ключ",
+          offerAction: "service_turnkey",
+        },
       },
     ];
   }
@@ -273,7 +324,11 @@ function buildActions(category: CategoryLike, subcategory: string): Array<{
         title: "Рассчитать стоимость",
         description: "Найти исполнителя для оценки и сметы",
         image: CATEGORY_IMAGES.design,
-        selection: { category: categoryName, search: `${subject} стоимость` },
+        selection: {
+          category: categoryName,
+          search: `${subject} стоимость`,
+          offerAction: "complex_project",
+        },
       },
     ];
   }
@@ -289,7 +344,11 @@ function buildActions(category: CategoryLike, subcategory: string): Array<{
       title: "Заказать работу под ключ",
       description: "Полный комплекс работ одним исполнителем",
       image: CATEGORY_IMAGES.construction,
-      selection: { category: categoryName, search: "под ключ" },
+      selection: {
+        category: categoryName,
+        search: "под ключ",
+        offerAction: "service_turnkey",
+      },
     },
     {
       title: "Показать все объявления",
@@ -355,7 +414,9 @@ export default function PremiumCategoryGrid({
       Math.abs(pageNumber - safeSubcategoryPage) <= 1
   );
 
-  const actions = activeCategory ? buildActions(activeCategory, subcategory) : [];
+  const actions = activeCategory
+    ? buildActions(activeCategory, subcategory, categories)
+    : [];
 
   function resetAll() {
     setSectionId(null);

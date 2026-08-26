@@ -623,3 +623,96 @@ a {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ===== Плавные анимации уведомлений, календаря и портфолио ===== */
+@keyframes stroikaNotificationEnter {
+  from { opacity: 0; transform: translateY(14px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes stroikaCalendarMonthEnter {
+  from { opacity: 0; transform: translateX(18px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes stroikaCalendarDayEnter {
+  from { opacity: 0; transform: translateY(8px) scale(.92); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes stroikaPortfolioCaseEnter {
+  from { opacity: 0; transform: translateY(18px) scale(.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.notification-card-enter {
+  opacity: 0;
+  animation: stroikaNotificationEnter .46s cubic-bezier(.22,1,.36,1) forwards;
+}
+
+.calendar-month-enter {
+  animation: stroikaCalendarMonthEnter .38s cubic-bezier(.22,1,.36,1) both;
+}
+
+.calendar-day-enter {
+  opacity: 0;
+  animation: stroikaCalendarDayEnter .38s cubic-bezier(.22,1,.36,1) forwards;
+}
+
+.portfolio-case-enter {
+  opacity: 0;
+  animation: stroikaPortfolioCaseEnter .52s cubic-bezier(.22,1,.36,1) forwards;
+}
+
+.calendar-nav-button {
+  display: inline-flex;
+  height: 48px;
+  width: 48px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 18px;
+  background: #eff6ff;
+  color: #0057ff;
+  transition: transform .25s ease, background-color .25s ease, box-shadow .25s ease;
+}
+.calendar-nav-button:hover { transform: translateY(-2px) scale(1.03); background: #dbeafe; box-shadow: 0 10px 24px rgba(0,87,255,.12); }
+.calendar-nav-button:active { transform: scale(.92); }
+
+.case-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  padding: 7px 10px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.case-detail {
+  display: flex;
+  min-height: 72px;
+  align-items: center;
+  gap: 12px;
+  border-radius: 22px;
+  background: #f8fafc;
+  padding: 14px;
+  box-shadow: inset 0 0 0 1px #f1f5f9;
+}
+.case-detail > svg { color: #0057ff; width: 21px; height: 21px; flex: 0 0 auto; }
+.case-detail span { min-width: 0; display: flex; flex-direction: column; }
+.case-detail small { color: #94a3b8; font-size: 11px; font-weight: 800; }
+.case-detail b { margin-top: 4px; color: #0f172a; font-size: 14px; font-weight: 900; }
+
+@media (prefers-reduced-motion: reduce) {
+  .notification-card-enter,
+  .calendar-month-enter,
+  .calendar-day-enter,
+  .portfolio-case-enter {
+    opacity: 1;
+    animation: none !important;
+    transform: none !important;
+  }
+}

@@ -16,6 +16,29 @@ function canModerate(profile: any) { return profile?.role === "moderator" || pro
 function reportUrl(item: Report) { if (item.targetType === "listing") return `/listing/${item.targetId}`; if (item.targetType === "profile") return `/user/${item.targetId}`; if (item.targetType === "request") return `/requests/${item.targetId}`; if (item.targetType === "chat") return `/messages/${item.targetId}`; return ""; }
 function publicationUrl(item: Publication) { return item.kind === "listing" ? `/listing/${item.id}` : `/requests/${item.id}`; }
 
+async function sendModerationNotification(sender: any, item: Publication, status: PublicationStatus, reason: string) {
+  if (!sender || !item.ownerId) return;
+  try {
+    const token = await sender.getIdToken();
+    await fetch("/api/push/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        recipientId: item.ownerId,
+        type: "moderation",
+        entityId: item.id,
+        title: status === "approved" ? "Публикация одобрена" : "Публикация отклонена",
+        body: status === "approved"
+          ? `«${item.title || "Публикация"}» прошла модерацию и теперь доступна пользователям.`
+          : `«${item.title || "Публикация"}» не прошла модерацию. ${reason}`,
+        url: item.kind === "listing" ? `/listing/${item.id}` : `/requests/${item.id}`,
+      }),
+    });
+  } catch (error) {
+    console.warn("moderation notification error:", error);
+  }
+}
+
 export default function ModeratorReportsPage() {
   const { user, profile, loading } = useAuth();
   const [mode, setMode] = useState<"publications" | "reports">("publications");
@@ -77,6 +100,7 @@ export default function ModeratorReportsPage() {
         updatedAt: serverTimestamp(),
       });
       setPublications((current) => current.map((publication) => publication.id === item.id && publication.kind === item.kind ? { ...publication, moderationStatus: status, moderationReason: reason } : publication));
+      await sendModerationNotification(user, item, status, reason);
       setMessage(status === "approved" ? "Публикация одобрена." : "Публикация отклонена.");
     } finally { setWorkingId(""); }
   }

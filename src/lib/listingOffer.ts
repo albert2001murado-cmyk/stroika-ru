@@ -17,6 +17,7 @@ export type OfferFeatureOption = {
 };
 
 export type SearchableListingFields = {
+  category?: string;
   searchGroup?: string;
   offerAction?: string;
   offerActionLabel?: string;
@@ -24,6 +25,7 @@ export type SearchableListingFields = {
   searchTags?: string[];
   searchText?: string;
   searchVersion?: number;
+  capabilities?: string[];
 };
 
 const GROUP_INFO: Record<
@@ -127,7 +129,7 @@ const ACTIONS: Record<OfferGroup, OfferActionOption[]> = {
     {
       id: "complex_stage",
       label: "Отдельный этап работ",
-      description: "Конкретный этап работы",
+      description: "Фундамент, коробка, кровля, отделка или другой этап",
       keywords: ["этап работ", "отдельный этап", "часть работ"],
     },
     {
@@ -317,6 +319,91 @@ export function getOfferActions(group: OfferGroup) {
 
 export function getOfferFeatures(group: OfferGroup) {
   return FEATURES[group];
+}
+
+export function getOfferAction(group: OfferGroup, actionId?: string) {
+  return ACTIONS[group].find((item) => item.id === actionId);
+}
+
+export function getEnabledOfferFeatures(
+  group: OfferGroup,
+  features?: Record<string, boolean>
+) {
+  return FEATURES[group].filter((item) => Boolean(features?.[item.id]));
+}
+
+export function legacyCapabilitiesFromOffer(
+  group: OfferGroup,
+  actionId: string,
+  features: Record<string, boolean>
+) {
+  const values = new Set<string>();
+
+  if (group === "materials") values.add("sale");
+  if (group === "services") values.add("service");
+  if (group === "complex") values.add("contractor");
+  if (group === "equipment" && actionId === "equipment_rent") values.add("rent");
+  if (group === "equipment" && actionId === "equipment_work") values.add("operator");
+  if (group === "equipment" && actionId === "equipment_transport") values.add("delivery");
+  if (actionId === "service_turnkey" || actionId === "complex_turnkey") values.add("turnkey");
+  if (actionId === "complex_project" || features.estimateAvailable) values.add("estimate");
+  if (features.deliveryAvailable) values.add("delivery");
+  if (features.operatorIncluded) values.add("operator");
+  if (features.materialsIncluded) values.add("materials_included");
+
+  return Array.from(values);
+}
+
+export function inferOfferFromLegacy(input: {
+  category?: string;
+  capabilities?: string[];
+}) {
+  const group = getOfferGroup(input.category || "");
+  const capabilities = new Set(input.capabilities || []);
+  let actionId = ACTIONS[group][0].id;
+
+  if (group === "services" && capabilities.has("turnkey")) actionId = "service_turnkey";
+  if (group === "equipment" && capabilities.has("operator")) actionId = "equipment_work";
+  if (group === "equipment" && capabilities.has("delivery")) actionId = "equipment_transport";
+  if (group === "complex" && capabilities.has("estimate")) actionId = "complex_project";
+  if (group === "complex" && capabilities.has("turnkey")) actionId = "complex_turnkey";
+
+  const features: Record<string, boolean> = {};
+  FEATURES[group].forEach((item) => {
+    features[item.id] = false;
+  });
+
+  if (capabilities.has("delivery")) features.deliveryAvailable = true;
+  if (capabilities.has("operator")) features.operatorIncluded = true;
+  if (capabilities.has("materials_included")) features.materialsIncluded = true;
+  if (capabilities.has("estimate")) features.estimateAvailable = true;
+
+  return { group, actionId, features };
+}
+
+export function matchesOfferSelection(
+  listing: SearchableListingFields,
+  actionId = "",
+  requiredFeatureIds: string[] = []
+) {
+  if (!actionId && requiredFeatureIds.length === 0) return true;
+
+  const structured = Boolean(
+    listing.offerAction ||
+      listing.searchGroup ||
+      (listing.offerFeatures && Object.keys(listing.offerFeatures).length)
+  );
+  const fallback = structured
+    ? null
+    : inferOfferFromLegacy({
+        category: listing.category,
+        capabilities: listing.capabilities,
+      });
+  const effectiveAction = listing.offerAction || fallback?.actionId || "";
+  const effectiveFeatures = listing.offerFeatures || fallback?.features || {};
+
+  if (actionId && effectiveAction !== actionId) return false;
+  return requiredFeatureIds.every((id) => Boolean(effectiveFeatures[id]));
 }
 
 export function buildListingSearchTags(input: {

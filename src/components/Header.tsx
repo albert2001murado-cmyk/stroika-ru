@@ -23,7 +23,7 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type MouseEvent } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "./AuthProvider";
 import VerifiedBadge from "./VerifiedBadge";
@@ -95,6 +95,12 @@ export default function Header() {
     return pathname === href || pathname.startsWith(`${href}/`);
   }
 
+  function handleHomeLogoClick(event: MouseEvent<HTMLAnchorElement>) {
+    if (pathname !== "/") return;
+    event.preventDefault();
+    window.location.reload();
+  }
+
   function mobileNavClass(href: string) {
     return `mobile-nav-item ${isActive(href) ? "mobile-nav-item-active" : ""}`;
   }
@@ -104,7 +110,12 @@ export default function Header() {
       <header className="sticky top-0 z-50 border-b border-white/10 bg-[#0057ff] text-white shadow-xl shadow-blue-950/10">
         {/* Полная шапка для компьютера */}
         <div className="hidden h-[82px] w-full items-center justify-between gap-4 px-3 lg:flex lg:px-4">
-          <Link href="/" className="flex min-w-[300px] shrink-0 items-center gap-3">
+          <Link
+            href="/"
+            onClick={handleHomeLogoClick}
+            className="flex min-w-[300px] shrink-0 items-center gap-3"
+            aria-label="Стройка.ру — обновить главную"
+          >
             <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white text-[#0057ff] shadow-lg shadow-blue-500/20">
               <HardHat size={30} strokeWidth={2.8} />
             </div>
@@ -217,7 +228,12 @@ export default function Header() {
 
         {/* Компактная шапка для телефона и планшета */}
         <div className="flex h-16 items-center justify-between gap-3 px-3 lg:hidden">
-          <Link href="/" className="flex min-w-0 items-center gap-2.5" aria-label="Стройка.ру — главная">
+          <Link
+            href="/"
+            onClick={handleHomeLogoClick}
+            className="flex min-w-0 items-center gap-2.5"
+            aria-label="Стройка.ру — обновить главную"
+          >
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] bg-white text-[#0057ff] shadow-lg shadow-blue-950/10">
               <HardHat size={23} strokeWidth={2.8} />
             </span>

@@ -130,6 +130,8 @@ export type Listing = {
   verificationStatus?: string;
   viewsCount?: number;
   favoritesCount?: number;
+  catalogSection?: "materials" | "services" | "equipment" | "solutions" | string;
+  capabilities?: string[];
   searchGroup?: string;
   offerAction?: string;
   offerActionLabel?: string;

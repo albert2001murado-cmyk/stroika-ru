@@ -3,10 +3,18 @@
 import { useAuth } from "@/components/AuthProvider";
 import ReportDialog from "@/components/ReportDialog";
 import { db } from "@/lib/firebase";
+import {
+  getEnabledOfferFeatures,
+  getOfferAction,
+  getOfferGroup,
+  getOfferGroupInfo,
+  type OfferGroup,
+} from "@/lib/listingOffer";
 import { isPublicationApproved } from "@/lib/moderation";
 import type { Listing, Review, UserProfile } from "@/types";
 import {
   Banknote,
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   CreditCard,
@@ -17,6 +25,7 @@ import {
   Phone,
   PlayCircle,
   Star,
+  Sparkles,
   UserRound,
   X,
 } from "lucide-react";
@@ -158,6 +167,27 @@ export default function ListingPage() {
     const total = reviews.reduce((sum, review) => sum + review.rating, 0);
     return total / reviews.length;
   }, [reviews]);
+
+  const offerPresentation = useMemo(() => {
+    if (!listing) return null;
+
+    const groups: OfferGroup[] = ["materials", "services", "equipment", "complex"];
+    const group = groups.includes(listing.searchGroup as OfferGroup)
+      ? (listing.searchGroup as OfferGroup)
+      : getOfferGroup(listing.category || "");
+    const action = getOfferAction(group, listing.offerAction);
+    const features = getEnabledOfferFeatures(group, listing.offerFeatures);
+    const actionLabel = listing.offerActionLabel || action?.label || "";
+
+    if (!actionLabel && features.length === 0) return null;
+
+    return {
+      group: getOfferGroupInfo(group),
+      actionLabel,
+      actionDescription: action?.description || "",
+      features,
+    };
+  }, [listing]);
 
   const allMedia = useMemo(() => {
     if (!listing) return [];
@@ -463,6 +493,57 @@ export default function ListingPage() {
               <p className="mt-4 whitespace-pre-wrap text-base leading-7 text-gray-600 sm:mt-5 sm:text-lg sm:leading-8">
                 {listing.description}
               </p>
+
+              {offerPresentation ? (
+                <div className="mt-6 overflow-hidden rounded-[24px] border border-blue-100 bg-[linear-gradient(135deg,#eff6ff_0%,#ffffff_66%,#f8fbff_100%)] p-4 sm:mt-8 sm:p-5">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.14em] text-[#0057ff]">
+                        <Sparkles size={15} />
+                        Что предлагает исполнитель
+                      </p>
+                      {offerPresentation.actionLabel ? (
+                        <h2 className="mt-2 text-xl font-black text-gray-950 sm:text-2xl">
+                          {offerPresentation.actionLabel}
+                        </h2>
+                      ) : null}
+                      {offerPresentation.actionDescription ? (
+                        <p className="mt-1 text-sm font-bold leading-5 text-gray-500">
+                          {offerPresentation.actionDescription}
+                        </p>
+                      ) : null}
+                    </div>
+
+                    <span className="inline-flex w-fit shrink-0 items-center gap-2 rounded-2xl bg-white px-3.5 py-2 text-sm font-black text-[#0057ff] shadow-sm ring-1 ring-blue-100">
+                      <span className="text-lg">{offerPresentation.group.emoji}</span>
+                      {offerPresentation.group.title}
+                    </span>
+                  </div>
+
+                  {offerPresentation.features.length > 0 ? (
+                    <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                      {offerPresentation.features.map((feature) => (
+                        <div
+                          key={feature.id}
+                          className="flex items-start gap-3 rounded-2xl bg-white p-3.5 shadow-sm ring-1 ring-blue-100"
+                        >
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#0057ff] text-white">
+                            <CheckCircle2 size={19} strokeWidth={2.7} />
+                          </span>
+                          <span>
+                            <span className="block text-sm font-black text-gray-950">
+                              {feature.label}
+                            </span>
+                            <span className="mt-0.5 block text-xs font-bold leading-4 text-gray-500">
+                              {feature.description}
+                            </span>
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
 
               <div className="mt-6 grid gap-4 rounded-[22px] bg-[#f5f7fb] p-4 sm:mt-8 sm:rounded-[28px] sm:p-5 md:grid-cols-2">
                 <div>

@@ -10,6 +10,7 @@ import {
   getOfferFeatures,
   getOfferGroup,
   getOfferGroupInfo,
+  legacyCapabilitiesFromOffer,
 } from "@/lib/listingOffer";
 import type { ListingMedia, PaymentMethod } from "@/types";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
@@ -362,6 +363,19 @@ export default function NewListingPage() {
         actionId: offerAction,
         enabledFeatureIds,
       });
+      const capabilities = legacyCapabilitiesFromOffer(
+        offerGroup,
+        offerAction,
+        offerFeatures
+      );
+      const catalogSection =
+        offerGroup === "materials"
+          ? "materials"
+          : offerGroup === "equipment"
+            ? "equipment"
+            : offerGroup === "complex"
+              ? "solutions"
+              : "services";
 
       const listingRef = await addDoc(collection(db, "listings"), {
         title: title.trim(),
@@ -386,6 +400,8 @@ export default function NewListingPage() {
         priceFrom: priceFrom.trim() ? Number(priceFrom) : null,
         paymentMethods,
 
+        catalogSection,
+        capabilities,
         searchGroup: offerGroup,
         offerAction,
         offerActionLabel: selectedOfferAction?.label || "",

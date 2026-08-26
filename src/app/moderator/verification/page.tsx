@@ -50,6 +50,29 @@ function isModerator(profile: any, user: any) {
   );
 }
 
+async function sendVerificationNotification(sender: any, item: RequestItem, approved: boolean, moderatorComment: string) {
+  if (!sender || !item.userId) return;
+  try {
+    const token = await sender.getIdToken();
+    await fetch("/api/push/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        recipientId: item.userId,
+        type: "moderation",
+        entityId: item.id,
+        title: approved ? "Профиль подтверждён" : "Проверка профиля отклонена",
+        body: approved
+          ? "Проверка завершена: профиль получил отметку подтверждённого исполнителя."
+          : moderatorComment || "Исправьте данные и отправьте заявку на проверку повторно.",
+        url: "/profile",
+      }),
+    });
+  } catch (error) {
+    console.warn("verification notification error:", error);
+  }
+}
+
 export default function ModeratorVerificationPage() {
   const authContext = useAuth() as any;
   const user = authContext?.user || null;
@@ -142,6 +165,7 @@ export default function ModeratorVerificationPage() {
       });
 
       await updateListings(item.userId, true);
+      await sendVerificationNotification(user, item, true, comment.trim());
       setSuccess(`Профиль ${item.name || item.email || item.userId} теперь проверен.`);
       setComment("");
       await load();
@@ -176,6 +200,12 @@ export default function ModeratorVerificationPage() {
       });
 
       await updateListings(item.userId, false);
+      await sendVerificationNotification(
+        user,
+        item,
+        false,
+        comment.trim() || "Профиль пока не прошёл проверку. Исправьте данные и отправьте заявку повторно."
+      );
       setSuccess("Заявка отклонена.");
       setComment("");
       await load();

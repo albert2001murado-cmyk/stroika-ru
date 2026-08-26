@@ -25,6 +25,7 @@ import {
   Landmark,
   Mail,
   MapPin,
+  Maximize2,
   MapPinned,
   MessageCircle,
   Phone,
@@ -50,7 +51,16 @@ type PortfolioItem = {
   id: string;
   title: string;
   description?: string;
+  category?: string;
   city?: string;
+  duration?: string;
+  cost?: number | null;
+  area?: number | null;
+  materials?: string;
+  completedAt?: string;
+  coverUrl?: string;
+  beforeUrl?: string;
+  afterUrl?: string;
   imageUrls?: string[];
   createdAt?: unknown;
 };
@@ -58,7 +68,7 @@ type PortfolioItem = {
 type AvailabilityDay = {
   id: string;
   date: string;
-  status: "free" | "busy";
+  status: "free" | "busy" | "reserved" | "dayoff";
 };
 
 function accountText(profile?: UserProfile | null) {
@@ -804,9 +814,13 @@ export default function PublicUserPage() {
               </div>
             </div>
 
-            <p className="text-sm font-bold text-slate-400">
-              Данные синхронизированы с приложением
-            </p>
+            <Link
+              href={`/availability/${uid}`}
+              className="inline-flex min-h-11 items-center gap-2 rounded-2xl bg-blue-50 px-4 text-sm font-black text-[#0057ff] transition hover:-translate-y-0.5 hover:bg-blue-100"
+            >
+              Открыть календарь
+              <ArrowRight size={17} />
+            </Link>
           </div>
 
           {upcoming.length === 0 ? (
@@ -827,7 +841,11 @@ export default function PublicUserPage() {
                   className={`group min-w-[122px] rounded-[24px] px-4 py-4 text-center font-black ring-1 transition duration-300 hover:-translate-y-1 hover:shadow-lg ${
                     item.status === "free"
                       ? "bg-emerald-50 text-emerald-700 ring-emerald-100"
-                      : "bg-rose-50 text-rose-700 ring-rose-100"
+                      : item.status === "busy"
+                      ? "bg-rose-50 text-rose-700 ring-rose-100"
+                      : item.status === "reserved"
+                      ? "bg-amber-50 text-amber-700 ring-amber-100"
+                      : "bg-slate-100 text-slate-600 ring-slate-200"
                   }`}
                   style={{ transitionDelay: `${Math.min(index * 20, 160)}ms` }}
                 >
@@ -838,7 +856,13 @@ export default function PublicUserPage() {
                     }).format(new Date(`${item.date}T12:00:00`))}
                   </p>
                   <p className="mt-1 text-xs">
-                    {item.status === "free" ? "Свободен" : "Занят"}
+                    {item.status === "free"
+                      ? "Свободен"
+                      : item.status === "busy"
+                      ? "Занят"
+                      : item.status === "reserved"
+                      ? "Предварительно"
+                      : "Выходной"}
                   </p>
                 </div>
               ))}
@@ -878,54 +902,75 @@ export default function PublicUserPage() {
             </div>
           ) : (
             <div className="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {portfolio.map((item, index) => (
-                <article
-                  key={item.id}
-                  className="group overflow-hidden rounded-[28px] bg-white shadow-sm ring-1 ring-slate-200/70 transition duration-500 hover:-translate-y-2 hover:shadow-[0_24px_60px_rgba(15,23,42,0.14)]"
-                  style={{ animationDelay: `${400 + index * 45}ms` }}
-                >
-                  <div className="relative h-56 overflow-hidden bg-blue-50">
-                    {item.imageUrls?.[0] ? (
-                      <img
-                        src={item.imageUrls[0]}
-                        alt={item.title}
-                        className="h-full w-full object-cover transition duration-700 group-hover:scale-110"
-                      />
-                    ) : (
-                      <div className="flex h-full items-center justify-center text-2xl font-black text-blue-200">
-                        Стройка.ру
+              {portfolio.map((item, index) => {
+                const cover =
+                  item.coverUrl ||
+                  item.afterUrl ||
+                  item.beforeUrl ||
+                  item.imageUrls?.[0] ||
+                  "";
+                const photoCount = new Set(
+                  [item.coverUrl, item.beforeUrl, item.afterUrl, ...(item.imageUrls || [])].filter(Boolean)
+                ).size;
+
+                return (
+                  <Link
+                    key={item.id}
+                    href={`/portfolio/${item.id}`}
+                    className="portfolio-case-enter group overflow-hidden rounded-[28px] bg-white shadow-sm ring-1 ring-slate-200/70 transition duration-500 hover:-translate-y-2 hover:shadow-[0_24px_60px_rgba(15,23,42,0.14)]"
+                    style={{ animationDelay: `${400 + index * 45}ms` }}
+                  >
+                    <div className="relative h-56 overflow-hidden bg-blue-50">
+                      {cover ? (
+                        <img
+                          src={cover}
+                          alt={item.title}
+                          className="h-full w-full object-cover transition duration-700 group-hover:scale-110"
+                        />
+                      ) : (
+                        <div className="flex h-full items-center justify-center text-2xl font-black text-blue-200">
+                          Стройка.ру
+                        </div>
+                      )}
+
+                      {item.category ? (
+                        <span className="absolute left-3 top-3 rounded-full bg-white/95 px-3 py-1.5 text-xs font-black text-[#0057ff] shadow-sm">
+                          {item.category}
+                        </span>
+                      ) : null}
+
+                      {item.beforeUrl && item.afterUrl ? (
+                        <span className="absolute right-3 top-3 rounded-full bg-[#0057ff] px-3 py-1.5 text-xs font-black text-white">
+                          До / после
+                        </span>
+                      ) : photoCount > 1 ? (
+                        <span className="absolute right-3 top-3 rounded-full bg-slate-950/70 px-3 py-1.5 text-xs font-black text-white backdrop-blur-md">
+                          {photoCount} фото
+                        </span>
+                      ) : null}
+                    </div>
+
+                    <div className="p-5">
+                      <h3 className="text-xl font-black text-slate-950">{item.title}</h3>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {item.city ? <span className="case-meta"><MapPin size={15} />{item.city}</span> : null}
+                        {item.duration ? <span className="case-meta"><Clock3 size={15} />{item.duration}</span> : null}
+                        {item.area ? <span className="case-meta"><Maximize2 size={15} />{item.area} м²</span> : null}
                       </div>
-                    )}
-
-                    {item.imageUrls && item.imageUrls.length > 1 ? (
-                      <span className="absolute right-3 top-3 rounded-full bg-slate-950/70 px-3 py-1.5 text-xs font-black text-white backdrop-blur-md">
-                        {item.imageUrls.length} фото
-                      </span>
-                    ) : null}
-
-                    <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-slate-950/45 to-transparent opacity-0 transition duration-500 group-hover:opacity-100" />
-                  </div>
-
-                  <div className="p-5">
-                    <h3 className="text-xl font-black text-slate-950">
-                      {item.title}
-                    </h3>
-
-                    {item.city ? (
-                      <p className="mt-2 flex items-center gap-2 text-sm font-bold text-slate-500">
-                        <MapPin size={16} className="text-[#0057ff]" />
-                        {item.city}
-                      </p>
-                    ) : null}
-
-                    {item.description ? (
-                      <p className="mt-3 line-clamp-3 text-sm font-medium leading-6 text-slate-500">
-                        {item.description}
-                      </p>
-                    ) : null}
-                  </div>
-                </article>
-              ))}
+                      {item.description ? (
+                        <p className="mt-3 line-clamp-3 text-sm font-medium leading-6 text-slate-500">
+                          {item.description}
+                        </p>
+                      ) : null}
+                      {item.cost ? (
+                        <p className="mt-4 text-lg font-black text-[#0057ff]">
+                          {item.cost.toLocaleString("ru-RU")} ₽
+                        </p>
+                      ) : null}
+                    </div>
+                  </Link>
+                );
+              })}
             </div>
           )}
         </section>

@@ -2,6 +2,12 @@
 
 import FavoriteButton from "@/components/FavoriteButton";
 import ListingAuthorVerifiedBadge from "@/components/ListingAuthorVerifiedBadge";
+import {
+  getEnabledOfferFeatures,
+  getOfferAction,
+  getOfferGroup,
+  type OfferGroup,
+} from "@/lib/listingOffer";
 import type { Listing } from "@/types";
 import { isCreatedWithinHours } from "@/types";
 import {
@@ -47,6 +53,16 @@ function paymentIcon(listing: Listing) {
 function ListingCard({ listing }: ListingCardProps) {
   const imageUrl = getImageUrl(listing);
   const isNew = isCreatedWithinHours(listing.createdAt, 72);
+  const offerGroups: OfferGroup[] = ["materials", "services", "equipment", "complex"];
+  const offerGroup = offerGroups.includes(listing.searchGroup as OfferGroup)
+    ? (listing.searchGroup as OfferGroup)
+    : getOfferGroup(listing.category || "");
+  const offerAction = getOfferAction(offerGroup, listing.offerAction);
+  const offerActionLabel = listing.offerActionLabel || offerAction?.label || "";
+  const offerFeatures = getEnabledOfferFeatures(
+    offerGroup,
+    listing.offerFeatures
+  ).slice(0, 2);
 
   return (
     <article className="group relative overflow-hidden rounded-[22px] bg-white sm:rounded-[26px] shadow-sm ring-1 ring-gray-100 transition duration-300 hover:-translate-y-1 hover:shadow-xl">
@@ -99,9 +115,28 @@ function ListingCard({ listing }: ListingCardProps) {
             {listing.title}
           </h3>
 
+          {offerActionLabel ? (
+            <div className="mt-2 inline-flex max-w-full items-center rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-black text-[#0057ff] ring-1 ring-blue-100">
+              <span className="truncate">{offerActionLabel}</span>
+            </div>
+          ) : null}
+
           <p className="mt-2 line-clamp-2 text-sm leading-5 text-gray-500">
             {listing.description}
           </p>
+
+          {offerFeatures.length > 0 ? (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {offerFeatures.map((feature) => (
+                <span
+                  key={feature.id}
+                  className="rounded-full bg-gray-50 px-2 py-1 text-[10px] font-black text-gray-500 ring-1 ring-gray-100"
+                >
+                  ✓ {feature.label}
+                </span>
+              ))}
+            </div>
+          ) : null}
 
           <p className="mt-3 flex items-center gap-2 text-sm font-bold text-gray-500">
             <MapPin size={15} className="shrink-0 text-[#0057ff]" />
