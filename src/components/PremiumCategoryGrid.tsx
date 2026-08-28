@@ -68,9 +68,9 @@ const sections: SectionConfig[] = [
   {
     id: "complex",
     title: "Комплексные решения",
-    description: "Ремонт, строительство и работы под ключ",
+    description: "Проектирование, ремонт и строительство под ключ",
     image: "/categories/construction.png",
-    keys: ["ремонт квартир", "строительство"],
+    keys: ["ремонт квартир", "дизайн", "проектирование", "строительство"],
   },
 ];
 
@@ -112,6 +112,7 @@ function getCategoryImage(title: string) {
 
   if (value.includes("материал")) return CATEGORY_IMAGES.materials;
   if (value.includes("ремонт квартир")) return CATEGORY_IMAGES.repair;
+  if (value.includes("дизайн") || value.includes("проект")) return CATEGORY_IMAGES.design;
   if (value.includes("отдел") || value.includes("пол")) return CATEGORY_IMAGES.finishing;
   if (value.includes("элект")) return CATEGORY_IMAGES.electric;
   if (value.includes("сант")) return CATEGORY_IMAGES.plumbing;
@@ -142,45 +143,9 @@ function resolveCategoryName(categories: CategoryLike[], target: string) {
 const SUBCATEGORY_PAGE_SIZE = 18;
 
 function getOrderedSubcategories(category: CategoryLike) {
-  const all = category.subcategories || [];
-  const title = normalize(getTitle(category));
-
-  const preferred = title.includes("материал")
-    ? [
-        "Бетон",
-        "Цемент",
-        "Кирпич",
-        "Арматура",
-        "Газобетонные блоки",
-        "Песок",
-        "Щебень",
-        "Пиломатериалы",
-        "Кровельные материалы",
-        "Кабель и провод",
-        "Трубы водопроводные",
-        "Утеплитель минеральная вата",
-      ]
-    : title.includes("спецтехника")
-      ? [
-          "Экскаваторы",
-          "Мини-экскаваторы",
-          "Экскаваторы-погрузчики",
-          "Фронтальные погрузчики",
-          "Автокраны",
-          "Манипуляторы",
-          "Самосвалы",
-          "Автовышки",
-          "Бетононасосы",
-          "Автобетоносмесители (миксеры)",
-          "Бульдозеры",
-          "Тракторы",
-        ]
-      : [];
-
-  if (!preferred.length) return all;
-
-  const found = preferred.filter((item) => all.includes(item));
-  return [...found, ...all.filter((item) => !found.includes(item))];
+  return [...(category.subcategories || [])].sort((a, b) =>
+    a.localeCompare(b, "ru", { numeric: true, sensitivity: "base" })
+  );
 }
 
 function buildActions(
@@ -300,6 +265,28 @@ function buildActions(
     ];
   }
 
+  if (normalized.includes("дизайн") || normalized.includes("проектирование")) {
+    return [
+      {
+        title: "Найти подрядчика",
+        description: `${subject} — исполнители и компании`,
+        image: CATEGORY_IMAGES.design,
+        selection: { category: categoryName, subcategory },
+      },
+      {
+        title: "Рассчитать стоимость",
+        description: "Получить оценку и расчёт проекта",
+        image: CATEGORY_IMAGES.design,
+        selection: {
+          category: categoryName,
+          subcategory,
+          search: `${subject} стоимость`,
+          offerAction: "complex_project",
+        },
+      },
+    ];
+  }
+
   if (normalized.includes("строительство")) {
     return [
       {
@@ -378,10 +365,17 @@ export default function PremiumCategoryGrid({
 
   const sectionCategories = useMemo(() => {
     if (!section) return [];
-    return categories.filter((item) => {
-      const title = normalize(getTitle(item));
-      return section.keys.some((key) => title.includes(normalize(key)));
-    });
+    return categories
+      .filter((item) => {
+        const title = normalize(getTitle(item));
+        return section.keys.some((key) => title.includes(normalize(key)));
+      })
+      .sort((a, b) =>
+        cleanTitle(getTitle(a)).localeCompare(cleanTitle(getTitle(b)), "ru", {
+          numeric: true,
+          sensitivity: "base",
+        })
+      );
   }, [categories, section]);
 
   const filteredSubcategories = useMemo(() => {
@@ -454,6 +448,19 @@ export default function PremiumCategoryGrid({
     window.requestAnimationFrame(() => {
       document.getElementById("recommended-listings")?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
+  }
+
+  function chooseSubcategory(value: string) {
+    if (activeCategory && normalize(getTitle(activeCategory)).includes("мебель")) {
+      apply({
+        category: getTitle(activeCategory),
+        subcategory: value,
+        search: "",
+      });
+      return;
+    }
+
+    setSubcategory(value);
   }
 
   const heading = subcategory
@@ -623,7 +630,7 @@ export default function PremiumCategoryGrid({
                   <button
                     key={item}
                     type="button"
-                    onClick={() => setSubcategory(item)}
+                    onClick={() => chooseSubcategory(item)}
                     className={[
                       "group flex min-h-14 items-center justify-between gap-3 rounded-2xl border px-4 py-3 sm:min-h-16 sm:px-5 text-left transition duration-300 ease-out hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-lg hover:shadow-blue-900/5 active:scale-[0.985]",
                       selectedSubcategory === item

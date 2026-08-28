@@ -4,6 +4,7 @@ import CustomerRequestCard from "@/components/CustomerRequestCard";
 import ListingCard from "@/components/ListingCard";
 import NearbyWorkerButton from "@/components/NearbyWorkerButton";
 import PremiumCategoryGrid from "@/components/PremiumCategoryGrid";
+import SolutionWidgets, { type SolutionSelection } from "@/components/SolutionWidgets";
 import { categories } from "@/data/categories";
 import { db } from "@/lib/firebase";
 import { isPublicationApproved } from "@/lib/moderation";
@@ -590,6 +591,29 @@ export default function HomePage() {
     setSourceMaterial("");
   }
 
+  function applySolution(selection: SolutionSelection) {
+    setFeedMode("contractors");
+    setSearch("");
+    setCategory(selection.category);
+    setSubcategory(selection.subcategory || "");
+    setSubcategoryQuery(selection.subcategory || "");
+    setPriceFrom(0);
+    setPriceTo(null);
+    setAccountType("");
+    setPaymentMethod("");
+    setVerifiedOnly(false);
+    setUrgentOnly(false);
+    setWithPhotosOnly(false);
+    setSelectedOfferAction("");
+    setRequiredOfferFeatures([]);
+    setSourceMaterial("");
+    setFiltersOpen(false);
+
+    window.requestAnimationFrame(() => {
+      scrollToFeed();
+    });
+  }
+
   function toggleRequiredOfferFeature(featureId: string) {
     setRequiredOfferFeatures((current) =>
       current.includes(featureId)
@@ -1135,6 +1159,10 @@ export default function HomePage() {
             setSourceMaterial(nextSourceMaterial || "");
           }}
         />
+      </section>
+
+      <section className="mx-auto max-w-7xl px-3 pt-8 sm:px-5 sm:pt-10">
+        <SolutionWidgets onSelect={applySolution} />
       </section>
 
       <section className="mx-auto max-w-7xl px-3 pb-8 pt-4 sm:px-5 sm:pt-5">

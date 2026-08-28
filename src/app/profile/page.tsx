@@ -1,641 +1,1258 @@
 "use client";
 
 import CustomerRequestCard from "@/components/CustomerRequestCard";
-import { ListingCard } from "@/components/ListingCard";
-import { useAuth } from "@/components/AuthProvider";
+import ListingCard from "@/components/ListingCard";
+import NearbyWorkerButton from "@/components/NearbyWorkerButton";
+import PremiumCategoryGrid from "@/components/PremiumCategoryGrid";
+import SolutionWidgets, { type SolutionSelection } from "@/components/SolutionWidgets";
+import { categories } from "@/data/categories";
 import { db } from "@/lib/firebase";
-import type { AccountType, CustomerRequest, Listing } from "@/types";
-import { updateProfile } from "firebase/auth";
+import { isPublicationApproved } from "@/lib/moderation";
 import {
-  collection,
-  deleteDoc,
-  doc,
-  onSnapshot,
-  query,
-  serverTimestamp,
-  setDoc,
-  where,
-} from "firebase/firestore";
+  getOfferActions,
+  getOfferFeatures,
+  getOfferGroup,
+  getOfferGroupInfo,
+  matchesListingSearch,
+  matchesOfferSelection,
+  type SearchableListingFields,
+} from "@/lib/listingOffer";
+import type { CustomerRequest, Listing } from "@/types";
+import { firestoreDateToMillis } from "@/types";
+import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
 import {
   BadgeCheck,
+  Banknote,
   Building2,
-  Camera,
-  Clock3,
   ClipboardList,
+  CreditCard,
   HardHat,
-  Loader2,
-  Mail,
+  Image as ImageIcon,
   MapPin,
-  Phone,
-  Plus,
-  Save,
-  Trash2,
+  Search,
+  SlidersHorizontal,
   UserRound,
+  Zap,
 } from "lucide-react";
-import Link from "next/link";
-import ProfileTools from "@/components/ProfileTools";
-import { moderationLabel } from "@/lib/moderation";
-import { ChangeEvent, FormEvent, useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-type UploadedFile = {
-  type: "image" | "video";
-  url: string;
-  path: string;
-  name: string;
-  size?: number;
-};
+type SearchableListing = Listing & SearchableListingFields;
+type FeedMode = "contractors" | "customers";
+type AccountTypeFilter = "" | "individual" | "ip" | "ooo";
+type PaymentFilter = "" | "cash" | "transfer";
 
-export default function ProfilePage() {
-  const { user, profile, loading } = useAuth();
+const POPULAR_CITIES = [
+  "Москва",
+  "Санкт-Петербург",
+  "Нижний Новгород",
+  "Казань",
+  "Самара",
+  "Екатеринбург",
+  "Новосибирск",
+  "Краснодар",
+  "Ростов-на-Дону",
+  "Уфа",
+  "Пермь",
+  "Челябинск",
+];
 
-  const [displayName, setDisplayName] = useState("");
-  const [accountType, setAccountType] = useState<AccountType>("individual");
-  const [companyName, setCompanyName] = useState("");
-  const [city, setCity] = useState("");
-  const [phone, setPhone] = useState("");
+function normalize(value: unknown) {
+  return String(value || "")
+    .trim()
+    .toLocaleLowerCase("ru-RU")
+    .replace(/^г\.?\s*/i, "");
+}
 
-  const [avatarUrl, setAvatarUrl] = useState("");
-  const [avatarPath, setAvatarPath] = useState("");
-  const [avatarFile, setAvatarFile] = useState<File | null>(null);
-  const [avatarPreview, setAvatarPreview] = useState("");
+function normalizeCatalogValue(value: unknown) {
+  return String(value || "")
+    .toLocaleLowerCase("ru-RU")
+    .replaceAll("ё", "е")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
-  const [listings, setListings] = useState<Listing[]>([]);
+function toFiniteNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value.replace(/[^\d.,-]/g, "").replace(",", "."));
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function cityMatches(itemCity: unknown, selectedCity: string) {
+  if (!selectedCity.trim()) return true;
+  const item = normalize(itemCity);
+  const selected = normalize(selectedCity);
+  return Boolean(item) && (item === selected || item.includes(selected) || selected.includes(item));
+}
+
+function hasImages(item: Listing | CustomerRequest) {
+  const imageUrls = Array.isArray(item.imageUrls) ? item.imageUrls : [];
+  if (imageUrls.some(Boolean)) return true;
+
+  if ("media" in item && Array.isArray(item.media)) {
+    return item.media.some((mediaItem) => mediaItem?.type === "image" && mediaItem?.url);
+  }
+
+  return false;
+}
+
+function listingPriceRange(listing: Listing) {
+  const from = toFiniteNumber(listing.priceFrom);
+  const to = toFiniteNumber(listing.priceTo) ?? from;
+  return { from, to };
+}
+
+function requestPriceRange(request: CustomerRequest) {
+  const fallback = toFiniteNumber(request.budget);
+  const from = toFiniteNumber(request.budgetFrom) ?? fallback;
+  const to = toFiniteNumber(request.budgetTo) ?? fallback ?? from;
+  return { from, to };
+}
+
+function overlapsPriceRange(
+  itemFrom: number | null,
+  itemTo: number | null,
+  selectedFrom: number,
+  selectedTo: number | null
+) {
+  const hasFilter = selectedFrom > 0 || selectedTo !== null;
+  if (!hasFilter) return true;
+  if (itemFrom === null && itemTo === null) return false;
+
+  const normalizedFrom = itemFrom ?? itemTo ?? 0;
+  const normalizedTo = itemTo ?? itemFrom ?? normalizedFrom;
+  const upper = selectedTo ?? Number.POSITIVE_INFINITY;
+
+  return normalizedTo >= selectedFrom && normalizedFrom <= upper;
+}
+
+function isListingVerified(listing: Listing) {
+  return Boolean(
+    listing.authorVerified ||
+      listing.verified ||
+      listing.isVerified ||
+      listing.verificationStatus === "approved"
+  );
+}
+
+function requestMatches(
+  request: CustomerRequest,
+  search: string,
+  category: string,
+  subcategory: string
+) {
+  const normalizedSearch = normalize(search);
+  const haystack = [
+    request.title,
+    request.description,
+    request.category,
+    request.subcategory,
+    request.city,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLocaleLowerCase("ru-RU");
+
+  const matchesText = normalizedSearch ? haystack.includes(normalizedSearch) : true;
+  const matchesCategory = category
+    ? normalizeCatalogValue(request.category) === normalizeCatalogValue(category)
+    : true;
+  const matchesSubcategory = subcategory
+    ? normalizeCatalogValue(request.subcategory) ===
+      normalizeCatalogValue(subcategory)
+    : true;
+
+  return isPublicationApproved(request) && request.status === "active" && matchesText && matchesCategory && matchesSubcategory;
+}
+
+function formatPrice(value: number) {
+  return new Intl.NumberFormat("ru-RU").format(Math.max(0, Math.round(value)));
+}
+
+function PriceRangeSlider({
+  max,
+  step,
+  from,
+  to,
+  onChangeFrom,
+  onChangeTo,
+}: {
+  max: number;
+  step: number;
+  from: number;
+  to: number | null;
+  onChangeFrom: (value: number) => void;
+  onChangeTo: (value: number | null) => void;
+}) {
+  const safeMax = Math.max(max, step);
+  const sliderTo = Math.min(Math.max(to ?? safeMax, from), safeMax);
+  const sliderFrom = Math.min(Math.max(from, 0), sliderTo);
+  const fromPercent = (sliderFrom / safeMax) * 100;
+  const toPercent = (sliderTo / safeMax) * 100;
+
+  return (
+    <div className="rounded-[24px] border border-blue-100 bg-gradient-to-br from-blue-50/80 to-white p-4 sm:p-5">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.13em] text-[#0057ff]">
+            Цена и бюджет
+          </p>
+          <p className="mt-1 text-sm font-bold text-gray-500">
+            Передвиньте ползунки или впишите сумму вручную
+          </p>
+        </div>
+        <span className="rounded-full bg-white px-3 py-1.5 text-xs font-black text-gray-600 shadow-sm ring-1 ring-blue-100">
+          до {formatPrice(safeMax)} ₽
+        </span>
+      </div>
+
+      <div className="relative mt-5 h-9">
+        <div className="absolute left-0 right-0 top-1/2 h-2 -translate-y-1/2 rounded-full bg-blue-100" />
+        <div
+          className="absolute top-1/2 h-2 -translate-y-1/2 rounded-full bg-gradient-to-r from-[#00aaff] to-[#0057ff] shadow-[0_4px_14px_rgba(0,87,255,0.28)] transition-[left,width] duration-300 ease-out"
+          style={{
+            left: `${fromPercent}%`,
+            width: `${Math.max(0, toPercent - fromPercent)}%`,
+          }}
+        />
+
+        <input
+          type="range"
+          min={0}
+          max={safeMax}
+          step={step}
+          value={sliderFrom}
+          onChange={(event) =>
+            onChangeFrom(Math.min(Number(event.target.value), sliderTo))
+          }
+          aria-label="Минимальная цена"
+          className={`pointer-events-none absolute inset-0 z-20 h-9 w-full appearance-none bg-transparent outline-none
+            [&::-webkit-slider-runnable-track]:h-2 [&::-webkit-slider-runnable-track]:bg-transparent
+            [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:mt-[-7px]
+            [&::-webkit-slider-thumb]:h-6 [&::-webkit-slider-thumb]:w-6
+            [&::-webkit-slider-thumb]:cursor-grab [&::-webkit-slider-thumb]:appearance-none
+            [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-[5px]
+            [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:bg-[#0057ff]
+            [&::-webkit-slider-thumb]:shadow-[0_5px_18px_rgba(0,87,255,0.38)]
+            [&::-webkit-slider-thumb]:transition-transform [&::-webkit-slider-thumb]:duration-200
+            active:[&::-webkit-slider-thumb]:cursor-grabbing active:[&::-webkit-slider-thumb]:scale-125
+            [&::-moz-range-track]:h-2 [&::-moz-range-track]:bg-transparent
+            [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4
+            [&::-moz-range-thumb]:cursor-grab [&::-moz-range-thumb]:rounded-full
+            [&::-moz-range-thumb]:border-[5px] [&::-moz-range-thumb]:border-white
+            [&::-moz-range-thumb]:bg-[#0057ff] [&::-moz-range-thumb]:shadow-[0_5px_18px_rgba(0,87,255,0.38)]`}
+        />
+
+        <input
+          type="range"
+          min={0}
+          max={safeMax}
+          step={step}
+          value={sliderTo}
+          onChange={(event) =>
+            onChangeTo(Math.max(Number(event.target.value), sliderFrom))
+          }
+          aria-label="Максимальная цена"
+          className={`pointer-events-none absolute inset-0 z-30 h-9 w-full appearance-none bg-transparent outline-none
+            [&::-webkit-slider-runnable-track]:h-2 [&::-webkit-slider-runnable-track]:bg-transparent
+            [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:mt-[-7px]
+            [&::-webkit-slider-thumb]:h-6 [&::-webkit-slider-thumb]:w-6
+            [&::-webkit-slider-thumb]:cursor-grab [&::-webkit-slider-thumb]:appearance-none
+            [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-[5px]
+            [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:bg-[#00aaff]
+            [&::-webkit-slider-thumb]:shadow-[0_5px_18px_rgba(0,170,255,0.38)]
+            [&::-webkit-slider-thumb]:transition-transform [&::-webkit-slider-thumb]:duration-200
+            active:[&::-webkit-slider-thumb]:cursor-grabbing active:[&::-webkit-slider-thumb]:scale-125
+            [&::-moz-range-track]:h-2 [&::-moz-range-track]:bg-transparent
+            [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4
+            [&::-moz-range-thumb]:cursor-grab [&::-moz-range-thumb]:rounded-full
+            [&::-moz-range-thumb]:border-[5px] [&::-moz-range-thumb]:border-white
+            [&::-moz-range-thumb]:bg-[#00aaff] [&::-moz-range-thumb]:shadow-[0_5px_18px_rgba(0,170,255,0.38)]`}
+        />
+      </div>
+
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <label className="rounded-2xl bg-white px-4 py-3 shadow-sm ring-1 ring-blue-100 transition focus-within:ring-2 focus-within:ring-[#0057ff]">
+          <span className="block text-[11px] font-black uppercase tracking-wide text-gray-400">
+            Цена от
+          </span>
+          <div className="mt-1 flex items-center gap-2">
+            <input
+              type="number"
+              min={0}
+              step={step}
+              value={from || ""}
+              onChange={(event) => {
+                const value = Math.max(0, Number(event.target.value) || 0);
+                onChangeFrom(Math.min(value, sliderTo));
+              }}
+              placeholder="0"
+              className="min-w-0 flex-1 border-0 bg-transparent text-lg font-black text-gray-950 outline-none"
+            />
+            <span className="font-black text-gray-400">₽</span>
+          </div>
+        </label>
+
+        <label className="rounded-2xl bg-white px-4 py-3 shadow-sm ring-1 ring-blue-100 transition focus-within:ring-2 focus-within:ring-[#0057ff]">
+          <span className="block text-[11px] font-black uppercase tracking-wide text-gray-400">
+            Цена до
+          </span>
+          <div className="mt-1 flex items-center gap-2">
+            <input
+              type="number"
+              min={0}
+              step={step}
+              value={to ?? ""}
+              onChange={(event) => {
+                if (!event.target.value) {
+                  onChangeTo(null);
+                  return;
+                }
+                onChangeTo(
+                  Math.min(
+                    safeMax,
+                    Math.max(sliderFrom, Number(event.target.value) || sliderFrom)
+                  )
+                );
+              }}
+              placeholder={`до ${formatPrice(safeMax)}`}
+              className="min-w-0 flex-1 border-0 bg-transparent text-lg font-black text-gray-950 outline-none"
+            />
+            <span className="font-black text-gray-400">₽</span>
+          </div>
+        </label>
+      </div>
+    </div>
+  );
+}
+
+export default function HomePage() {
+  const [listings, setListings] = useState<SearchableListing[]>([]);
   const [requests, setRequests] = useState<CustomerRequest[]>([]);
-  const [publicationTab, setPublicationTab] = useState<"listings" | "requests">("listings");
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState("");
+  const [feedMode, setFeedMode] = useState<FeedMode>("contractors");
+  const [search, setSearch] = useState("");
+  const [category, setCategory] = useState("");
+  const [subcategory, setSubcategory] = useState("");
+  const [subcategoryQuery, setSubcategoryQuery] = useState("");
+  const [city, setCity] = useState("");
+  const [priceFrom, setPriceFrom] = useState(0);
+  const [priceTo, setPriceTo] = useState<number | null>(null);
+  const [accountType, setAccountType] = useState<AccountTypeFilter>("");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentFilter>("");
+  const [verifiedOnly, setVerifiedOnly] = useState(false);
+  const [urgentOnly, setUrgentOnly] = useState(false);
+  const [withPhotosOnly, setWithPhotosOnly] = useState(false);
+  const [selectedOfferAction, setSelectedOfferAction] = useState("");
+  const [requiredOfferFeatures, setRequiredOfferFeatures] = useState<string[]>([]);
+  const [sourceMaterial, setSourceMaterial] = useState("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   useEffect(() => {
-    if (!profile && !user) return;
-
-    setDisplayName(profile?.displayName || user?.displayName || "");
-    setAccountType(profile?.accountType || "individual");
-    setCompanyName(profile?.companyName || "");
-    setCity(profile?.city || "");
-    setPhone(profile?.phone || "");
-    setAvatarUrl(profile?.avatarUrl || user?.photoURL || "");
-    setAvatarPath(profile?.avatarPath || "");
-  }, [profile, user]);
-
-  useEffect(() => {
-    if (!user) return;
-
-    const q = query(
+    const listingQuery = query(
       collection(db, "listings"),
-      where("authorId", "==", user.uid)
+      orderBy("createdAt", "desc")
     );
 
-    const unsub = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map((docItem) => ({
-        id: docItem.id,
-        ...docItem.data(),
-      })) as Listing[];
-
-      data.sort((a, b) => {
-        const aTime = a.createdAt?.toMillis?.() || 0;
-        const bTime = b.createdAt?.toMillis?.() || 0;
-        return bTime - aTime;
-      });
+    const unsubscribeListings = onSnapshot(listingQuery, (snapshot) => {
+      const data = snapshot.docs.map((document) => ({
+        id: document.id,
+        ...document.data(),
+      })) as SearchableListing[];
 
       setListings(data);
     });
 
-    return () => unsub();
-  }, [user]);
+    const unsubscribeRequests = onSnapshot(
+      collection(db, "customerRequests"),
+      (snapshot) => {
+        const data = snapshot.docs.map((document) => ({
+          id: document.id,
+          ...document.data(),
+        })) as CustomerRequest[];
+
+        data.sort(
+          (a, b) =>
+            firestoreDateToMillis(b.createdAt) - firestoreDateToMillis(a.createdAt)
+        );
+
+        setRequests(data);
+      }
+    );
+
+    return () => {
+      unsubscribeListings();
+      unsubscribeRequests();
+    };
+  }, []);
+
+  const selectedCategory = categories.find((item) => item.name === category);
+  const filteredSubcategoryOptions = useMemo(() => {
+    const options = selectedCategory?.subcategories || [];
+    const value = normalizeCatalogValue(subcategoryQuery);
+
+    if (!value) return options.slice(0, 12);
+    return options
+      .filter((item) => normalizeCatalogValue(item).includes(value))
+      .slice(0, 30);
+  }, [selectedCategory, subcategoryQuery]);
+  const selectedOfferGroup = useMemo(
+    () => (category ? getOfferGroup(category) : null),
+    [category]
+  );
+  const offerActionOptions = useMemo(
+    () => (selectedOfferGroup ? getOfferActions(selectedOfferGroup) : []),
+    [selectedOfferGroup]
+  );
+  const offerFeatureOptions = useMemo(
+    () => (selectedOfferGroup ? getOfferFeatures(selectedOfferGroup) : []),
+    [selectedOfferGroup]
+  );
+  const selectedOfferGroupInfo = useMemo(
+    () => (selectedOfferGroup ? getOfferGroupInfo(selectedOfferGroup) : null),
+    [selectedOfferGroup]
+  );
+
+  const availableCities = useMemo(() => {
+    const source = feedMode === "contractors" ? listings : requests;
+    const dynamicCities = source
+      .map((item) => String(item.city || "").trim())
+      .filter(Boolean);
+
+    return Array.from(new Set([...POPULAR_CITIES, ...dynamicCities])).sort((a, b) =>
+      a.localeCompare(b, "ru")
+    );
+  }, [feedMode, listings, requests]);
+
+  // Верхняя граница фильтра фиксирована на 9 млн рублей,
+  // чтобы можно было искать крупные строительные работы и проекты.
+  const priceCeiling = 9_000_000;
+
+  const priceStep = 10_000;
 
   useEffect(() => {
-    if (!user) return;
-
-    const requestQuery = query(
-      collection(db, "customerRequests"),
-      where("customerId", "==", user.uid)
-    );
-
-    const unsubscribe = onSnapshot(requestQuery, (snapshot) => {
-      const data = snapshot.docs.map((document) => ({
-        id: document.id,
-        ...document.data(),
-      })) as CustomerRequest[];
-
-      data.sort((a, b) => {
-        const aTime = a.createdAt?.toMillis?.() || 0;
-        const bTime = b.createdAt?.toMillis?.() || 0;
-        return bTime - aTime;
-      });
-
-      setRequests(data);
-    });
-
-    return () => unsubscribe();
-  }, [user]);
-
-  function handleAvatarChange(e: ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-
-    if (!file) return;
-
-    if (!file.type.startsWith("image/")) {
-      setMessage("Можно загрузить только изображение.");
-      return;
+    if (priceTo !== null && priceTo > priceCeiling) {
+      setPriceTo(priceCeiling);
     }
+  }, [priceCeiling, priceTo]);
 
-    if (file.size > 5 * 1024 * 1024) {
-      setMessage("Фото профиля слишком большое. Максимум 5 МБ.");
-      return;
-    }
-
-    if (avatarPreview) {
-      URL.revokeObjectURL(avatarPreview);
-    }
-
-    setAvatarFile(file);
-    setAvatarPreview(URL.createObjectURL(file));
-    setMessage("");
-  }
-
-  async function uploadAvatar(file: File): Promise<UploadedFile> {
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("folder", "avatars");
-
-    const response = await fetch("/api/upload", {
-      method: "POST",
-      body: formData,
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.error || "Не получилось загрузить фото профиля.");
-    }
-
-    return data as UploadedFile;
-  }
-
-  async function handleSave(e: FormEvent) {
-    e.preventDefault();
-
-    if (!user) return;
-
-    setSaving(true);
-    setMessage("");
-
-    try {
-      let finalAvatarUrl = avatarUrl;
-      let finalAvatarPath = avatarPath;
-
-      if (avatarFile) {
-        setMessage("Загружаем фото профиля...");
-        const uploadedAvatar = await uploadAvatar(avatarFile);
-
-        finalAvatarUrl = uploadedAvatar.url;
-        finalAvatarPath = uploadedAvatar.path;
-
-        setAvatarUrl(uploadedAvatar.url);
-        setAvatarPath(uploadedAvatar.path);
-        setAvatarFile(null);
-
-        if (avatarPreview) {
-          URL.revokeObjectURL(avatarPreview);
-          setAvatarPreview("");
-        }
-      }
-
-      const businessAccount = accountType === "ip" || accountType === "ooo";
-      const safeDisplayName = businessAccount
-        ? profile?.companyShortName || profile?.companyName || profile?.displayName || displayName
-        : displayName.trim();
-
-      await updateProfile(user, {
-        displayName: safeDisplayName,
-        photoURL: finalAvatarUrl || null,
-      });
-
-      await setDoc(
-        doc(db, "users", user.uid),
-        {
-          uid: user.uid,
-          email: user.email,
-          displayName: safeDisplayName,
-          city: city.trim(),
-          phone: phone.trim(),
-          avatarUrl: finalAvatarUrl,
-          avatarPath: finalAvatarPath,
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true }
+  const filteredListings = useMemo(() => {
+    return listings.filter((listing) => {
+      if (!isPublicationApproved(listing)) return false;
+      const matchesSearch = matchesListingSearch(
+        listing as Record<string, any>,
+        search,
+        category,
+        subcategory
       );
-
-      setMessage("Профиль сохранён.");
-    } catch (error) {
-      console.error(error);
-      setMessage(
-        error instanceof Error
-          ? error.message
-          : "Не получилось сохранить профиль."
+      const matchesCategory = category
+        ? normalizeCatalogValue(listing.category) === normalizeCatalogValue(category)
+        : true;
+      const matchesSubcategory = subcategory
+        ? normalizeCatalogValue(listing.subcategory) ===
+          normalizeCatalogValue(subcategory)
+        : true;
+      const matchesOffer = matchesOfferSelection(
+        listing,
+        selectedOfferAction,
+        requiredOfferFeatures
       );
-    } finally {
-      setSaving(false);
-    }
+      const matchesCity = cityMatches(listing.city, city);
+      const range = listingPriceRange(listing);
+      const matchesPrice = overlapsPriceRange(
+        range.from,
+        range.to,
+        priceFrom,
+        priceTo
+      );
+      const matchesAccount = accountType
+        ? listing.accountType === accountType
+        : true;
+      const matchesPayment = paymentMethod
+        ? Array.isArray(listing.paymentMethods) &&
+          listing.paymentMethods.includes(paymentMethod)
+        : true;
+      const matchesVerified = verifiedOnly ? isListingVerified(listing) : true;
+      const matchesPhotos = withPhotosOnly ? hasImages(listing) : true;
+
+      return (
+        matchesSearch &&
+        matchesCategory &&
+        matchesSubcategory &&
+        matchesOffer &&
+        matchesCity &&
+        matchesPrice &&
+        matchesAccount &&
+        matchesPayment &&
+        matchesVerified &&
+        matchesPhotos
+      );
+    });
+  }, [
+    listings,
+    search,
+    category,
+    subcategory,
+    selectedOfferAction,
+    requiredOfferFeatures,
+    city,
+    priceFrom,
+    priceTo,
+    accountType,
+    paymentMethod,
+    verifiedOnly,
+    withPhotosOnly,
+  ]);
+
+  const filteredRequests = useMemo(
+    () =>
+      requests.filter((request) => {
+        const baseMatches = requestMatches(
+          request,
+          search,
+          category,
+          subcategory
+        );
+        const matchesCity = cityMatches(request.city, city);
+        const range = requestPriceRange(request);
+        const matchesPrice = overlapsPriceRange(
+          range.from,
+          range.to,
+          priceFrom,
+          priceTo
+        );
+        const matchesUrgency = urgentOnly
+          ? request.urgency === "urgent"
+          : true;
+        const matchesPhotos = withPhotosOnly ? hasImages(request) : true;
+
+        return (
+          baseMatches &&
+          matchesCity &&
+          matchesPrice &&
+          matchesUrgency &&
+          matchesPhotos
+        );
+      }),
+    [
+      requests,
+      search,
+      category,
+      subcategory,
+      city,
+      priceFrom,
+      priceTo,
+      urgentOnly,
+      withPhotosOnly,
+    ]
+  );
+
+  const shownCount =
+    feedMode === "contractors" ? filteredListings.length : filteredRequests.length;
+
+  const priceFilterActive = priceFrom > 0 || priceTo !== null;
+  const activeFilterCount =
+    Number(Boolean(category)) +
+    Number(Boolean(subcategory)) +
+    Number(Boolean(city)) +
+    Number(priceFilterActive) +
+    Number(withPhotosOnly) +
+    (feedMode === "contractors"
+      ? Number(Boolean(selectedOfferAction)) +
+        Number(requiredOfferFeatures.length > 0) +
+        Number(Boolean(accountType)) +
+        Number(Boolean(paymentMethod)) +
+        Number(verifiedOnly)
+      : Number(urgentOnly));
+
+  function scrollToFeed() {
+    document
+      .getElementById("recommended-listings")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
-  async function handleDeleteListing(id: string) {
-    const ok = confirm("Удалить объявление? Фото из хранилища пока не удаляются.");
-
-    if (!ok) return;
-
-    await deleteDoc(doc(db, "listings", id));
+  function resetFilters() {
+    setSearch("");
+    setCategory("");
+    setSubcategory("");
+    setSubcategoryQuery("");
+    setCity("");
+    setPriceFrom(0);
+    setPriceTo(null);
+    setAccountType("");
+    setPaymentMethod("");
+    setVerifiedOnly(false);
+    setUrgentOnly(false);
+    setWithPhotosOnly(false);
+    setSelectedOfferAction("");
+    setRequiredOfferFeatures([]);
+    setSourceMaterial("");
   }
 
-  async function handleDeleteRequest(id: string) {
-    const ok = confirm("Удалить заявку заказчика?");
-    if (!ok) return;
-    await deleteDoc(doc(db, "customerRequests", id));
+  function applySolution(selection: SolutionSelection) {
+    setFeedMode("contractors");
+    setSearch("");
+    setCategory(selection.category);
+    setSubcategory(selection.subcategory || "");
+    setSubcategoryQuery(selection.subcategory || "");
+    setPriceFrom(0);
+    setPriceTo(null);
+    setAccountType("");
+    setPaymentMethod("");
+    setVerifiedOnly(false);
+    setUrgentOnly(false);
+    setWithPhotosOnly(false);
+    setSelectedOfferAction("");
+    setRequiredOfferFeatures([]);
+    setSourceMaterial("");
+    setFiltersOpen(false);
+
+    window.requestAnimationFrame(() => {
+      scrollToFeed();
+    });
   }
 
-  if (loading) {
-    return (
-      <main className="min-h-screen bg-[#f5f7fb] px-3 py-6 sm:px-5 sm:py-10">
-        Загрузка...
-      </main>
+  function toggleRequiredOfferFeature(featureId: string) {
+    setRequiredOfferFeatures((current) =>
+      current.includes(featureId)
+        ? current.filter((id) => id !== featureId)
+        : [...current, featureId]
     );
   }
-
-  if (!user) {
-    return (
-      <main className="min-h-screen bg-[#f5f7fb] px-3 py-6 sm:px-5 sm:py-10">
-        <div className="mx-auto max-w-xl rounded-[30px] bg-white p-8 text-center shadow-xl">
-          <h1 className="text-2xl font-black text-gray-950 sm:text-3xl">
-            Сначала войди в аккаунт
-          </h1>
-
-          <Link href="/auth" className="btn-primary mt-6 inline-block">
-            Войти
-          </Link>
-        </div>
-      </main>
-    );
-  }
-
-  const shownAvatar = avatarPreview || avatarUrl;
-  const businessAccount = accountType === "ip" || accountType === "ooo";
-  const verificationApproved = profile?.verificationStatus === "approved";
-  const verificationRejected = profile?.verificationStatus === "rejected";
 
   return (
-    <main className="min-h-screen bg-[#f5f7fb] px-3 py-5 sm:px-5 sm:py-8">
-      <div className="mx-auto max-w-7xl">
-        <div className="rounded-[26px] bg-[#0057ff] p-5 sm:rounded-[34px] sm:p-8 text-white shadow-xl shadow-blue-900/15">
-          <p className="font-black text-[#ffd233]">Личный кабинет</p>
-
-          <h1 className="mt-3 text-3xl font-black sm:text-4xl md:text-5xl">
-            Мой профиль
-          </h1>
-
-          <p className="mt-3 max-w-2xl text-blue-50">
-            Управляй данными профиля, анкетами исполнителя и заявками заказчика.
-          </p>
-        </div>
-
-        <div className="mt-6">
-          <ProfileTools />
-        </div>
-
-        <div className="mt-5 grid gap-5 sm:mt-6 sm:gap-6 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
-          <form
-            onSubmit={handleSave}
-            className="h-fit rounded-[24px] bg-white p-4 shadow-sm sm:rounded-[30px] sm:p-6 lg:sticky lg:top-24"
-          >
-            <h2 className="text-2xl font-black text-gray-950">
-              Данные профиля
-            </h2>
-
-            <div className="mt-5 flex flex-col items-center rounded-[22px] bg-blue-50/60 p-4 sm:mt-6 sm:rounded-[28px] sm:p-5">
-              <div className="relative">
-                <div className="flex h-28 w-28 items-center sm:h-32 sm:w-32 justify-center overflow-hidden rounded-full bg-white text-[#0057ff] shadow-lg">
-                  {shownAvatar ? (
-                    <img
-                      src={shownAvatar}
-                      alt="Фото профиля"
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <UserRound size={54} />
-                  )}
-                </div>
-
-                <label className="absolute bottom-0 right-0 flex h-11 w-11 cursor-pointer items-center justify-center rounded-full bg-[#0057ff] text-white shadow-lg transition hover:scale-105">
-                  <Camera size={20} />
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleAvatarChange}
-                  />
-                </label>
-              </div>
-
-              <p className="mt-4 text-center text-sm font-bold text-gray-500">
-                Нажми на синюю кнопку, чтобы выбрать фото профиля.
-              </p>
-
-              {avatarFile && (
-                <p className="mt-2 text-center text-sm font-black text-[#0057ff]">
-                  Новое фото выбрано. Нажми «Сохранить профиль».
-                </p>
-              )}
-            </div>
-
-            <div className="mt-6 space-y-4">
-              <div className="relative">
-                <UserRound
-                  className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
-                  size={20}
-                />
-                <input
-                  className="input"
-                  style={{ paddingLeft: "58px" }}
-                  placeholder={businessAccount ? "Официальное название" : "Имя исполнителя"}
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  disabled={businessAccount}
-                />
-              </div>
-
-              <div className="relative">
-                <Mail
-                  className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
-                  size={20}
-                />
-                <input
-                  className="input"
-                  style={{ paddingLeft: "58px" }}
-                  value={user.email || ""}
-                  disabled
-                />
-              </div>
-
-              <div>
-                <div className="grid gap-3 sm:grid-cols-3">
-                  {[
-                    { value: "individual", label: "Физлицо" },
-                    { value: "ip", label: "ИП" },
-                    { value: "ooo", label: "ООО" },
-                  ].map((item) => (
-                    <button
-                      key={item.value}
-                      type="button"
-                      disabled
-                      className={`cursor-not-allowed rounded-2xl border px-4 py-4 font-black ${
-                        accountType === item.value
-                          ? "border-[#0057ff] bg-blue-50 text-[#0057ff]"
-                          : "border-gray-200 bg-gray-50 text-gray-400"
-                      }`}
-                    >
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
-                <p className="mt-2 text-xs font-bold leading-5 text-gray-500">
-                  Тип аккаунта и реквизиты нельзя менять вручную после регистрации.
-                </p>
-              </div>
-
-              {businessAccount && (
-                <div className="rounded-[24px] border border-blue-100 bg-blue-50/60 p-5">
-                  <div className="flex items-start gap-3">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-[#0057ff] shadow-sm">
-                      <Building2 size={22} />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="font-black text-gray-950">{companyName || profile?.companyOfficialName}</p>
-                      <p className="mt-1 text-sm font-bold text-gray-500">
-                        ИНН {profile?.companyInn || "—"} · ОГРН {profile?.companyOgrn || "—"}
-                      </p>
-                      {profile?.companyKpp && (
-                        <p className="mt-1 text-sm font-bold text-gray-500">КПП {profile.companyKpp}</p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className={`mt-4 flex items-center gap-2 rounded-2xl p-3 text-sm font-black ${
-                    verificationApproved
-                      ? "bg-emerald-100 text-emerald-700"
-                      : verificationRejected
-                      ? "bg-red-100 text-red-700"
-                      : "bg-amber-100 text-amber-700"
-                  }`}>
-                    {verificationApproved ? <BadgeCheck size={18} /> : <Clock3 size={18} />}
-                    {verificationApproved
-                      ? "Организация подтверждена"
-                      : verificationRejected
-                      ? "Проверка отклонена"
-                      : "Организация ожидает подтверждения владельца"}
-                  </div>
-                </div>
-              )}
-
-              <div className="relative">
-                <MapPin
-                  className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
-                  size={20}
-                />
-                <input
-                  className="input"
-                  style={{ paddingLeft: "58px" }}
-                  placeholder="Город"
-                  value={city}
-                  onChange={(e) => setCity(e.target.value)}
-                />
-              </div>
-
-              <div className="relative">
-                <Phone
-                  className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
-                  size={20}
-                />
-                <input
-                  className="input"
-                  style={{ paddingLeft: "58px" }}
-                  placeholder="Телефон"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                />
-              </div>
-            </div>
-
-            {message && (
-              <p className="mt-5 rounded-2xl bg-blue-50 p-4 text-sm font-black text-[#0057ff]">
-                {message}
-              </p>
-            )}
-
+    <main className="min-h-screen bg-[#f5f7fb]">
+      <section className="relative z-40 border-b border-gray-200 bg-white px-3 py-4 sm:px-5 sm:py-5">
+        <div className="mx-auto max-w-7xl">
+          <div className="relative flex flex-col gap-3 lg:flex-row lg:items-stretch">
             <button
-              disabled={saving}
-              className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#0057ff] px-5 py-4 text-lg font-black text-white disabled:opacity-70"
+              type="button"
+              aria-expanded={filtersOpen}
+              onClick={() => setFiltersOpen((current) => !current)}
+              className={`group inline-flex min-h-14 shrink-0 items-center justify-center gap-3 rounded-2xl px-5 text-sm font-black transition duration-300 active:scale-[0.97] lg:justify-start ${
+                filtersOpen || activeFilterCount
+                  ? "bg-[#0057ff] text-white shadow-lg shadow-blue-600/20 hover:-translate-y-0.5 hover:bg-[#004de6]"
+                  : "bg-[#eef5ff] text-[#0057ff] ring-1 ring-blue-100 hover:-translate-y-0.5 hover:bg-blue-100"
+              }`}
             >
-              {saving ? (
-                <>
-                  <Loader2 className="animate-spin" size={20} />
-                  Сохраняем...
-                </>
-              ) : (
-                <>
-                  <Save size={20} />
-                  Сохранить профиль
-                </>
-              )}
+              <span
+                className={`flex h-9 w-9 items-center justify-center rounded-xl transition duration-300 group-hover:rotate-[-5deg] ${
+                  filtersOpen || activeFilterCount
+                    ? "bg-white/15"
+                    : "bg-white shadow-sm"
+                }`}
+              >
+                <SlidersHorizontal size={19} strokeWidth={2.7} />
+              </span>
+              <span>Фильтры</span>
+              {activeFilterCount ? (
+                <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-white px-1.5 text-xs font-black text-[#0057ff]">
+                  {activeFilterCount}
+                </span>
+              ) : null}
             </button>
-          </form>
 
-          <section className="rounded-[24px] bg-white p-4 shadow-sm sm:rounded-[30px] sm:p-6">
-            <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
-              <div>
-                <h2 className="text-2xl font-black text-gray-950 sm:text-3xl">
-                  Мои публикации
-                </h2>
-                <p className="mt-2 text-gray-500">
-                  Анкеты исполнителя: {listings.length} · Заявки заказчика: {requests.length}
-                </p>
+            <div className="flex min-w-0 flex-1 overflow-hidden rounded-2xl border-2 border-[#00aaff] bg-white shadow-sm transition focus-within:border-[#0057ff] focus-within:shadow-[0_0_0_4px_rgba(0,87,255,0.10)]">
+              <div className="relative min-w-0 flex-1">
+                <Search
+                  className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 sm:left-5"
+                  size={21}
+                />
+
+                <input
+                  className="h-full min-h-14 w-full border-0 bg-transparent py-3 pl-12 pr-2 text-base font-bold text-gray-950 outline-none placeholder:font-medium placeholder:text-gray-400 sm:pl-14 sm:pr-4"
+                  placeholder={
+                    feedMode === "contractors"
+                      ? "Поиск по анкетам исполнителей"
+                      : "Поиск по заявкам заказчиков"
+                  }
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") scrollToFeed();
+                  }}
+                />
               </div>
 
-              <div className="grid w-full gap-2 sm:flex sm:w-auto sm:flex-wrap">
-                <Link
-                  href="/post/new"
-                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#0057ff] px-4 py-3 sm:inline-flex sm:w-auto text-sm font-black text-white transition hover:-translate-y-0.5 hover:shadow-lg active:scale-95"
-                >
-                  <HardHat size={18} />
-                  Анкета исполнителя
-                </Link>
-                <Link
-                  href="/requests/new"
-                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 sm:inline-flex sm:w-auto text-sm font-black text-white transition hover:-translate-y-0.5 hover:shadow-lg active:scale-95"
-                >
-                  <Plus size={18} />
-                  Заявка заказчика
-                </Link>
-              </div>
-            </div>
-
-            <div className="mt-6 grid w-full grid-cols-2 rounded-2xl bg-gray-100 p-1.5 sm:inline-flex sm:w-auto">
               <button
                 type="button"
-                onClick={() => setPublicationTab("listings")}
-                className={`flex min-w-0 items-center justify-center gap-1.5 rounded-xl px-2 py-3 text-xs font-black transition sm:gap-2 sm:px-4 sm:text-sm ${
-                  publicationTab === "listings"
-                    ? "bg-[#0057ff] text-white shadow-lg"
-                    : "text-gray-500 hover:text-[#0057ff]"
-                }`}
+                onClick={scrollToFeed}
+                className="min-h-14 shrink-0 bg-[#00aaff] px-4 text-sm font-black text-white transition duration-200 hover:bg-[#0097e6] active:scale-[0.98] sm:px-7 md:px-10"
               >
-                <HardHat size={18} />
-                Исполнитель ({listings.length})
-              </button>
-              <button
-                type="button"
-                onClick={() => setPublicationTab("requests")}
-                className={`flex min-w-0 items-center justify-center gap-1.5 rounded-xl px-2 py-3 text-xs font-black transition sm:gap-2 sm:px-4 sm:text-sm ${
-                  publicationTab === "requests"
-                    ? "bg-[#0057ff] text-white shadow-lg"
-                    : "text-gray-500 hover:text-[#0057ff]"
-                }`}
-              >
-                <ClipboardList size={18} />
-                Заказчик ({requests.length})
+                Найти
               </button>
             </div>
 
-            {publicationTab === "listings" ? (
-              listings.length === 0 ? (
-                <div className="mt-6 rounded-[22px] border border-dashed border-blue-200 bg-blue-50/50 p-6 text-center sm:mt-8 sm:rounded-[26px] sm:p-10">
-                  <h3 className="text-2xl font-black text-gray-950">
-                    У тебя пока нет анкет исполнителя
-                  </h3>
-                  <p className="mt-2 text-gray-500">
-                    Создай первую анкету, и она появится здесь.
-                  </p>
+            <label className="group relative flex min-h-14 min-w-[220px] shrink-0 items-center overflow-hidden rounded-2xl border-2 border-blue-100 bg-white shadow-sm transition duration-300 hover:-translate-y-0.5 hover:border-[#00aaff] hover:shadow-lg focus-within:border-[#0057ff] focus-within:shadow-[0_0_0_4px_rgba(0,87,255,0.10)]">
+              <MapPin
+                size={20}
+                strokeWidth={2.7}
+                className="pointer-events-none absolute left-4 text-[#0057ff] transition duration-300 group-hover:scale-110"
+              />
+              <select
+                value={city}
+                onChange={(event) => setCity(event.target.value)}
+                aria-label="Выбрать город"
+                className="h-full min-h-14 w-full cursor-pointer appearance-none border-0 bg-transparent py-3 pl-12 pr-10 text-sm font-black text-gray-800 outline-none"
+              >
+                <option value="">Вся Россия</option>
+                {availableCities.map((cityName) => (
+                  <option key={cityName} value={cityName}>
+                    {cityName}
+                  </option>
+                ))}
+              </select>
+              <span className="pointer-events-none absolute right-4 text-xs font-black text-[#0057ff]">
+                ▼
+              </span>
+            </label>
+
+            {filtersOpen ? (
+              <div className="absolute -left-1 -right-1 top-[calc(100%+10px)] z-50 max-h-[76dvh] overflow-y-auto rounded-[24px] border border-blue-100 bg-white p-4 shadow-[0_28px_85px_rgba(15,23,42,0.22)] sm:left-0 sm:right-0 sm:top-[calc(100%+12px)] sm:rounded-[30px] sm:p-6">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[0.16em] text-[#0057ff]">
+                      Расширенный подбор
+                    </p>
+                    <h2 className="mt-1 text-2xl font-black text-gray-950">
+                      Найдите подходящую публикацию
+                    </h2>
+                    <p className="mt-1 text-sm font-bold text-gray-500">
+                      Все параметры применяются сразу к ленте ниже
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setFiltersOpen(false)}
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gray-100 text-xl font-black text-gray-500 transition duration-300 hover:rotate-90 hover:bg-gray-200 active:scale-90"
+                    aria-label="Закрыть фильтры"
+                  >
+                    ×
+                  </button>
                 </div>
-              ) : (
-                <div className="mt-8 grid gap-5 xl:grid-cols-2">
-                  {listings.map((listing) => (
-                    <div key={listing.id} className="relative">
-                      <ListingCard listing={listing} />
-                      <div className="mt-3 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3">
-                        <p className="text-sm font-black text-[#0057ff]">
-                          {moderationLabel(listing.moderationStatus)}
-                        </p>
-                        {listing.moderationReason ? (
-                          <p className="mt-1 text-sm font-semibold text-gray-600">
-                            Причина: {listing.moderationReason}
+
+                <datalist id="stroika-city-options">
+                  {availableCities.map((cityName) => (
+                    <option key={cityName} value={cityName} />
+                  ))}
+                </datalist>
+
+                <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  <label>
+                    <span className="mb-2 block text-xs font-black uppercase tracking-wide text-gray-500">
+                      Категория
+                    </span>
+                    <select
+                      className="input bg-white font-bold text-gray-950"
+                      value={category}
+                      onChange={(event) => {
+                        setCategory(event.target.value);
+                        setSubcategory("");
+                        setSubcategoryQuery("");
+                        setSelectedOfferAction("");
+                        setRequiredOfferFeatures([]);
+                        setSourceMaterial("");
+                      }}
+                    >
+                      <option value="">Все категории</option>
+                      {categories.map((item) => (
+                        <option key={item.name} value={item.name}>
+                          {item.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <div>
+                    <span className="mb-2 block text-xs font-black uppercase tracking-wide text-gray-500">
+                      Подкатегория
+                    </span>
+                    <div className="relative">
+                      <Search
+                        size={18}
+                        className="pointer-events-none absolute left-4 top-7 -translate-y-1/2 text-[#0057ff]"
+                      />
+                      <input
+                        value={subcategoryQuery}
+                        onChange={(event) => setSubcategoryQuery(event.target.value)}
+                        disabled={!category}
+                        placeholder={category ? "Найти подкатегорию" : "Сначала выберите категорию"}
+                        className="input bg-white font-bold text-gray-950 disabled:bg-gray-50 disabled:text-gray-400"
+                        style={{ paddingLeft: 48 }}
+                      />
+                    </div>
+
+                    {category ? (
+                      <div className="mt-2 max-h-44 overflow-y-auto rounded-2xl border border-gray-200 bg-white p-2 shadow-sm">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSubcategory("");
+                            setSubcategoryQuery("");
+                          }}
+                          className={`w-full rounded-xl px-3 py-2 text-left text-sm font-black transition ${
+                            !subcategory
+                              ? "bg-blue-50 text-[#0057ff]"
+                              : "text-gray-500 hover:bg-gray-50"
+                          }`}
+                        >
+                          Все подкатегории
+                        </button>
+
+                        {filteredSubcategoryOptions.map((item) => (
+                          <button
+                            key={item}
+                            type="button"
+                            onClick={() => {
+                              setSubcategory(item);
+                              setSubcategoryQuery(item);
+                            }}
+                            className={`mt-1 flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm font-bold transition ${
+                              subcategory === item
+                                ? "bg-[#0057ff] text-white"
+                                : "text-gray-800 hover:bg-blue-50 hover:text-[#0057ff]"
+                            }`}
+                          >
+                            <span>{item}</span>
+                            {subcategory === item ? <span aria-hidden="true">✓</span> : null}
+                          </button>
+                        ))}
+
+                        {filteredSubcategoryOptions.length === 0 ? (
+                          <p className="px-3 py-4 text-sm font-bold text-gray-400">
+                            Ничего не найдено
                           </p>
                         ) : null}
                       </div>
-                      <div className="mt-3 flex gap-2">
-                        <Link
-                          href={`/listing/${listing.id}/edit`}
-                          className="flex-1 rounded-2xl bg-[#0057ff] px-4 py-3 text-center text-sm font-black text-white transition hover:bg-[#004de6] active:scale-[0.98]"
-                        >
-                          Редактировать
-                        </Link>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteListing(listing.id)}
-                          className="flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50 text-red-500 transition hover:bg-red-100 active:scale-90"
-                          title="Удалить объявление"
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                      </div>
+                    ) : null}
+                  </div>
+
+                  <label>
+                    <span className="mb-2 block text-xs font-black uppercase tracking-wide text-gray-500">
+                      Город
+                    </span>
+                    <div className="relative">
+                      <MapPin
+                        size={18}
+                        className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[#0057ff]"
+                      />
+                      <input
+                        list="stroika-city-options"
+                        value={city}
+                        onChange={(event) => setCity(event.target.value)}
+                        placeholder="Выберите или напишите город"
+                        className="input bg-white font-bold text-gray-950"
+                        style={{ paddingLeft: 48 }}
+                      />
                     </div>
-                  ))}
+                  </label>
                 </div>
-              )
-            ) : requests.length === 0 ? (
-              <div className="mt-6 rounded-[22px] border border-dashed border-blue-200 bg-blue-50/50 p-6 text-center sm:mt-8 sm:rounded-[26px] sm:p-10">
-                <h3 className="text-2xl font-black text-gray-950">
-                  У тебя пока нет заявок заказчика
-                </h3>
-                <p className="mt-2 text-gray-500">
-                  Опиши задачу, бюджет и сроки — заявка появится здесь и в мобильном приложении.
-                </p>
-              </div>
-            ) : (
-              <div className="mt-8 grid gap-5 xl:grid-cols-2">
-                {requests.map((request) => (
-                  <div key={request.id}>
-                    <CustomerRequestCard request={request} />
-                    <div className="mt-3 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3">
-                      <p className="text-sm font-black text-[#0057ff]">
-                        {moderationLabel(request.moderationStatus)}
-                      </p>
-                      {request.moderationReason ? (
-                        <p className="mt-1 text-sm font-semibold text-gray-600">
-                          Причина: {request.moderationReason}
+
+                <div className="mt-5">
+                  <PriceRangeSlider
+                    max={priceCeiling}
+                    step={priceStep}
+                    from={priceFrom}
+                    to={priceTo}
+                    onChangeFrom={setPriceFrom}
+                    onChangeTo={setPriceTo}
+                  />
+                </div>
+
+                {feedMode === "contractors" && selectedOfferGroup && selectedOfferGroupInfo ? (
+                  <div className="mt-5 overflow-hidden rounded-[24px] border border-blue-100 bg-[linear-gradient(135deg,#eff6ff_0%,#ffffff_62%,#f8fbff_100%)] p-4 sm:p-5">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-[0.14em] text-[#0057ff]">
+                          Точный тип предложения
                         </p>
-                      ) : null}
+                        <h3 className="mt-1 text-lg font-black text-gray-950">
+                          Что должен предлагать исполнитель?
+                        </h3>
+                        <p className="mt-1 text-sm font-bold leading-5 text-gray-500">
+                          Эти параметры одинаково работают для объявлений с сайта и из приложения.
+                        </p>
+                      </div>
+
+                      <span className="inline-flex w-fit shrink-0 items-center gap-2 rounded-2xl bg-white px-3 py-2 text-xs font-black text-[#0057ff] shadow-sm ring-1 ring-blue-100">
+                        <span className="text-base">{selectedOfferGroupInfo.emoji}</span>
+                        {selectedOfferGroupInfo.title}
+                      </span>
                     </div>
-                    <div className="mt-3 flex gap-2">
-                      <Link
-                        href={`/requests/${request.id}/edit`}
-                        className="flex-1 rounded-2xl bg-[#0057ff] px-4 py-3 text-center text-sm font-black text-white transition hover:bg-[#004de6] active:scale-[0.98]"
-                      >
-                        Редактировать
-                      </Link>
+
+                    <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
                       <button
                         type="button"
-                        onClick={() => handleDeleteRequest(request.id)}
-                        className="flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50 text-red-500 transition hover:bg-red-100 active:scale-90"
-                        title="Удалить заявку"
+                        onClick={() => setSelectedOfferAction("")}
+                        className={`min-h-[76px] rounded-2xl border px-4 py-3 text-left transition duration-300 hover:-translate-y-0.5 active:scale-[0.98] ${
+                          !selectedOfferAction
+                            ? "border-[#0057ff] bg-[#0057ff] text-white shadow-lg shadow-blue-600/15"
+                            : "border-white bg-white text-gray-800 shadow-sm hover:border-blue-200"
+                        }`}
                       >
-                        <Trash2 size={18} />
+                        <span className="block text-sm font-black">Любое предложение</span>
+                        <span className={`mt-1 block text-xs font-bold ${!selectedOfferAction ? "text-blue-100" : "text-gray-400"}`}>
+                          Без ограничения по типу
+                        </span>
                       </button>
+
+                      {offerActionOptions.map((action) => {
+                        const active = selectedOfferAction === action.id;
+
+                        return (
+                          <button
+                            key={action.id}
+                            type="button"
+                            onClick={() => setSelectedOfferAction(active ? "" : action.id)}
+                            className={`min-h-[76px] rounded-2xl border px-4 py-3 text-left transition duration-300 hover:-translate-y-0.5 active:scale-[0.98] ${
+                              active
+                                ? "border-[#0057ff] bg-[#0057ff] text-white shadow-lg shadow-blue-600/15"
+                                : "border-white bg-white text-gray-800 shadow-sm hover:border-blue-200"
+                            }`}
+                          >
+                            <span className="block text-sm font-black">{action.label}</span>
+                            <span className={`mt-1 line-clamp-2 block text-xs font-bold leading-4 ${active ? "text-blue-100" : "text-gray-400"}`}>
+                              {action.description}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <p className="mt-5 text-xs font-black uppercase tracking-[0.13em] text-gray-500">
+                      Дополнительные возможности
+                    </p>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                      {offerFeatureOptions.map((feature) => {
+                        const active = requiredOfferFeatures.includes(feature.id);
+
+                        return (
+                          <button
+                            key={feature.id}
+                            type="button"
+                            onClick={() => toggleRequiredOfferFeature(feature.id)}
+                            className={`flex min-h-[70px] items-center gap-3 rounded-2xl border p-3 text-left transition duration-300 hover:-translate-y-0.5 active:scale-[0.98] ${
+                              active
+                                ? "border-[#0057ff] bg-white shadow-md shadow-blue-500/10"
+                                : "border-white bg-white/75 hover:border-blue-200"
+                            }`}
+                          >
+                            <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border text-sm font-black transition ${
+                              active
+                                ? "border-[#0057ff] bg-[#0057ff] text-white"
+                                : "border-gray-200 bg-gray-50 text-gray-300"
+                            }`}>
+                              ✓
+                            </span>
+                            <span>
+                              <span className="block text-sm font-black text-gray-950">{feature.label}</span>
+                              <span className="mt-0.5 line-clamp-2 block text-xs font-bold leading-4 text-gray-400">{feature.description}</span>
+                            </span>
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
-                ))}
+                ) : null}
+
+                <div className="mt-5 rounded-[24px] border border-gray-200 bg-gray-50/80 p-4 sm:p-5">
+                  <p className="text-xs font-black uppercase tracking-[0.13em] text-gray-500">
+                    Дополнительные параметры
+                  </p>
+
+                  {feedMode === "contractors" ? (
+                    <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                      <label className="group flex cursor-pointer items-center gap-3 rounded-2xl bg-white p-3.5 shadow-sm ring-1 ring-gray-200 transition hover:-translate-y-0.5 hover:ring-blue-200">
+                        <Building2 size={20} className="text-[#0057ff]" />
+                        <select
+                          value={accountType}
+                          onChange={(event) =>
+                            setAccountType(event.target.value as AccountTypeFilter)
+                          }
+                          className="min-w-0 flex-1 cursor-pointer border-0 bg-transparent text-sm font-black text-gray-800 outline-none"
+                        >
+                          <option value="">Любой тип исполнителя</option>
+                          <option value="individual">Физлицо</option>
+                          <option value="ip">ИП</option>
+                          <option value="ooo">ООО</option>
+                        </select>
+                      </label>
+
+                      <label className="group flex cursor-pointer items-center gap-3 rounded-2xl bg-white p-3.5 shadow-sm ring-1 ring-gray-200 transition hover:-translate-y-0.5 hover:ring-blue-200">
+                        {paymentMethod === "transfer" ? (
+                          <CreditCard size={20} className="text-[#0057ff]" />
+                        ) : (
+                          <Banknote size={20} className="text-[#0057ff]" />
+                        )}
+                        <select
+                          value={paymentMethod}
+                          onChange={(event) =>
+                            setPaymentMethod(event.target.value as PaymentFilter)
+                          }
+                          className="min-w-0 flex-1 cursor-pointer border-0 bg-transparent text-sm font-black text-gray-800 outline-none"
+                        >
+                          <option value="">Любой способ оплаты</option>
+                          <option value="cash">Наличными</option>
+                          <option value="transfer">Переводом</option>
+                        </select>
+                      </label>
+
+                      <button
+                        type="button"
+                        onClick={() => setVerifiedOnly((current) => !current)}
+                        className={`group flex items-center gap-3 rounded-2xl p-3.5 text-left shadow-sm ring-1 transition duration-300 hover:-translate-y-0.5 active:scale-[0.98] ${
+                          verifiedOnly
+                            ? "bg-[#0057ff] text-white ring-[#0057ff]"
+                            : "bg-white text-gray-800 ring-gray-200 hover:ring-blue-200"
+                        }`}
+                      >
+                        <span
+                          className={`flex h-9 w-9 items-center justify-center rounded-xl transition ${
+                            verifiedOnly ? "bg-white/15" : "bg-blue-50 text-[#0057ff]"
+                          }`}
+                        >
+                          <BadgeCheck size={20} />
+                        </span>
+                        <span>
+                          <span className="block text-sm font-black">
+                            Только проверенные
+                          </span>
+                          <span
+                            className={`mt-0.5 block text-xs font-bold ${
+                              verifiedOnly ? "text-blue-100" : "text-gray-400"
+                            }`}
+                          >
+                            Исполнители с подтверждением
+                          </span>
+                        </span>
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="mt-4 grid gap-3 md:grid-cols-2">
+                      <button
+                        type="button"
+                        onClick={() => setUrgentOnly((current) => !current)}
+                        className={`group flex items-center gap-3 rounded-2xl p-3.5 text-left shadow-sm ring-1 transition duration-300 hover:-translate-y-0.5 active:scale-[0.98] ${
+                          urgentOnly
+                            ? "bg-orange-500 text-white ring-orange-500"
+                            : "bg-white text-gray-800 ring-gray-200 hover:ring-orange-200"
+                        }`}
+                      >
+                        <span
+                          className={`flex h-9 w-9 items-center justify-center rounded-xl ${
+                            urgentOnly ? "bg-white/15" : "bg-orange-50 text-orange-500"
+                          }`}
+                        >
+                          <Zap size={20} />
+                        </span>
+                        <span>
+                          <span className="block text-sm font-black">
+                            Только срочные заявки
+                          </span>
+                          <span
+                            className={`mt-0.5 block text-xs font-bold ${
+                              urgentOnly ? "text-orange-100" : "text-gray-400"
+                            }`}
+                          >
+                            Заказы, которым нужен быстрый отклик
+                          </span>
+                        </span>
+                      </button>
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => setWithPhotosOnly((current) => !current)}
+                    className={`mt-3 flex w-full items-center gap-3 rounded-2xl p-3.5 text-left shadow-sm ring-1 transition duration-300 hover:-translate-y-0.5 active:scale-[0.99] ${
+                      withPhotosOnly
+                        ? "bg-[#0f172a] text-white ring-[#0f172a]"
+                        : "bg-white text-gray-800 ring-gray-200 hover:ring-blue-200"
+                    }`}
+                  >
+                    <span
+                      className={`flex h-9 w-9 items-center justify-center rounded-xl ${
+                        withPhotosOnly ? "bg-white/10" : "bg-blue-50 text-[#0057ff]"
+                      }`}
+                    >
+                      <ImageIcon size={20} />
+                    </span>
+                    <span>
+                      <span className="block text-sm font-black">Только с фотографиями</span>
+                      <span
+                        className={`mt-0.5 block text-xs font-bold ${
+                          withPhotosOnly ? "text-gray-300" : "text-gray-400"
+                        }`}
+                      >
+                        Скрыть публикации без примеров работ или объекта
+                      </span>
+                    </span>
+                  </button>
+                </div>
+
+                <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-2 text-sm font-bold text-gray-500">
+                    <UserRound size={18} className="text-[#0057ff]" />
+                    Найдено: <strong className="text-gray-950">{shownCount}</strong>
+                  </div>
+
+                  <div className="flex flex-col-reverse gap-3 sm:flex-row">
+                    <button
+                      type="button"
+                      className="rounded-2xl bg-gray-100 px-5 py-3 font-black text-gray-700 transition hover:-translate-y-0.5 hover:bg-gray-200 active:scale-[0.98]"
+                      onClick={resetFilters}
+                    >
+                      Сбросить всё
+                    </button>
+
+                    <button
+                      type="button"
+                      className="rounded-2xl bg-[#0057ff] px-7 py-3 font-black text-white shadow-lg shadow-blue-600/20 transition hover:-translate-y-0.5 hover:bg-[#004de6] hover:shadow-xl active:scale-[0.98]"
+                      onClick={() => {
+                        setFiltersOpen(false);
+                        scrollToFeed();
+                      }}
+                    >
+                      Показать {shownCount} {shownCount === 1 ? "результат" : "результатов"}
+                    </button>
+                  </div>
+                </div>
               </div>
-            )}
-          </section>
+            ) : null}
+          </div>
         </div>
-      </div>
+      </section>
+
+      <section
+        id="premium-catalog"
+        className="mx-auto max-w-7xl scroll-mt-28 px-3 pt-4 sm:px-5 sm:pt-5"
+      >
+        <PremiumCategoryGrid
+          categories={categories}
+          selectedCategory={category}
+          selectedSubcategory={subcategory}
+          onSelectCategory={(value) => {
+            setCategory(value);
+            setSubcategory("");
+            setSubcategoryQuery("");
+            setSelectedOfferAction("");
+            setRequiredOfferFeatures([]);
+            setSourceMaterial("");
+          }}
+          onApplySelection={({
+            category: nextCategory,
+            subcategory: nextSubcategory,
+            search: nextSearch,
+            offerAction: nextOfferAction,
+            offerFeatures: nextOfferFeatures,
+            sourceMaterial: nextSourceMaterial,
+          }) => {
+            setCategory(nextCategory || "");
+            setSubcategory(nextSubcategory || "");
+            setSubcategoryQuery(nextSubcategory || "");
+            setSearch(nextSearch || "");
+            setSelectedOfferAction(nextOfferAction || "");
+            setRequiredOfferFeatures(nextOfferFeatures || []);
+            setSourceMaterial(nextSourceMaterial || "");
+          }}
+        />
+      </section>
+
+      <section className="mx-auto max-w-7xl px-3 pt-8 sm:px-5 sm:pt-10">
+        <SolutionWidgets onSelect={applySolution} />
+      </section>
+
+      <section className="mx-auto max-w-7xl px-3 pb-8 pt-4 sm:px-5 sm:pt-5">
+        <div
+          id="recommended-listings"
+          className="mt-8 scroll-mt-28 flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between"
+        >
+          <div>
+            <h2 className="text-3xl font-black text-gray-950 sm:text-4xl">Для вас</h2>
+            <p className="mt-2 font-medium text-gray-500">
+              Найдено публикаций: {shownCount}
+              {city ? ` · ${city}` : ""}
+            </p>
+            {sourceMaterial && feedMode === "contractors" ? (
+              <div className="mt-3 inline-flex max-w-full flex-wrap items-center gap-2 rounded-2xl border border-blue-100 bg-white px-3.5 py-2 text-sm font-bold text-gray-600 shadow-sm">
+                <span className="font-black text-[#0057ff]">
+                  Специалист для материала: {sourceMaterial}
+                </span>
+                <span className="text-gray-300">•</span>
+                <span>{[category, subcategory].filter(Boolean).join(" · ")}</span>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="inline-flex rounded-2xl bg-white p-1.5 shadow-sm ring-1 ring-gray-200">
+              <button
+                type="button"
+                onClick={() => setFeedMode("contractors")}
+                className={`flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-black transition duration-300 ${
+                  feedMode === "contractors"
+                    ? "bg-[#0057ff] text-white shadow-lg shadow-blue-600/20"
+                    : "text-gray-500 hover:bg-blue-50 hover:text-[#0057ff]"
+                }`}
+              >
+                <HardHat size={18} />
+                Исполнители
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setFeedMode("customers");
+                  setSelectedOfferAction("");
+                  setRequiredOfferFeatures([]);
+                  setSourceMaterial("");
+                }}
+                className={`flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-black transition duration-300 ${
+                  feedMode === "customers"
+                    ? "bg-[#0057ff] text-white shadow-lg shadow-blue-600/20"
+                    : "text-gray-500 hover:bg-blue-50 hover:text-[#0057ff]"
+                }`}
+              >
+                <ClipboardList size={18} />
+                Заказчики
+              </button>
+            </div>
+
+            <NearbyWorkerButton />
+          </div>
+        </div>
+
+        {shownCount === 0 ? (
+          <div className="mt-8 rounded-[24px] border border-dashed border-blue-200 bg-white p-7 text-center sm:rounded-[30px] sm:p-12">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-blue-50 text-[#0057ff]">
+              <Search size={30} />
+            </div>
+
+            <h3 className="mt-5 text-2xl font-black text-gray-950 sm:text-3xl">
+              Ничего не найдено
+            </h3>
+
+            <p className="mx-auto mt-3 max-w-xl text-gray-500">
+              Попробуй другой запрос, город, цену или сбрось фильтры.
+            </p>
+          </div>
+        ) : feedMode === "contractors" ? (
+          <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {filteredListings.map((listing) => (
+              <ListingCard key={listing.id} listing={listing} />
+            ))}
+          </div>
+        ) : (
+          <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {filteredRequests.map((request) => (
+              <CustomerRequestCard key={request.id} request={request} />
+            ))}
+          </div>
+        )}
+      </section>
     </main>
   );
 }
