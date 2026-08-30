@@ -1,12 +1,28 @@
 "use client";
 
 import { useAuth } from "@/components/AuthProvider";
+import { auth, db } from "@/lib/firebase";
 import {
   expectedInnLength,
   isValidRussianInn,
   normalizeInn,
 } from "@/lib/company-verification";
 import type { AccountType, CompanyLookupResult } from "@/types";
+import {
+  browserLocalPersistence,
+  browserSessionPersistence,
+  type ConfirmationResult,
+  RecaptchaVerifier,
+  setPersistence,
+  signInWithPhoneNumber,
+  updateProfile,
+} from "firebase/auth";
+import {
+  doc,
+  getDoc,
+  serverTimestamp,
+  setDoc,
+} from "firebase/firestore";
 import {
   ArrowLeft,
   BadgeCheck,
@@ -26,15 +42,54 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 type LookupState = "idle" | "loading" | "success" | "error";
+
+function normalizeRussianPhone(value: string) {
+  let digits = value.replace(/\D/g, "");
+  if (digits.length > 10 && (digits.startsWith("7") || digits.startsWith("8"))) {
+    digits = digits.slice(1);
+  }
+  return digits.slice(0, 10);
+}
+
+function formatRussianPhone(digits: string) {
+  const value = normalizeRussianPhone(digits);
+  const parts = [
+    value.slice(0, 3),
+    value.slice(3, 6),
+    value.slice(6, 8),
+    value.slice(8, 10),
+  ].filter(Boolean);
+  if (parts.length === 0) return "";
+  if (parts.length === 1) return `(${parts[0]}`;
+  return `(${parts[0]}) ${parts.slice(1).join("-")}`;
+}
+
+function readableAuthError(error: unknown) {
+  const code = typeof error === "object" && error && "code" in error
+    ? String((error as { code?: unknown }).code || "")
+    : "";
+  if (code.includes("invalid-phone-number")) return "Проверьте номер телефона.";
+  if (code.includes("invalid-verification-code")) return "Неверный SMS-код.";
+  if (code.includes("too-many-requests")) return "Слишком много попыток. Попробуйте немного позже.";
+  if (code.includes("invalid-credential")) return "Неверная почта или пароль.";
+  if (error instanceof Error) return error.message;
+  return "Не получилось войти или зарегистрироваться.";
+}
 
 export default function AuthPage() {
   const router = useRouter();
   const { register, login } = useAuth();
 
   const [mode, setMode] = useState<"register" | "login">("register");
+  const [loginMethod, setLoginMethod] = useState<"email" | "phone">("email");
+  const [rememberMe, setRememberMe] = useState(true);
+  const [loginPhone, setLoginPhone] = useState("");
+  const [smsCode, setSmsCode] = useState("");
+  const [confirmation, setConfirmation] = useState<ConfirmationResult | null>(null);
+  const recaptchaRef = useRef<RecaptchaVerifier | null>(null);
   const [displayName, setDisplayName] = useState("");
   const [accountType, setAccountType] = useState<AccountType>("individual");
   const [inn, setInn] = useState("");
@@ -48,6 +103,13 @@ export default function AuthPage() {
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
   const [legalAccepted, setLegalAccepted] = useState(false);
+
+  useEffect(() => {
+    return () => {
+      recaptchaRef.current?.clear();
+      recaptchaRef.current = null;
+    };
+  }, []);
 
   const isBusiness = accountType === "ip" || accountType === "ooo";
   const innLength = useMemo(() => expectedInnLength(accountType), [accountType]);
@@ -162,19 +224,91 @@ export default function AuthPage() {
           city,
           phone,
         });
+      } else if (loginMethod === "email") {
+        await login(email, password, rememberMe);
       } else {
-        await login(email, password);
+        if (loginPhone.length !== 10) {
+          throw new Error("Введите 10 цифр номера после +7.");
+        }
+
+        if (!confirmation) {
+          await setPersistence(
+            auth,
+            rememberMe ? browserLocalPersistence : browserSessionPersistence
+          );
+
+          recaptchaRef.current?.clear();
+          recaptchaRef.current = new RecaptchaVerifier(
+            auth,
+            "phone-login-recaptcha",
+            { size: "invisible" }
+          );
+
+          const nextConfirmation = await signInWithPhoneNumber(
+            auth,
+            `+7${loginPhone}`,
+            recaptchaRef.current
+          );
+          setConfirmation(nextConfirmation);
+          setSmsCode("");
+          return;
+        }
+
+        if (smsCode.replace(/\D/g, "").length < 6) {
+          throw new Error("Введите шестизначный код из SMS.");
+        }
+
+        const credential = await confirmation.confirm(
+          smsCode.replace(/\D/g, "").slice(0, 6)
+        );
+        const phoneNumber = credential.user.phoneNumber || `+7${loginPhone}`;
+        const userRef = doc(db, "users", credential.user.uid);
+        const profileSnapshot = await getDoc(userRef);
+
+        if (!credential.user.displayName) {
+          await updateProfile(credential.user, { displayName: "Пользователь" });
+        }
+
+        if (!profileSnapshot.exists()) {
+          await setDoc(userRef, {
+            uid: credential.user.uid,
+            email: credential.user.email || "",
+            displayName: credential.user.displayName || "Пользователь",
+            representativeName: credential.user.displayName || "Пользователь",
+            accountType: "individual",
+            companyName: "",
+            city: "",
+            phone: phoneNumber,
+            avatarUrl: "",
+            avatarPath: "",
+            verified: false,
+            isVerified: false,
+            verificationStatus: "unverified",
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+        } else {
+          await setDoc(
+            userRef,
+            { phone: phoneNumber, updatedAt: serverTimestamp() },
+            { merge: true }
+          );
+        }
       }
 
-      router.push("/");
+      const nextPath = typeof window !== "undefined"
+        ? new URLSearchParams(window.location.search).get("next") || "/"
+        : "/";
+      router.push(nextPath.startsWith("/") && !nextPath.startsWith("//") ? nextPath : "/");
     } catch (submitError) {
       console.error(submitError);
 
-      setError(
-        submitError instanceof Error
-          ? submitError.message
-          : "Не получилось войти или зарегистрироваться."
-      );
+      if (mode === "login" && loginMethod === "phone" && !confirmation) {
+        recaptchaRef.current?.clear();
+        recaptchaRef.current = null;
+      }
+
+      setError(readableAuthError(submitError));
     } finally {
       setSending(false);
     }
@@ -182,6 +316,10 @@ export default function AuthPage() {
 
   const registrationBlocked =
     mode === "register" && (!legalAccepted || (isBusiness && lookupState !== "success"));
+  const phoneLoginBlocked =
+    mode === "login" &&
+    loginMethod === "phone" &&
+    (loginPhone.length !== 10 || (Boolean(confirmation) && smsCode.length !== 6));
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#f4f7fc] px-4 py-5 sm:px-6 sm:py-7 lg:px-8">
@@ -269,6 +407,10 @@ export default function AuthPage() {
                     onClick={() => {
                       setMode(item);
                       setError("");
+                      setConfirmation(null);
+                      setSmsCode("");
+                      recaptchaRef.current?.clear();
+                      recaptchaRef.current = null;
                     }}
                     className={`rounded-[17px] px-4 py-3.5 text-sm font-black transition duration-300 hover:-translate-y-0.5 active:scale-[0.98] sm:text-base ${
                       mode === item
@@ -280,6 +422,36 @@ export default function AuthPage() {
                   </button>
                 ))}
               </div>
+
+              {mode === "login" ? (
+                <div className="mt-4 grid grid-cols-2 rounded-[20px] border border-blue-100 bg-blue-50/55 p-1.5">
+                  {([
+                    { id: "email", label: "По почте", Icon: Mail },
+                    { id: "phone", label: "По телефону", Icon: Phone },
+                  ] as const).map(({ id, label, Icon }) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => {
+                        setLoginMethod(id);
+                        setError("");
+                        setConfirmation(null);
+                        setSmsCode("");
+                        recaptchaRef.current?.clear();
+                        recaptchaRef.current = null;
+                      }}
+                      className={`flex items-center justify-center gap-2 rounded-2xl px-3 py-3 text-sm font-black transition duration-300 active:scale-[0.98] ${
+                        loginMethod === id
+                          ? "bg-white text-[#0057ff] shadow-md shadow-blue-900/8 ring-1 ring-blue-100"
+                          : "text-slate-500 hover:text-slate-800"
+                      }`}
+                    >
+                      <Icon size={18} />
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
 
               <div className="mt-6 space-y-4">
                 {mode === "register" ? (
@@ -476,51 +648,147 @@ export default function AuthPage() {
                   </>
                 ) : null}
 
-                <div
-                  className={`grid gap-4 ${
-                    mode === "register" ? "sm:grid-cols-2" : ""
-                  }`}
-                >
-                  <div className="relative">
-                    <Mail
-                      className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-                      size={20}
-                    />
-                    <input
-                      className="input w-full"
-                      style={{ paddingLeft: "58px" }}
-                      type="email"
-                      autoComplete="email"
-                      placeholder="Электронная почта"
-                      value={email}
-                      onChange={(event) => setEmail(event.target.value)}
-                      required
-                    />
-                  </div>
+                {mode === "register" || loginMethod === "email" ? (
+                  <div
+                    className={`grid gap-4 ${
+                      mode === "register" ? "sm:grid-cols-2" : ""
+                    }`}
+                  >
+                    <div className="relative">
+                      <Mail
+                        className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                        size={20}
+                      />
+                      <input
+                        className="input w-full"
+                        style={{ paddingLeft: "58px" }}
+                        type="email"
+                        autoComplete="email"
+                        placeholder="Электронная почта"
+                        value={email}
+                        onChange={(event) => setEmail(event.target.value)}
+                        required
+                      />
+                    </div>
 
-                  <div className="relative">
-                    <Lock
-                      className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-                      size={20}
-                    />
-                    <input
-                      className="input w-full"
-                      style={{ paddingLeft: "58px" }}
-                      type="password"
-                      minLength={6}
-                      autoComplete={
-                        mode === "register"
-                          ? "new-password"
-                          : "current-password"
-                      }
-                      placeholder="Пароль — минимум 6 символов"
-                      value={password}
-                      onChange={(event) => setPassword(event.target.value)}
-                      required
-                    />
+                    <div className="relative">
+                      <Lock
+                        className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                        size={20}
+                      />
+                      <input
+                        className="input w-full"
+                        style={{ paddingLeft: "58px" }}
+                        type="password"
+                        minLength={6}
+                        autoComplete={
+                          mode === "register"
+                            ? "new-password"
+                            : "current-password"
+                        }
+                        placeholder="Пароль — минимум 6 символов"
+                        value={password}
+                        onChange={(event) => setPassword(event.target.value)}
+                        required
+                      />
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="phone-login-enter space-y-4 rounded-[26px] border border-blue-100 bg-blue-50/35 p-4 sm:p-5">
+                    <div>
+                      <label className="mb-2 block text-sm font-black text-slate-700">
+                        Номер телефона
+                      </label>
+                      <div className="flex h-[58px] items-center overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition focus-within:border-[#0057ff] focus-within:ring-4 focus-within:ring-blue-100">
+                        <span className="flex h-full items-center border-r border-slate-200 bg-slate-50 px-4 text-base font-black text-[#0057ff]">
+                          +7
+                        </span>
+                        <input
+                          className="h-full min-w-0 flex-1 bg-transparent px-4 font-black text-slate-950 outline-none placeholder:font-bold placeholder:text-slate-400"
+                          inputMode="tel"
+                          autoComplete="tel"
+                          placeholder="(999) 123-45-67"
+                          value={formatRussianPhone(loginPhone)}
+                          onChange={(event) => {
+                            setLoginPhone(normalizeRussianPhone(event.target.value));
+                            setConfirmation(null);
+                            setSmsCode("");
+                            setError("");
+                          }}
+                          disabled={Boolean(confirmation)}
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    {confirmation ? (
+                      <div className="company-result-enter">
+                        <label className="mb-2 block text-sm font-black text-slate-700">
+                          Код из SMS
+                        </label>
+                        <div className="relative">
+                          <ShieldCheck
+                            className="absolute left-4 top-1/2 -translate-y-1/2 text-[#0057ff]"
+                            size={20}
+                          />
+                          <input
+                            className="input w-full tracking-[0.34em]"
+                            style={{ paddingLeft: "58px" }}
+                            inputMode="numeric"
+                            autoComplete="one-time-code"
+                            maxLength={6}
+                            placeholder="000000"
+                            value={smsCode}
+                            onChange={(event) =>
+                              setSmsCode(event.target.value.replace(/\D/g, "").slice(0, 6))
+                            }
+                            required
+                            autoFocus
+                          />
+                        </div>
+                        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs font-bold">
+                          <span className="text-emerald-700">Код отправлен на +7 {formatRussianPhone(loginPhone)}</span>
+                          <button
+                            type="button"
+                            className="text-[#0057ff] underline-offset-4 hover:underline"
+                            onClick={() => {
+                              setConfirmation(null);
+                              setSmsCode("");
+                              recaptchaRef.current?.clear();
+                              recaptchaRef.current = null;
+                            }}
+                          >
+                            Изменить номер
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-sm font-bold leading-6 text-slate-500">
+                        Пришлём одноразовый код. Пароль не нужен, номер всегда начинается с +7.
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
+
+              {mode === "login" ? (
+                <button
+                  type="button"
+                  onClick={() => setRememberMe((current) => !current)}
+                  className="mt-5 flex w-full items-center gap-3 rounded-2xl bg-slate-50 p-4 text-left ring-1 ring-slate-100 transition duration-300 hover:bg-blue-50/60"
+                  aria-pressed={rememberMe}
+                >
+                  <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border-2 transition ${rememberMe ? "border-[#0057ff] bg-[#0057ff] text-white" : "border-slate-300 bg-white"}`}>
+                    {rememberMe ? <Check size={15} strokeWidth={3} /> : null}
+                  </span>
+                  <span>
+                    <span className="block text-sm font-black text-slate-800">Запомнить меня</span>
+                    <span className="mt-0.5 block text-xs font-bold text-slate-500">Оставаться в аккаунте на этом устройстве</span>
+                  </span>
+                </button>
+              ) : null}
+
+              <div id="phone-login-recaptcha" />
 
               {error ? (
                 <p className="mt-5 rounded-2xl bg-red-50 p-4 text-sm font-black text-red-600 ring-1 ring-red-100">
@@ -529,7 +797,7 @@ export default function AuthPage() {
               ) : null}
 
               <button
-                disabled={sending || registrationBlocked}
+                disabled={sending || registrationBlocked || phoneLoginBlocked}
                 className="group mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#0057ff] px-5 py-4 text-base font-black text-white shadow-lg shadow-blue-600/20 transition duration-300 hover:-translate-y-1 hover:bg-[#004de6] hover:shadow-[0_18px_40px_rgba(0,87,255,0.28)] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 sm:text-lg"
               >
                 {sending ? (
@@ -539,6 +807,10 @@ export default function AuthPage() {
                   ? "Подождите..."
                   : mode === "register"
                   ? "Создать аккаунт"
+                  : loginMethod === "phone"
+                  ? confirmation
+                    ? "Войти по коду"
+                    : "Получить SMS-код"
                   : "Войти"}
               </button>
 
@@ -600,9 +872,14 @@ export default function AuthPage() {
           animation: companyResultIn 320ms ease-out both;
         }
 
+        .phone-login-enter {
+          animation: companyResultIn 300ms ease-out both;
+        }
+
         @media (prefers-reduced-motion: reduce) {
           .auth-reveal,
-          .company-result-enter {
+          .company-result-enter,
+          .phone-login-enter {
             animation: none !important;
           }
         }

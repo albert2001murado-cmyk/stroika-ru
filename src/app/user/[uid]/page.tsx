@@ -20,6 +20,7 @@ import {
   Edit3,
   FileText,
   GitCompareArrows,
+  Hammer,
   Hash,
   Images,
   Landmark,
@@ -29,9 +30,11 @@ import {
   MapPinned,
   MessageCircle,
   Phone,
+  Ruler,
   ShieldCheck,
   Sparkles,
   UserRound,
+  Wrench,
 } from "lucide-react";
 import {
   collection,
@@ -45,7 +48,7 @@ import {
 } from "firebase/firestore";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { type CSSProperties, useEffect, useMemo, useState } from "react";
 
 type PortfolioItem = {
   id: string;
@@ -425,17 +428,29 @@ export default function PublicUserPage() {
           }
         }
 
+        @keyframes public-profile-tool {
+          0%, 100% { transform: translate3d(0, 0, 0) rotate(var(--tool-rotate)); opacity: .22; }
+          50% { transform: translate3d(0, -12px, 0) rotate(calc(var(--tool-rotate) + 5deg)); opacity: .38; }
+        }
+
         .public-profile-reveal {
           animation: public-profile-reveal 0.65s cubic-bezier(0.22, 1, 0.36, 1) both;
         }
 
-        .public-profile-float {
-          animation: public-profile-float 7s ease-in-out infinite;
+        .public-profile-tool {
+          animation: public-profile-tool 6.8s ease-in-out infinite;
+        }
+
+        .public-profile-corner {
+          animation: public-profile-float 8.5s ease-in-out infinite;
         }
 
         @media (prefers-reduced-motion: reduce) {
-          .public-profile-reveal,
-          .public-profile-float {
+          .public-profile-reveal {
+            animation: none !important;
+          }
+          .public-profile-tool,
+          .public-profile-corner {
             animation: none !important;
           }
         }
@@ -444,12 +459,13 @@ export default function PublicUserPage() {
       <div className="app-container max-w-7xl">
         <section className="public-profile-reveal relative overflow-hidden rounded-[38px] bg-white shadow-[0_26px_80px_rgba(15,23,42,0.10)] ring-1 ring-slate-200/70">
           <div className="relative min-h-[250px] overflow-hidden bg-gradient-to-br from-[#0048dc] via-[#0057ff] to-[#3482ff] px-5 pb-24 pt-7 text-white sm:px-10 sm:pb-28 sm:pt-10">
-            <div className="public-profile-float pointer-events-none absolute -right-20 -top-24 h-72 w-72 rounded-full bg-white/10 blur-[1px]" />
-            <div
-              className="public-profile-float pointer-events-none absolute -bottom-36 left-[18%] h-72 w-72 rounded-full bg-cyan-300/15"
-              style={{ animationDelay: "-2.5s" }}
-            />
             <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-blue-950/10 via-transparent to-white/5" />
+
+            <span className="public-profile-corner pointer-events-none absolute left-6 top-24 h-14 w-14 border-l-2 border-t-2 border-[#ffd233]/80 sm:left-10" />
+            <span className="public-profile-corner pointer-events-none absolute bottom-16 right-7 h-14 w-14 border-b-2 border-r-2 border-[#ffd233]/70 sm:right-12" style={{ animationDelay: "-3s" }} />
+            <Hammer className="public-profile-tool pointer-events-none absolute right-[16%] top-[42%] text-white" size={48} style={{ "--tool-rotate": "-12deg", animationDelay: "-1.1s" } as CSSProperties} />
+            <Wrench className="public-profile-tool pointer-events-none absolute left-[7%] top-[48%] text-white" size={44} style={{ "--tool-rotate": "18deg", animationDelay: "-3.4s" } as CSSProperties} />
+            <Ruler className="public-profile-tool pointer-events-none absolute bottom-8 right-[38%] text-[#ffd233]" size={42} style={{ "--tool-rotate": "-4deg", animationDelay: "-5.2s" } as CSSProperties} />
 
             <div className="relative flex flex-wrap items-center justify-between gap-3">
               <div className="inline-flex items-center gap-2 rounded-full bg-white/13 px-4 py-2 text-xs font-black uppercase tracking-[0.16em] ring-1 ring-white/20 backdrop-blur-md">

@@ -101,6 +101,19 @@ export default function Header() {
     window.location.reload();
   }
 
+  function handleProfileClick(event: MouseEvent<HTMLAnchorElement>) {
+    if (!user) return;
+
+    event.preventDefault();
+
+    if (window.location.pathname === "/profile") {
+      window.location.reload();
+      return;
+    }
+
+    window.location.assign("/profile");
+  }
+
   function mobileNavClass(href: string) {
     return `mobile-nav-item ${isActive(href) ? "mobile-nav-item-active" : ""}`;
   }
@@ -179,6 +192,7 @@ export default function Header() {
               <>
                 <Link
                   href="/profile"
+                  onClick={handleProfileClick}
                   className="flex h-14 max-w-[220px] items-center gap-3 rounded-2xl bg-white/10 px-3 text-white ring-1 ring-white/10 transition hover:bg-white/20"
                 >
                   {avatarUrl ? (
@@ -256,6 +270,7 @@ export default function Header() {
 
             <Link
               href={user ? "/profile" : "/auth"}
+              onClick={handleProfileClick}
               aria-label={user ? "Профиль" : "Войти"}
               className="mobile-header-button overflow-hidden bg-white/12 text-white"
             >
@@ -306,7 +321,11 @@ export default function Header() {
           <span>Сообщения</span>
         </Link>
 
-        <Link href={user ? "/profile" : "/auth"} className={mobileNavClass(user ? "/profile" : "/auth")}>
+        <Link
+          href={user ? "/profile" : "/auth"}
+          onClick={handleProfileClick}
+          className={mobileNavClass(user ? "/profile" : "/auth")}
+        >
           <UserRound size={21} strokeWidth={2.5} />
           <span>{user ? "Профиль" : "Войти"}</span>
         </Link>
@@ -356,6 +375,7 @@ export default function Header() {
 
               <Link
                 href={user ? "/profile" : "/auth"}
+                onClick={handleProfileClick}
                 className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-white px-4 text-sm font-black text-[#0057ff] shadow-lg shadow-blue-950/10"
               >
                 <UserRound size={18} />

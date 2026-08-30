@@ -4,10 +4,13 @@ import { auth, db } from "@/lib/firebase";
 import type { AccountType, UserProfile } from "@/types";
 import {
   User,
+  browserLocalPersistence,
+  browserSessionPersistence,
   createUserWithEmailAndPassword,
   deleteUser,
   onAuthStateChanged,
   signInWithEmailAndPassword,
+  setPersistence,
   signOut,
   updateProfile,
 } from "firebase/auth";
@@ -36,7 +39,7 @@ type AuthContextValue = {
   profile: UserProfile | null;
   loading: boolean;
   register: (data: RegisterData) => Promise<void>;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, remember?: boolean) => Promise<void>;
   logout: () => Promise<void>;
 };
 
@@ -125,7 +128,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  async function login(email: string, password: string) {
+  async function login(email: string, password: string, remember = true) {
+    await setPersistence(
+      auth,
+      remember ? browserLocalPersistence : browserSessionPersistence
+    );
     await signInWithEmailAndPassword(auth, email, password);
   }
 

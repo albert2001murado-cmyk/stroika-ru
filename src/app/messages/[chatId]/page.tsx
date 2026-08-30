@@ -24,6 +24,7 @@ import {
   Check,
   CheckCheck,
   Edit3,
+  FileText,
   ImagePlus,
   Loader2,
   Mic,
@@ -33,8 +34,10 @@ import {
   PinOff,
   Play,
   Send,
+  Settings,
   Trash2,
   UserRound,
+  UsersRound,
   X,
 } from "lucide-react";
 import Link from "next/link";
@@ -59,6 +62,10 @@ type ChatParticipant = {
 
 type Chat = {
   id: string;
+  chatType?: "direct" | "group";
+  isGroup?: boolean;
+  groupTitle?: string;
+  groupAvatarUrl?: string;
   participantIds?: string[];
   participants?: Record<string, ChatParticipant> | string[];
   users?: Record<string, ChatParticipant>;
@@ -69,7 +76,7 @@ type Chat = {
   pinnedBy?: string[] | Record<string, boolean> | string | null;
 };
 
-type MessageType = "text" | "image" | "video" | "audio" | "mixed";
+type MessageType = "text" | "image" | "video" | "audio" | "document" | "mixed";
 
 type ChatMessage = {
   id: string;
@@ -93,7 +100,7 @@ type ChatMessage = {
 };
 
 type UploadedChatFile = {
-  type: "image" | "video" | "audio";
+  type: "image" | "video" | "audio" | "document";
   url: string;
   path: string;
   name?: string;
@@ -197,6 +204,7 @@ function messagePreview(message: ChatMessage) {
   if (message.text) return message.text;
   if (message.type === "audio") return "Голосовое сообщение";
   if (message.type === "video") return "Видео";
+  if (message.type === "document") return message.fileName || "Файл";
   if (message.type === "image" || message.type === "mixed" || message.imageUrl) {
     return "Фото";
   }
@@ -344,7 +352,7 @@ export default function ChatPage() {
   const [openMenuId, setOpenMenuId] = useState("");
   const [mediaFile, setMediaFile] = useState<File | null>(null);
   const [mediaPreview, setMediaPreview] = useState("");
-  const [mediaKind, setMediaKind] = useState<"image" | "video" | "">("");
+  const [mediaKind, setMediaKind] = useState<"image" | "video" | "document" | "">("");
   const [pageLoading, setPageLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [voiceUploading, setVoiceUploading] = useState(false);
@@ -355,6 +363,7 @@ export default function ChatPage() {
   const [highlightedId, setHighlightedId] = useState("");
 
   const participantIds = useMemo(() => getParticipantIds(chat), [chat]);
+  const isGroup = chat?.chatType === "group" || chat?.isGroup === true;
   const otherId = useMemo(
     () => participantIds.find((uid) => uid !== user?.uid) || "",
     [participantIds, user?.uid]
@@ -362,10 +371,12 @@ export default function ChatPage() {
   const other = getParticipant(chat, otherId);
   const otherName = other?.displayName || other?.name || "Пользователь";
   const otherAvatar = other?.avatarUrl || other?.photoURL || "";
+  const headerName = isGroup ? chat?.groupTitle || "Групповой чат" : otherName;
+  const headerAvatar = isGroup ? chat?.groupAvatarUrl || "" : otherAvatar;
   const chatPinned = Boolean(user && isChatPinned(chat, user.uid));
 
   useEffect(() => {
-    if (!user || !otherId) {
+    if (!user || !otherId || isGroup) {
       setBlockedEither(false);
       return;
     }
@@ -376,7 +387,7 @@ export default function ChatPage() {
     ])
       .then(([mine, theirs]) => setBlockedEither(mine.exists() || theirs.exists()))
       .catch(() => undefined);
-  }, [otherId, user]);
+  }, [isGroup, otherId, user]);
 
   useEffect(() => {
     if (loading) return;
@@ -479,23 +490,22 @@ export default function ChatPage() {
       ? "image"
       : file.type.startsWith("video/")
       ? "video"
-      : "";
+      : "document";
 
-    if (!kind) {
-      setError("Можно отправлять только фото и видео.");
-      return;
-    }
-
-    const limit = kind === "image" ? 10 * 1024 * 1024 : 80 * 1024 * 1024;
+    const limit = kind === "image"
+      ? 10 * 1024 * 1024
+      : kind === "video"
+      ? 80 * 1024 * 1024
+      : 25 * 1024 * 1024;
     if (file.size > limit) {
-      setError(kind === "image" ? "Фото больше 10 МБ." : "Видео больше 80 МБ.");
+      setError(kind === "image" ? "Фото больше 10 МБ." : kind === "video" ? "Видео больше 80 МБ." : "Файл больше 25 МБ.");
       return;
     }
 
     removeMedia();
     setMediaFile(file);
     setMediaKind(kind);
-    setMediaPreview(URL.createObjectURL(file));
+    setMediaPreview(kind === "document" ? "" : URL.createObjectURL(file));
     setError("");
   }
 
@@ -554,6 +564,8 @@ export default function ChatPage() {
       ? "Голосовое сообщение"
       : type === "video"
       ? "Видео"
+      : type === "document"
+      ? uploaded?.name || "Файл"
       : "Фото";
 
     await addDoc(collection(db, "chats", chatId, "messages"), {
@@ -585,32 +597,23 @@ export default function ChatPage() {
       [`participants.${user.uid}.avatarUrl`]: senderAvatarUrl,
     });
 
-    if (otherId) {
+    const recipients = participantIds.filter((uid) => uid !== user.uid);
+    if (recipients.length > 0) {
       user
         .getIdToken()
-        .then((token) =>
+        .then((token) => Promise.allSettled(recipients.map((recipientId) =>
           fetch(getApiUrl("/api/push/send"), {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
             body: JSON.stringify({
-              recipientId: otherId,
-              title: senderName,
-              body:
-                type === "audio"
-                  ? "🎤 Голосовое сообщение"
-                  : type === "video"
-                  ? "📹 Видео"
-                  : type === "image"
-                  ? "📷 Фото"
-                  : clean,
+              recipientId,
+              title: isGroup ? chat.groupTitle || senderName : senderName,
+              body: type === "audio" ? "🎤 Голосовое сообщение" : type === "video" ? "📹 Видео" : type === "image" ? "📷 Фото" : type === "document" ? `📎 ${uploaded?.name || "Файл"}` : clean,
               url: `/messages/${chatId}`,
               chatId,
             }),
           })
-        )
+        )))
         .catch(() => undefined);
     }
   }
@@ -885,25 +888,27 @@ export default function ChatPage() {
           </Link>
 
           <Link
-            href={otherId ? `/user/${otherId}` : "/messages"}
+            href={isGroup ? `/messages/${chatId}/info` : otherId ? `/user/${otherId}` : "/messages"}
             className="relative flex min-w-0 flex-1 items-center gap-3"
           >
             <div className="relative flex h-10 w-10 shrink-0 sm:h-12 sm:w-12 items-center justify-center overflow-hidden rounded-[18px] bg-white/18 text-white ring-1 ring-white/25 sm:h-13 sm:w-13">
-              {otherAvatar ? (
+              {headerAvatar ? (
                 <img
-                  src={otherAvatar}
-                  alt={otherName}
+                  src={headerAvatar}
+                  alt={headerName}
                   className="h-full w-full object-cover"
                 />
+              ) : isGroup ? (
+                <UsersRound size={24} />
               ) : (
                 <UserRound size={24} />
               )}
-              <span className="absolute bottom-1 right-1 h-3 w-3 rounded-full border-2 border-[#1266ff] bg-emerald-400" />
+              {!isGroup ? <span className="absolute bottom-1 right-1 h-3 w-3 rounded-full border-2 border-[#1266ff] bg-emerald-400" /> : null}
             </div>
             <div className="min-w-0">
-              <h1 className="truncate text-base font-black sm:text-lg">{otherName}</h1>
+              <h1 className="truncate text-base font-black sm:text-lg">{headerName}</h1>
               <p className="truncate text-xs font-bold text-blue-100 sm:text-sm">
-                {chat?.listingTitle || "Личная переписка"}
+                {isGroup ? `${participantIds.length} участников` : chat?.listingTitle || "Личная переписка"}
               </p>
             </div>
           </Link>
@@ -920,7 +925,15 @@ export default function ChatPage() {
               <Pin size={18} fill={chatPinned ? "currentColor" : "none"} />
             </button>
 
-            {otherId ? (
+            {isGroup ? (
+              <Link
+                href={`/messages/${chatId}/info`}
+                className="flex h-9 w-9 items-center justify-center rounded-2xl bg-white/14 text-white transition duration-200 hover:scale-105 hover:bg-white/24 sm:h-10 sm:w-10"
+                title="Настройки группы"
+              >
+                <Settings size={18} />
+              </Link>
+            ) : otherId ? (
               <>
                 <ReportDialog
                   targetType="chat"
@@ -1020,9 +1033,12 @@ export default function ChatPage() {
           ) : (
             messages.map((message, index) => {
               const isMine = message.senderId === user?.uid;
-              const isRead = otherId ? hasUserMarker(message.readBy, otherId) : false;
-              const isDelivered = otherId
-                ? hasUserMarker(message.deliveredTo, otherId)
+              const receiptUsers = participantIds.filter((uid) => uid !== user?.uid);
+              const isRead = receiptUsers.length > 0
+                ? receiptUsers.every((uid) => hasUserMarker(message.readBy, uid))
+                : false;
+              const isDelivered = receiptUsers.length > 0
+                ? receiptUsers.every((uid) => hasUserMarker(message.deliveredTo, uid))
                 : false;
               const showDay =
                 index === 0 ||
@@ -1033,6 +1049,7 @@ export default function ChatPage() {
                   : message.imageUrl || "";
               const videoUrl = message.type === "video" ? message.mediaUrl || "" : "";
               const audioUrl = message.type === "audio" ? message.mediaUrl || "" : "";
+              const documentUrl = message.type === "document" ? message.mediaUrl || "" : "";
 
               return (
                 <div key={message.id} className="relative">
@@ -1074,6 +1091,12 @@ export default function ChatPage() {
                           </div>
                         ) : null}
 
+                        {isGroup && !isMine ? (
+                          <p className="mb-1.5 text-xs font-black text-[#0057ff]">
+                            {message.senderName || getParticipant(chat, message.senderId)?.displayName || getParticipant(chat, message.senderId)?.name || "Участник"}
+                          </p>
+                        ) : null}
+
                         {imageUrl ? (
                           <a href={imageUrl} target="_blank" rel="noreferrer">
                             <img
@@ -1097,6 +1120,23 @@ export default function ChatPage() {
                         ) : null}
 
                         {audioUrl ? <VoiceMessage url={audioUrl} mine={isMine} /> : null}
+
+                        {documentUrl ? (
+                          <a
+                            href={documentUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className={`mb-2 flex min-w-[220px] items-center gap-3 rounded-[18px] p-3 ${isMine ? "bg-white/14" : "bg-blue-50"}`}
+                          >
+                            <span className={`flex h-11 w-11 items-center justify-center rounded-2xl ${isMine ? "bg-white/16 text-white" : "bg-white text-[#0057ff]"}`}>
+                              <FileText size={21} />
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-sm font-black">{message.fileName || "Документ"}</span>
+                              <span className={`mt-1 block text-xs font-bold ${isMine ? "text-blue-100" : "text-slate-500"}`}>Открыть файл</span>
+                            </span>
+                          </a>
+                        ) : null}
 
                         {message.text ? (
                           <p className="whitespace-pre-wrap break-words text-sm font-medium leading-6 sm:text-[15px]">
@@ -1239,6 +1279,16 @@ export default function ChatPage() {
           </div>
         ) : null}
 
+        {mediaFile && mediaKind === "document" ? (
+          <div className="relative z-20 border-t border-slate-100 bg-white px-3 py-3 sm:px-5">
+            <div className="media-preview flex max-w-md items-center gap-3 rounded-[20px] bg-blue-50 p-3 ring-1 ring-blue-100">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-[#0057ff] shadow-sm"><FileText size={21} /></span>
+              <span className="min-w-0 flex-1"><span className="block truncate text-sm font-black text-slate-950">{mediaFile.name}</span><span className="mt-1 block text-xs font-bold text-slate-500">Документ · до 25 МБ</span></span>
+              <button type="button" onClick={removeMedia} className="flex h-9 w-9 items-center justify-center rounded-2xl bg-white text-slate-500 transition hover:text-red-600" aria-label="Удалить файл"><X size={17} /></button>
+            </div>
+          </div>
+        ) : null}
+
         {editingId ? (
           <div className="relative z-20 flex items-center justify-between border-t border-blue-100 bg-blue-50 px-4 py-2.5 text-sm font-black text-[#0057ff] sm:px-5">
             <span className="flex items-center gap-2">
@@ -1324,7 +1374,7 @@ export default function ChatPage() {
                   <ImagePlus size={21} />
                   <input
                     type="file"
-                    accept="image/*,video/*"
+                    accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.rtf,.csv,.zip,.rar,.7z"
                     className="hidden"
                     onChange={handleMediaChange}
                   />

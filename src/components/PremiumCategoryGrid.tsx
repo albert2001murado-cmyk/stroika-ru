@@ -1,6 +1,7 @@
 "use client";
 
 import { getMaterialServiceLink } from "@/data/materialServices";
+import { groupsForSection } from "@/data/catalogGroups";
 import { ArrowLeft, ArrowRight, Search, ShieldCheck } from "lucide-react";
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
@@ -48,28 +49,28 @@ const sections: SectionConfig[] = [
     id: "materials",
     title: "Материалы",
     description: "Бетон, кирпич, отделка и инженерные материалы",
-    image: "/categories/materials.png",
+    image: "/categories/sections/materials-overview.png",
     keys: ["материал"],
   },
   {
     id: "services",
     title: "Услуги",
     description: "Мастера и бригады для отдельных строительных работ",
-    image: "/categories/finishing.png",
+    image: "/categories/services/services-overview.png",
     keys: ["отдел", "элект", "сант", "пол", "крыша", "фасад", "участок", "благоустрой", "инженер", "окна", "двер", "мебель", "дополнитель"],
   },
   {
     id: "machinery",
     title: "Техника",
     description: "Спецтехника, доставка и работа с оператором",
-    image: "/categories/equipment.png",
+    image: "/categories/sections/equipment-overview.png",
     keys: ["спецтехника"],
   },
   {
     id: "complex",
     title: "Комплексные решения",
     description: "Проектирование, ремонт и строительство под ключ",
-    image: "/categories/construction.png",
+    image: "/categories/sections/solutions-overview.png",
     keys: ["ремонт квартир", "дизайн", "проектирование", "строительство"],
   },
 ];
@@ -92,18 +93,22 @@ function getTitle(category: CategoryLike) {
 }
 
 const CATEGORY_IMAGES = {
-  materials: "/categories/materials.png",
-  repair: "/categories/repair.png",
-  finishing: "/categories/finishing.png",
-  electric: "/categories/electric.png",
-  plumbing: "/categories/plumbing.png",
-  construction: "/categories/construction.png",
-  equipment: "/categories/equipment.png",
-  design: "/categories/design.png",
-  engineering: "/categories/engineering.png",
-  windows: "/categories/windows.png",
-  furniture: "/categories/furniture.png",
-  extra: "/categories/extra.png",
+  materials: "/categories/sections/materials-overview.png",
+  repair: "/categories/solutions/solutions-repair.png",
+  services: "/categories/services/services-overview.png",
+  finishing: "/categories/services/services-finishing.png",
+  electric: "/categories/services/services-electric.png",
+  plumbing: "/categories/services/services-plumbing.png",
+  floors: "/categories/services/services-floors.png",
+  roof: "/categories/services/services-roof.png",
+  landscape: "/categories/services/services-landscape.png",
+  construction: "/categories/solutions/solutions-construction.png",
+  equipment: "/categories/sections/equipment-overview.png",
+  design: "/categories/solutions/solutions-design.png",
+  engineering: "/categories/services/services-engineering.png",
+  windows: "/categories/services/services-windows.png",
+  furniture: "/categories/services/services-furniture.png",
+  extra: "/categories/services/services-extra.png",
   all: "/categories/all.png",
 } as const;
 
@@ -113,16 +118,18 @@ function getCategoryImage(title: string) {
   if (value.includes("материал")) return CATEGORY_IMAGES.materials;
   if (value.includes("ремонт квартир")) return CATEGORY_IMAGES.repair;
   if (value.includes("дизайн") || value.includes("проект")) return CATEGORY_IMAGES.design;
-  if (value.includes("отдел") || value.includes("пол")) return CATEGORY_IMAGES.finishing;
+  if (value.includes("пол")) return CATEGORY_IMAGES.floors;
+  if (value.includes("отдел")) return CATEGORY_IMAGES.finishing;
   if (value.includes("элект")) return CATEGORY_IMAGES.electric;
   if (value.includes("сант")) return CATEGORY_IMAGES.plumbing;
   if (value.includes("спец") || value.includes("техника")) return CATEGORY_IMAGES.equipment;
-  if (value.includes("участок") || value.includes("благоустрой")) return CATEGORY_IMAGES.design;
+  if (value.includes("участок") || value.includes("благоустрой")) return CATEGORY_IMAGES.landscape;
   if (value.includes("инженер")) return CATEGORY_IMAGES.engineering;
   if (value.includes("окна") || value.includes("двер")) return CATEGORY_IMAGES.windows;
   if (value.includes("мебель")) return CATEGORY_IMAGES.furniture;
   if (value.includes("дополнитель")) return CATEGORY_IMAGES.extra;
-  if (value.includes("стро") || value.includes("крыша") || value.includes("фасад")) return CATEGORY_IMAGES.construction;
+  if (value.includes("крыша") || value.includes("фасад")) return CATEGORY_IMAGES.roof;
+  if (value.includes("стро")) return CATEGORY_IMAGES.construction;
 
   return CATEGORY_IMAGES.repair;
 }
@@ -356,11 +363,15 @@ export default function PremiumCategoryGrid({
 }: Props) {
   const [sectionId, setSectionId] = useState<SectionId | null>(null);
   const [categoryName, setCategoryName] = useState("");
+  const [groupId, setGroupId] = useState("");
   const [subcategory, setSubcategory] = useState("");
   const [search, setSearch] = useState("");
+  const [sectionSearch, setSectionSearch] = useState("");
   const [subcategoryPage, setSubcategoryPage] = useState(1);
 
   const section = sections.find((item) => item.id === sectionId) || null;
+  const catalogGroups = groupsForSection(sectionId);
+  const activeGroup = catalogGroups.find((item) => item.id === groupId) || null;
   const activeCategory = categories.find((item) => getTitle(item) === categoryName);
 
   const sectionCategories = useMemo(() => {
@@ -378,13 +389,55 @@ export default function PremiumCategoryGrid({
       );
   }, [categories, section]);
 
+  const sectionSearchResults = useMemo(() => {
+    if (!section) return [];
+    const query = normalize(sectionSearch);
+    if (!query) return [];
+
+    return sectionCategories
+      .flatMap((category) =>
+        getOrderedSubcategories(category).map((item) => {
+          const group = catalogGroups.find((candidate) =>
+            candidate.items.some((groupItem) => normalize(groupItem) === normalize(item))
+          );
+          const categoryTitle = cleanTitle(getTitle(category));
+          const path = group
+            ? [section.title, group.title, item]
+            : [section.title, categoryTitle, item];
+
+          return {
+            category,
+            subcategory: item,
+            path,
+          };
+        })
+      )
+      .filter(({ path }) => normalize(path.join(" ")).includes(query))
+      .sort((left, right) => {
+        const leftValue = normalize(left.subcategory);
+        const rightValue = normalize(right.subcategory);
+        const leftPriority = leftValue === query ? 0 : leftValue.startsWith(query) ? 1 : 2;
+        const rightPriority = rightValue === query ? 0 : rightValue.startsWith(query) ? 1 : 2;
+        if (leftPriority !== rightPriority) return leftPriority - rightPriority;
+        return left.subcategory.localeCompare(right.subcategory, "ru", {
+          numeric: true,
+          sensitivity: "base",
+        });
+      })
+      .slice(0, 24);
+  }, [catalogGroups, section, sectionCategories, sectionSearch]);
+
   const filteredSubcategories = useMemo(() => {
     if (!activeCategory) return [];
-    const all = getOrderedSubcategories(activeCategory);
+    const all = activeGroup
+      ? [...activeGroup.items].sort((a, b) =>
+          a.localeCompare(b, "ru", { numeric: true, sensitivity: "base" })
+        )
+      : getOrderedSubcategories(activeCategory);
     const value = normalize(search);
     if (!value) return all;
     return all.filter((item) => normalize(item).includes(value));
-  }, [activeCategory, search]);
+  }, [activeCategory, activeGroup, search]);
 
   const subcategoryPageCount = Math.max(
     1,
@@ -415,8 +468,10 @@ export default function PremiumCategoryGrid({
   function resetAll() {
     setSectionId(null);
     setCategoryName("");
+    setGroupId("");
     setSubcategory("");
     setSearch("");
+    setSectionSearch("");
     setSubcategoryPage(1);
     onSelectCategory?.("");
     onApplySelection?.({ category: "", subcategory: "", search: "" });
@@ -426,11 +481,13 @@ export default function PremiumCategoryGrid({
     if (subcategory) return setSubcategory("");
     if (categoryName) {
       setCategoryName("");
+      setGroupId("");
       setSearch("");
       setSubcategoryPage(1);
       return;
     }
     setSectionId(null);
+    setSectionSearch("");
     setSubcategoryPage(1);
   }
 
@@ -465,6 +522,8 @@ export default function PremiumCategoryGrid({
 
   const heading = subcategory
     ? subcategory
+    : activeGroup
+      ? activeGroup.title
     : activeCategory
       ? cleanTitle(getTitle(activeCategory))
       : section
@@ -473,6 +532,8 @@ export default function PremiumCategoryGrid({
 
   const subtitle = subcategory
     ? "Выберите подходящее действие"
+    : activeGroup
+      ? activeGroup.description
     : activeCategory
       ? "Выберите конкретную услугу или товар"
       : section
@@ -509,14 +570,17 @@ export default function PremiumCategoryGrid({
           </div>
         </div>
 
-        <div key={`${sectionId}-${categoryName}-${subcategory}`} className="category-stage relative mt-7">
+        <div key={`${sectionId}-${groupId}-${categoryName}-${subcategory}`} className="category-stage relative mt-7">
           {!sectionId ? (
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               {sections.map(({ id, title, description, image }) => (
                 <button
                   key={id}
                   type="button"
-                  onClick={() => setSectionId(id)}
+                  onClick={() => {
+                    setSectionId(id);
+                    setSectionSearch("");
+                  }}
                   className="group relative min-h-[190px] overflow-hidden rounded-[24px] sm:min-h-[228px] sm:rounded-[30px] border border-slate-100 bg-[#f8fbff] p-5 text-left transition duration-500 ease-out hover:-translate-y-1.5 hover:border-blue-200 hover:bg-white hover:shadow-[0_26px_70px_rgba(0,87,255,0.16)] active:scale-[0.975]"
                 >
                   <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_88%_82%,rgba(0,87,255,0.13),transparent_42%)] opacity-70 transition duration-500 group-hover:opacity-100" />
@@ -538,6 +602,108 @@ export default function PremiumCategoryGrid({
           ) : null}
 
           {sectionId && !activeCategory ? (
+            <div className="mb-5">
+              <div className="relative">
+                <Search size={21} className="pointer-events-none absolute left-5 top-1/2 -translate-y-1/2 text-[#0057ff]" />
+                <input
+                  value={sectionSearch}
+                  onChange={(event) => setSectionSearch(event.target.value)}
+                  placeholder={`Найти в разделе «${section?.title || "Каталог"}»`}
+                  className="h-16 w-full rounded-[22px] border border-blue-100 bg-blue-50/45 pl-14 pr-5 text-base font-black text-slate-950 outline-none transition placeholder:font-bold placeholder:text-slate-400 focus:border-[#0057ff] focus:bg-white focus:ring-4 focus:ring-blue-100"
+                />
+              </div>
+
+              {normalize(sectionSearch) ? (
+                <div className="catalog-page-stage mt-4">
+                  {sectionSearchResults.length > 0 ? (
+                    <>
+                      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-sm font-black text-slate-950">Подходящие позиции</p>
+                        <span className="rounded-full bg-blue-50 px-3 py-1.5 text-xs font-black text-[#0057ff] ring-1 ring-blue-100">
+                          Найдено: {sectionSearchResults.length}
+                        </span>
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {sectionSearchResults.map((result) => (
+                          <button
+                            key={`${getTitle(result.category)}-${result.subcategory}`}
+                            type="button"
+                            onClick={() => apply({
+                              category: getTitle(result.category),
+                              subcategory: result.subcategory,
+                              search: "",
+                            })}
+                            className="group flex min-h-[88px] items-center gap-4 rounded-[22px] border border-slate-200 bg-white p-3 text-left transition duration-300 hover:-translate-y-1 hover:border-blue-200 hover:shadow-xl hover:shadow-blue-900/5 active:scale-[.985]"
+                          >
+                            <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-[18px] bg-blue-50">
+                              <img src={getCategoryImage(getTitle(result.category))} alt="" aria-hidden="true" className="h-14 w-14 object-contain" />
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block font-black leading-5 text-slate-950">{result.subcategory}</span>
+                              <span className="mt-1.5 block text-xs font-bold leading-5 text-slate-500">
+                                {result.path.map((segment, index) => (
+                                  <span key={`${segment}-${index}`}>
+                                    {index > 0 ? <span className="text-[#0057ff]"> → </span> : null}
+                                    {segment}
+                                  </span>
+                                ))}
+                              </span>
+                            </span>
+                            <ArrowRight size={19} className="shrink-0 text-[#0057ff] transition duration-300 group-hover:translate-x-1" />
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="rounded-[24px] border border-dashed border-blue-200 bg-blue-50/50 p-7 text-center">
+                      <Search size={27} className="mx-auto text-[#0057ff]" />
+                      <p className="mt-3 font-black text-slate-950">Ничего не найдено</p>
+                      <p className="mt-1 text-sm font-bold text-slate-500">Попробуйте ввести часть названия категории или работы.</p>
+                    </div>
+                  )}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {sectionId && !activeCategory && catalogGroups.length > 0 && !normalize(sectionSearch) ? (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {catalogGroups.map((group) => (
+                <button
+                  key={group.id}
+                  type="button"
+                  onClick={() => {
+                    const sourceCategory = sectionCategories[0];
+                    if (!sourceCategory) return;
+                    setGroupId(group.id);
+                    setCategoryName(getTitle(sourceCategory));
+                    setSearch("");
+                    setSubcategoryPage(1);
+                  }}
+                  className="group relative min-h-[190px] overflow-hidden rounded-[28px] border border-slate-100 bg-[#f8fbff] p-5 text-left transition duration-500 ease-out hover:-translate-y-1.5 hover:border-blue-200 hover:bg-white hover:shadow-[0_24px_60px_rgba(0,87,255,0.15)] active:scale-[0.98]"
+                >
+                  <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_88%_82%,rgba(0,87,255,0.14),transparent_45%)] opacity-75 transition duration-500 group-hover:opacity-100" />
+                  <span className="relative z-10 inline-flex rounded-full bg-white px-3 py-1 text-[11px] font-black text-[#0057ff] shadow-sm ring-1 ring-blue-100">
+                    {group.items.length} позиций
+                  </span>
+                  <h3 className="relative z-10 mt-5 max-w-[64%] text-xl font-black leading-tight text-slate-950">
+                    {group.title}
+                  </h3>
+                  <p className="relative z-10 mt-2 max-w-[66%] text-sm font-bold leading-5 text-slate-500">
+                    {group.description}
+                  </p>
+                  <img
+                    src={`/categories/groups/${group.imageKey}.png`}
+                    alt=""
+                    aria-hidden="true"
+                    className="pointer-events-none absolute -bottom-5 -right-3 h-[132px] w-[132px] object-contain drop-shadow-[0_18px_20px_rgba(15,23,42,0.2)] transition duration-500 ease-out group-hover:-translate-x-1 group-hover:-translate-y-2 group-hover:rotate-[-1deg] group-hover:scale-[1.08]"
+                  />
+                </button>
+              ))}
+            </div>
+          ) : null}
+
+          {sectionId && !activeCategory && catalogGroups.length === 0 && !normalize(sectionSearch) ? (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {sectionCategories.map((category, index) => {
                 const title = getTitle(category);
@@ -550,6 +716,7 @@ export default function PremiumCategoryGrid({
                     type="button"
                     onClick={() => {
                       setCategoryName(title);
+                      setGroupId("");
                       setSearch("");
                       setSubcategoryPage(1);
                     }}
@@ -603,7 +770,7 @@ export default function PremiumCategoryGrid({
                       setSearch(event.target.value);
                       setSubcategoryPage(1);
                     }}
-                    placeholder={`Найти внутри «${cleanTitle(getTitle(activeCategory))}»`}
+                    placeholder={`Найти внутри «${activeGroup?.title || cleanTitle(getTitle(activeCategory))}»`}
                     className="h-14 w-full rounded-2xl border border-slate-200 bg-[#f8fafc] pl-14 pr-5 text-sm font-bold text-slate-950 outline-none transition focus:border-[#0057ff] focus:bg-white focus:ring-4 focus:ring-blue-100"
                   />
                 </div>

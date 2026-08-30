@@ -15,9 +15,11 @@ import {
   MessageCircle,
   Mic2,
   Pin,
+  Plus,
   Search,
   Sparkles,
   UserRound,
+  UsersRound,
   X,
 } from "lucide-react";
 import Link from "next/link";
@@ -33,6 +35,10 @@ type ChatParticipant = {
 
 type Chat = {
   id: string;
+  chatType?: "direct" | "group";
+  isGroup?: boolean;
+  groupTitle?: string;
+  groupAvatarUrl?: string;
   participantIds?: string[];
   participants?: Record<string, ChatParticipant> | string[];
   users?: Record<string, ChatParticipant>;
@@ -40,7 +46,7 @@ type Chat = {
   listingTitle?: string;
   listingImageUrl?: string;
   lastMessageText?: string;
-  lastMessageType?: "text" | "image" | "video" | "audio";
+  lastMessageType?: "text" | "image" | "video" | "audio" | "document";
   lastMessageAt?: Timestamp;
   updatedAt?: Timestamp;
   createdAt?: Timestamp;
@@ -79,6 +85,14 @@ function getParticipantIds(chat: Chat) {
 }
 
 function getOtherParticipant(chat: Chat, myUid: string) {
+  if (chat.chatType === "group" || chat.isGroup) {
+    return {
+      id: "",
+      displayName: chat.groupTitle || "Групповой чат",
+      avatarUrl: chat.groupAvatarUrl || "",
+    };
+  }
+
   const otherId = getParticipantIds(chat).find((uid) => uid !== myUid) || "";
   const participantMap =
     chat.participants && !Array.isArray(chat.participants)
@@ -131,6 +145,7 @@ function chatPreview(chat: Chat) {
   if (chat.lastMessageType === "audio") return "Голосовое сообщение";
   if (chat.lastMessageType === "video") return "Видео";
   if (chat.lastMessageType === "image") return "Фото";
+  if (chat.lastMessageType === "document") return "Файл";
   return "Чат создан";
 }
 
@@ -255,12 +270,17 @@ export default function MessagesPage() {
               </p>
             </div>
 
-            <div className="flex items-center gap-3 rounded-[24px] bg-white/12 px-4 py-3 ring-1 ring-white/20 backdrop-blur-md">
-              <MessageCircle size={22} />
-              <div>
-                <p className="text-2xl font-black leading-none">{chats.length}</p>
-                <p className="mt-1 text-xs font-bold text-blue-100">активных чатов</p>
+            <div className="flex flex-col gap-3 sm:items-end">
+              <div className="flex items-center gap-3 rounded-[24px] bg-white/12 px-4 py-3 ring-1 ring-white/20 backdrop-blur-md">
+                <MessageCircle size={22} />
+                <div>
+                  <p className="text-2xl font-black leading-none">{chats.length}</p>
+                  <p className="mt-1 text-xs font-bold text-blue-100">активных чатов</p>
+                </div>
               </div>
+              <Link href="/messages/new-group" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-white px-4 text-sm font-black text-[#0057ff] shadow-lg shadow-blue-950/15 transition duration-300 hover:-translate-y-1 hover:bg-blue-50 active:scale-[.97]">
+                <Plus size={18} strokeWidth={3} /> Создать группу
+              </Link>
             </div>
           </div>
         </section>
@@ -307,6 +327,7 @@ export default function MessagesPage() {
             ) : (
               sortedChats.map((chat, index) => {
                 const other = getOtherParticipant(chat, user.uid);
+                const isGroup = chat.chatType === "group" || chat.isGroup;
                 const pinned = isChatPinned(chat, user.uid);
                 const preview = chatPreview(chat);
 
@@ -327,10 +348,18 @@ export default function MessagesPage() {
                             alt={other.displayName}
                             className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
                           />
+                        ) : isGroup ? (
+                          <UsersRound size={28} />
                         ) : (
                           <UserRound size={28} />
                         )}
-                        <span className="absolute bottom-1 right-1 h-3 w-3 rounded-full border-2 border-white bg-emerald-400" />
+                        {isGroup ? (
+                          <span className="absolute bottom-0.5 right-0.5 flex h-6 min-w-6 items-center justify-center rounded-full border-2 border-white bg-[#0057ff] px-1 text-[9px] font-black text-white">
+                            {getParticipantIds(chat).length}
+                          </span>
+                        ) : (
+                          <span className="absolute bottom-1 right-1 h-3 w-3 rounded-full border-2 border-white bg-emerald-400" />
+                        )}
                       </div>
 
                       <div className="min-w-0 flex-1">
