@@ -211,6 +211,114 @@ function messagePreview(message: ChatMessage) {
   return "Сообщение";
 }
 
+type GroupInvitePreview = {
+  id: string;
+  title: string;
+  avatarUrl?: string;
+  memberCount: number;
+};
+
+const GROUP_INVITE_URL_PATTERN =
+  /(?:(?:https?:\/\/)?(?:www\.)?stroika-ru\.ru)?\/join\/([a-f0-9]{32})(?=$|[\s/?#])/i;
+
+function getGroupInviteToken(text?: string) {
+  return text?.match(GROUP_INVITE_URL_PATTERN)?.[1] || "";
+}
+
+function withoutGroupInviteUrl(text?: string) {
+  return (text || "")
+    .replace(GROUP_INVITE_URL_PATTERN, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function memberCountLabel(value: number) {
+  const count = Math.max(0, Math.floor(value || 0));
+  const lastTwo = count % 100;
+  const last = count % 10;
+  if (lastTwo >= 11 && lastTwo <= 14) return `${count} участников`;
+  if (last === 1) return `${count} участник`;
+  if (last >= 2 && last <= 4) return `${count} участника`;
+  return `${count} участников`;
+}
+
+function GroupInviteCard({ token, mine }: { token: string; mine: boolean }) {
+  const [preview, setPreview] = useState<GroupInvitePreview | null>(null);
+  const [loadingPreview, setLoadingPreview] = useState(true);
+  const [previewUnavailable, setPreviewUnavailable] = useState(false);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setLoadingPreview(true);
+    setPreviewUnavailable(false);
+
+    fetch(getApiUrl(`/api/groups/resolve?token=${encodeURIComponent(token)}`), {
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok || !data?.group) throw new Error("GROUP_NOT_FOUND");
+        setPreview(data.group as GroupInvitePreview);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setPreviewUnavailable(true);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoadingPreview(false);
+      });
+
+    return () => controller.abort();
+  }, [token]);
+
+  return (
+    <div
+      className={`mb-2 w-[292px] max-w-full overflow-hidden rounded-[22px] bg-white p-3.5 text-slate-950 shadow-[0_12px_34px_rgba(15,23,42,0.14)] ring-1 ${
+        mine ? "ring-white/40" : "ring-blue-100"
+      }`}
+    >
+      <div className="flex items-center gap-3">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-[17px] bg-gradient-to-br from-blue-50 to-indigo-100 text-[#0057ff] ring-1 ring-blue-100">
+          {preview?.avatarUrl ? (
+            <img
+              src={preview.avatarUrl}
+              alt="Аватар группы"
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <UsersRound size={23} strokeWidth={2.7} />
+          )}
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] font-black uppercase tracking-[0.12em] text-[#0057ff]">
+            Приглашение в группу
+          </p>
+          <p className="mt-1 truncate text-sm font-black text-slate-950">
+            {loadingPreview
+              ? "Загружаем группу..."
+              : preview?.title || "Рабочая группа Стройка.ру"}
+          </p>
+          <p className="mt-0.5 text-xs font-bold text-slate-500">
+            {preview
+              ? memberCountLabel(preview.memberCount)
+              : previewUnavailable
+              ? "Откройте приглашение для просмотра"
+              : "Проверяем участников..."}
+          </p>
+        </div>
+      </div>
+
+      <Link
+        href={`/join/${token}`}
+        className="mt-3 flex min-h-11 items-center justify-center gap-2 rounded-[16px] bg-[#0057ff] px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-blue-600/20 transition duration-200 hover:-translate-y-0.5 hover:bg-[#004de3]"
+      >
+        <UsersRound size={18} strokeWidth={2.8} />
+        Присоединиться
+      </Link>
+    </div>
+  );
+}
+
 function chooseRecordingMimeType() {
   if (typeof MediaRecorder === "undefined") return "";
   const types = [
@@ -593,8 +701,6 @@ export default function ChatPage() {
       lastMessageType: type,
       lastMessageAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-      [`participants.${user.uid}.displayName`]: senderName,
-      [`participants.${user.uid}.avatarUrl`]: senderAvatarUrl,
     });
 
     const recipients = participantIds.filter((uid) => uid !== user.uid);
@@ -1050,6 +1156,10 @@ export default function ChatPage() {
               const videoUrl = message.type === "video" ? message.mediaUrl || "" : "";
               const audioUrl = message.type === "audio" ? message.mediaUrl || "" : "";
               const documentUrl = message.type === "document" ? message.mediaUrl || "" : "";
+              const groupInviteToken = getGroupInviteToken(message.text);
+              const visibleMessageText = groupInviteToken
+                ? withoutGroupInviteUrl(message.text)
+                : message.text?.trim() || "";
 
               return (
                 <div key={message.id} className="relative">
@@ -1138,9 +1248,13 @@ export default function ChatPage() {
                           </a>
                         ) : null}
 
-                        {message.text ? (
+                        {groupInviteToken ? (
+                          <GroupInviteCard token={groupInviteToken} mine={isMine} />
+                        ) : null}
+
+                        {visibleMessageText ? (
                           <p className="whitespace-pre-wrap break-words text-sm font-medium leading-6 sm:text-[15px]">
-                            {message.text}
+                            {visibleMessageText}
                           </p>
                         ) : null}
 

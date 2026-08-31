@@ -1,7 +1,13 @@
 "use client";
 
 import { useAuth } from "@/components/AuthProvider";
-import { categories } from "@/data/categories";
+import CatalogPathPicker from "@/components/CatalogPathPicker";
+import {
+  getCatalogSectionTitle,
+  getDefaultCatalogPath,
+  resolveCatalogPath,
+} from "@/data/catalogForm";
+import type { CatalogPathValue } from "@/data/catalogForm";
 import { db } from "@/lib/firebase";
 import { getApiUrl } from "@/lib/getApiUrl";
 import {
@@ -57,6 +63,7 @@ type MediaItem = LocalMediaFile | ExistingMediaFile;
 
 const MAX_IMAGES = 15;
 const MAX_VIDEOS = 3;
+const DEFAULT_CATALOG_PATH = getDefaultCatalogPath("services");
 
 function createLocalId() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -194,18 +201,16 @@ export default function EditListingPage() {
       ? params.id[0]
       : "";
 
-  const firstCategory = categories[0]?.name || "";
-  const firstSubcategory = categories[0]?.subcategories?.[0] || "";
-
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [category, setCategory] = useState(firstCategory);
-  const [subcategory, setSubcategory] = useState(firstSubcategory);
+  const [catalogPath, setCatalogPath] = useState(DEFAULT_CATALOG_PATH);
+  const category = catalogPath.category;
+  const subcategory = catalogPath.subcategory;
   const [city, setCity] = useState("");
   const [phone, setPhone] = useState("");
   const [priceFrom, setPriceFrom] = useState("");
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>(["cash"]);
-  const initialOfferGroup = getOfferGroup(firstCategory);
+  const initialOfferGroup = getOfferGroup(DEFAULT_CATALOG_PATH.category);
   const [offerAction, setOfferAction] = useState(
     getOfferActions(initialOfferGroup)[0]?.id || ""
   );
@@ -213,17 +218,11 @@ export default function EditListingPage() {
 
   const [mediaFiles, setMediaFiles] = useState<MediaItem[]>([]);
   const [authorId, setAuthorId] = useState("");
-  const [originalCategory, setOriginalCategory] = useState("");
-  const [originalSubcategory, setOriginalSubcategory] = useState("");
 
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
-  const selectedCategory = useMemo(
-    () => categories.find((item) => item.name === category),
-    [category]
-  );
   const offerGroup = useMemo(() => getOfferGroup(category), [category]);
   const offerGroupInfo = useMemo(
     () => getOfferGroupInfo(offerGroup),
@@ -266,12 +265,17 @@ export default function EditListingPage() {
 
         setTitle(data.title || "");
         setDescription(data.description || "");
-        const loadedCategory = data.category || firstCategory;
-        const loadedSubcategory = data.subcategory || firstSubcategory;
-        setCategory(loadedCategory);
-        setSubcategory(loadedSubcategory);
-        setOriginalCategory(loadedCategory);
-        setOriginalSubcategory(loadedSubcategory);
+        const loadedCategory = data.category || DEFAULT_CATALOG_PATH.category;
+        const loadedSubcategory =
+          data.subcategory || DEFAULT_CATALOG_PATH.subcategory;
+        setCatalogPath(
+          resolveCatalogPath({
+            catalogSection: data.catalogSection,
+            catalogGroupId: data.catalogGroupId,
+            category: loadedCategory,
+            subcategory: loadedSubcategory,
+          })
+        );
         const loadedGroup = getOfferGroup(loadedCategory);
         const legacyOffer = inferOfferFromLegacy({
           category: loadedCategory,
@@ -317,7 +321,7 @@ export default function EditListingPage() {
     }
 
     loadListing();
-  }, [listingId, firstCategory, firstSubcategory]);
+  }, [listingId]);
 
   useEffect(() => {
     if (authorId && user?.uid && authorId !== user.uid) {
@@ -325,14 +329,15 @@ export default function EditListingPage() {
     }
   }, [authorId, user?.uid]);
 
-  function handleCategoryChange(value: string) {
-    const nextCategory = categories.find((item) => item.name === value);
-    const nextGroup = getOfferGroup(value);
+  function handleCatalogPathChange(next: CatalogPathValue) {
+    const categoryChanged = next.category !== category;
+    setCatalogPath(next);
 
-    setCategory(value);
-    setSubcategory(nextCategory?.subcategories?.[0] || "");
-    setOfferAction(getOfferActions(nextGroup)[0]?.id || "");
-    setOfferFeatures({});
+    if (categoryChanged) {
+      const nextGroup = getOfferGroup(next.category);
+      setOfferAction(getOfferActions(nextGroup)[0]?.id || "");
+      setOfferFeatures({});
+    }
   }
 
   function toggleOfferFeature(featureId: string) {
@@ -487,16 +492,14 @@ export default function EditListingPage() {
         .filter((item) => item.type === "video")
         .map((item) => item.url);
 
-      const listingCategory = originalCategory || category;
-      const listingSubcategory = originalSubcategory || subcategory;
       const enabledFeatureIds = Object.entries(offerFeatures)
         .filter(([, enabled]) => enabled)
         .map(([featureId]) => featureId);
       const searchTags = buildListingSearchTags({
         title: title.trim(),
         description: description.trim(),
-        category: listingCategory,
-        subcategory: listingSubcategory,
+        category,
+        subcategory,
         city: city.trim(),
         group: offerGroup,
         actionId: offerAction,
@@ -507,26 +510,28 @@ export default function EditListingPage() {
         offerAction,
         offerFeatures
       );
-      const catalogSection =
-        offerGroup === "materials"
-          ? "materials"
-          : offerGroup === "equipment"
-            ? "equipment"
-            : offerGroup === "complex"
-              ? "solutions"
-              : "services";
-
       await updateDoc(doc(db, "listings", listingId), {
         title: title.trim(),
         description: description.trim(),
-        category: listingCategory,
-        subcategory: listingSubcategory,
+        category,
+        subcategory,
         city: city.trim(),
         phone: phone.trim(),
         priceFrom: priceFrom.trim() ? Number(priceFrom) : null,
         paymentMethods,
 
-        catalogSection,
+        catalogSection: catalogPath.catalogSection,
+        catalogCategoryId: catalogPath.catalogCategoryId,
+        catalogCategoryTitle: catalogPath.catalogCategoryTitle,
+        catalogGroupId: catalogPath.catalogGroupId || null,
+        catalogGroupTitle: catalogPath.catalogGroupId
+          ? catalogPath.catalogCategoryTitle
+          : "",
+        catalogPath: [
+          getCatalogSectionTitle(catalogPath.catalogSection),
+          catalogPath.catalogCategoryTitle,
+          catalogPath.subcategory,
+        ].filter(Boolean),
         capabilities,
         searchGroup: offerGroup,
         offerAction,
@@ -633,14 +638,12 @@ export default function EditListingPage() {
               />
 
               <div className="grid gap-5 md:grid-cols-2">
-                <div className="rounded-2xl bg-slate-50 px-5 py-4 ring-1 ring-slate-200">
-                  <div className="text-xs font-black uppercase tracking-wider text-slate-400">Категория зафиксирована</div>
-                  <div className="mt-1 font-black text-slate-900">{category}</div>
-                </div>
-
-                <div className="rounded-2xl bg-slate-50 px-5 py-4 ring-1 ring-slate-200">
-                  <div className="text-xs font-black uppercase tracking-wider text-slate-400">Подкатегория зафиксирована</div>
-                  <div className="mt-1 font-black text-slate-900">{subcategory}</div>
+                <div className="md:col-span-2">
+                  <CatalogPathPicker
+                    mode="executor"
+                    value={catalogPath}
+                    onChange={handleCatalogPathChange}
+                  />
                 </div>
 
                 <div className="relative">

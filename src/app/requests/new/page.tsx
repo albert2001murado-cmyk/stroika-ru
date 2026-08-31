@@ -1,6 +1,12 @@
 "use client";
 
 import { useAuth } from "@/components/AuthProvider";
+import CatalogPathPicker from "@/components/CatalogPathPicker";
+import {
+  getCatalogSectionTitle,
+  getDefaultCatalogPath,
+} from "@/data/catalogForm";
+import type { CatalogPathValue } from "@/data/catalogForm";
 import { db } from "@/lib/firebase";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import {
@@ -15,20 +21,6 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChangeEvent, FormEvent, useEffect, useState } from "react";
-
-const REQUEST_CATEGORIES = [
-  "Ремонт квартир",
-  "Строительство домов",
-  "Сантехника",
-  "Электрика",
-  "Кровля",
-  "Фасады",
-  "Отделочные работы",
-  "Окна и двери",
-  "Ландшафтные работы",
-  "Демонтаж",
-  "Другое",
-];
 
 const MAX_IMAGES = 8;
 
@@ -66,10 +58,11 @@ async function uploadImage(file: File) {
 export default function NewRequestPage() {
   const { user, profile, loading } = useAuth();
   const router = useRouter();
+  const defaultCatalogPath = getDefaultCatalogPath("services");
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [category, setCategory] = useState(REQUEST_CATEGORIES[0]);
+  const [catalogPath, setCatalogPath] = useState(defaultCatalogPath);
   const [city, setCity] = useState("");
   const [budgetFrom, setBudgetFrom] = useState("");
   const [budgetTo, setBudgetTo] = useState("");
@@ -133,6 +126,11 @@ export default function NewRequestPage() {
       return;
     }
 
+    if (!catalogPath.category || !catalogPath.subcategory) {
+      setError("Выбери каталог, категорию и подкатегорию задачи.");
+      return;
+    }
+
     if (city.trim().length < 2) {
       setError("Укажи город.");
       return;
@@ -175,7 +173,30 @@ export default function NewRequestPage() {
         customerPhone,
         title: title.trim(),
         description: description.trim(),
-        category,
+        category: catalogPath.category,
+        subcategory: catalogPath.subcategory,
+        catalogSection: catalogPath.catalogSection,
+        catalogCategoryId: catalogPath.catalogCategoryId,
+        catalogCategoryTitle: catalogPath.catalogCategoryTitle,
+        catalogGroupId: catalogPath.catalogGroupId || null,
+        catalogGroupTitle: catalogPath.catalogGroupId
+          ? catalogPath.catalogCategoryTitle
+          : "",
+        catalogPath: [
+          getCatalogSectionTitle(catalogPath.catalogSection),
+          catalogPath.catalogCategoryTitle,
+          catalogPath.subcategory,
+        ].filter(Boolean),
+        searchText: [
+          title.trim(),
+          description.trim(),
+          catalogPath.category,
+          catalogPath.catalogCategoryTitle,
+          catalogPath.subcategory,
+          city.trim(),
+        ]
+          .join(" ")
+          .toLocaleLowerCase("ru-RU"),
         city: city.trim(),
         budget: from,
         budgetFrom: from,
@@ -254,22 +275,13 @@ export default function NewRequestPage() {
               />
             </label>
 
-            <label>
-              <span className="mb-2 block text-sm font-black text-gray-700">
-                Категория
-              </span>
-              <select
-                className="input bg-white"
-                value={category}
-                onChange={(event) => setCategory(event.target.value)}
-              >
-                {REQUEST_CATEGORIES.map((item) => (
-                  <option key={item} value={item}>
-                    {item}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div className="md:col-span-2">
+              <CatalogPathPicker
+                mode="customer"
+                value={catalogPath}
+                onChange={(next: CatalogPathValue) => setCatalogPath(next)}
+              />
+            </div>
 
             <label>
               <span className="mb-2 block text-sm font-black text-gray-700">

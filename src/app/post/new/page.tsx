@@ -1,7 +1,12 @@
 "use client";
 
 import { useAuth } from "@/components/AuthProvider";
-import { categories } from "@/data/categories";
+import CatalogPathPicker from "@/components/CatalogPathPicker";
+import {
+  getCatalogSectionTitle,
+  getDefaultCatalogPath,
+} from "@/data/catalogForm";
+import type { CatalogPathValue } from "@/data/catalogForm";
 import { db } from "@/lib/firebase";
 import { getApiUrl } from "@/lib/getApiUrl";
 import {
@@ -146,13 +151,26 @@ export default function NewListingPage() {
   const router = useRouter();
   const { user, profile } = useAuth();
 
-  const firstCategory = categories[0]?.name || "";
-  const firstSubcategory = categories[0]?.subcategories?.[0] || "";
+  const defaultCatalogPath = getDefaultCatalogPath("services");
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [category, setCategory] = useState(firstCategory);
-  const [subcategory, setSubcategory] = useState(firstSubcategory);
+  const [catalogSection, setCatalogSection] = useState(
+    defaultCatalogPath.catalogSection
+  );
+  const [catalogCategoryId, setCatalogCategoryId] = useState(
+    defaultCatalogPath.catalogCategoryId
+  );
+  const [catalogCategoryTitle, setCatalogCategoryTitle] = useState(
+    defaultCatalogPath.catalogCategoryTitle
+  );
+  const [catalogGroupId, setCatalogGroupId] = useState(
+    defaultCatalogPath.catalogGroupId
+  );
+  const [category, setCategory] = useState(defaultCatalogPath.category);
+  const [subcategory, setSubcategory] = useState(
+    defaultCatalogPath.subcategory
+  );
   const [city, setCity] = useState("");
   const [address, setAddress] = useState("");
   const [phone, setPhone] = useState(profile?.phone || "");
@@ -161,7 +179,7 @@ export default function NewListingPage() {
     "cash",
   ]);
 
-  const initialOfferGroup = getOfferGroup(firstCategory);
+  const initialOfferGroup = getOfferGroup(defaultCatalogPath.category);
   const [offerAction, setOfferAction] = useState(
     getOfferActions(initialOfferGroup)[0]?.id || ""
   );
@@ -172,11 +190,6 @@ export default function NewListingPage() {
   const [mediaFiles, setMediaFiles] = useState<LocalMediaFile[]>([]);
   const [error, setError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
-
-  const selectedCategory = useMemo(
-    () => categories.find((item) => item.name === category),
-    [category]
-  );
 
   const offerGroup = useMemo(() => getOfferGroup(category), [category]);
   const offerGroupInfo = useMemo(
@@ -199,14 +212,21 @@ export default function NewListingPage() {
   const imageCount = mediaFiles.filter((item) => item.type === "image").length;
   const videoCount = mediaFiles.filter((item) => item.type === "video").length;
 
-  function handleCategoryChange(value: string) {
-    const nextCategory = categories.find((item) => item.name === value);
-    const nextGroup = getOfferGroup(value);
+  function handleCatalogPathChange(next: CatalogPathValue) {
+    const categoryChanged = next.category !== category;
 
-    setCategory(value);
-    setSubcategory(nextCategory?.subcategories?.[0] || "");
-    setOfferAction(getOfferActions(nextGroup)[0]?.id || "");
-    setOfferFeatures({});
+    setCatalogSection(next.catalogSection);
+    setCatalogCategoryId(next.catalogCategoryId);
+    setCatalogCategoryTitle(next.catalogCategoryTitle);
+    setCatalogGroupId(next.catalogGroupId);
+    setCategory(next.category);
+    setSubcategory(next.subcategory);
+
+    if (categoryChanged) {
+      const nextGroup = getOfferGroup(next.category);
+      setOfferAction(getOfferActions(nextGroup)[0]?.id || "");
+      setOfferFeatures({});
+    }
   }
 
   function toggleOfferFeature(featureId: string) {
@@ -368,15 +388,6 @@ export default function NewListingPage() {
         offerAction,
         offerFeatures
       );
-      const catalogSection =
-        offerGroup === "materials"
-          ? "materials"
-          : offerGroup === "equipment"
-            ? "equipment"
-            : offerGroup === "complex"
-              ? "solutions"
-              : "services";
-
       const listingRef = await addDoc(collection(db, "listings"), {
         title: title.trim(),
         description: description.trim(),
@@ -401,6 +412,15 @@ export default function NewListingPage() {
         paymentMethods,
 
         catalogSection,
+        catalogCategoryId,
+        catalogCategoryTitle,
+        catalogGroupId: catalogGroupId || null,
+        catalogGroupTitle: catalogGroupId ? catalogCategoryTitle : "",
+        catalogPath: [
+          getCatalogSectionTitle(catalogSection),
+          catalogCategoryTitle,
+          subcategory,
+        ].filter(Boolean),
         capabilities,
         searchGroup: offerGroup,
         offerAction,
@@ -497,31 +517,20 @@ export default function NewListingPage() {
                 className="input min-h-40 resize-none"
               />
 
+              <CatalogPathPicker
+                mode="executor"
+                value={{
+                  catalogSection,
+                  catalogCategoryId,
+                  catalogCategoryTitle,
+                  catalogGroupId,
+                  category,
+                  subcategory,
+                }}
+                onChange={handleCatalogPathChange}
+              />
+
               <div className="grid gap-5 md:grid-cols-2">
-                <select
-                  value={category}
-                  onChange={(event) => handleCategoryChange(event.target.value)}
-                  className="input"
-                >
-                  {categories.map((item) => (
-                    <option key={item.name} value={item.name}>
-                      {item.name}
-                    </option>
-                  ))}
-                </select>
-
-                <select
-                  value={subcategory}
-                  onChange={(event) => setSubcategory(event.target.value)}
-                  className="input"
-                >
-                  {(selectedCategory?.subcategories || []).map((item) => (
-                    <option key={item} value={item}>
-                      {item}
-                    </option>
-                  ))}
-                </select>
-
                 <div className="relative">
                   <MapPin
                     size={19}
@@ -838,6 +847,20 @@ export default function NewListingPage() {
                 </span>
               </div>
 
+              <div className="flex items-start justify-between gap-4">
+                <span>Каталог</span>
+                <span className="max-w-[190px] text-right text-gray-950">
+                  {getCatalogSectionTitle(catalogSection)} → {catalogCategoryTitle}
+                </span>
+              </div>
+
+              <div className="flex items-start justify-between gap-4">
+                <span>Направление</span>
+                <span className="max-w-[190px] text-right text-gray-950">
+                  {subcategory || "Не выбрано"}
+                </span>
+              </div>
+
               <div className="flex items-center justify-between">
                 <span>Фото</span>
                 <span className="text-gray-950">{imageCount}/{MAX_IMAGES}</span>
@@ -862,7 +885,8 @@ export default function NewListingPage() {
             </div>
 
             <div className="mt-6 rounded-3xl bg-blue-50 p-5 text-sm font-bold leading-6 text-[#0057ff]">
-             
+              Точный путь сохранится в анкете и поможет показать её клиентам,
+              которым нужно именно это направление.
             </div>
 
             {mediaFiles.length > 0 && (

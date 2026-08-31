@@ -131,6 +131,11 @@ export type Listing = {
   viewsCount?: number;
   favoritesCount?: number;
   catalogSection?: "materials" | "services" | "equipment" | "solutions" | string;
+  catalogCategoryId?: string;
+  catalogCategoryTitle?: string;
+  catalogGroupId?: string | null;
+  catalogGroupTitle?: string;
+  catalogPath?: string[];
   capabilities?: string[];
   searchGroup?: string;
   offerAction?: string;
@@ -166,6 +171,13 @@ export type CustomerRequest = {
   description: string;
   category?: string;
   subcategory?: string;
+  catalogSection?: "materials" | "services" | "equipment" | "solutions" | string;
+  catalogCategoryId?: string;
+  catalogCategoryTitle?: string;
+  catalogGroupId?: string | null;
+  catalogGroupTitle?: string;
+  catalogPath?: string[];
+  searchText?: string;
   city?: string;
   budget?: number | null;
   budgetFrom?: number | null;

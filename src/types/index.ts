@@ -32,6 +32,12 @@ export type Listing = {
   description: string;
   category: string;
   subcategory: string;
+  catalogSection?: "materials" | "services" | "equipment" | "solutions" | string;
+  catalogCategoryId?: string;
+  catalogCategoryTitle?: string;
+  catalogGroupId?: string | null;
+  catalogGroupTitle?: string;
+  catalogPath?: string[];
   city: string;
   priceFrom?: number | null;
   phone: string;
@@ -116,6 +122,14 @@ export type CustomerRequest = {
   title: string;
   description: string;
   category?: string;
+  subcategory?: string;
+  catalogSection?: "materials" | "services" | "equipment" | "solutions" | string;
+  catalogCategoryId?: string;
+  catalogCategoryTitle?: string;
+  catalogGroupId?: string | null;
+  catalogGroupTitle?: string;
+  catalogPath?: string[];
+  searchText?: string;
   city?: string;
   budget?: number | null;
   status: "active" | "closed";
