@@ -40,6 +40,15 @@ export async function POST(request: NextRequest) {
       groupAvatarPath: avatarPath,
       ownerId: decoded.uid,
       adminIds: [decoded.uid],
+      adminPermissions: {
+        [decoded.uid]: {
+          editInfo: true,
+          inviteMembers: true,
+          kickMembers: true,
+          manageTags: true,
+        },
+      },
+      memberTags: {},
       participantIds: [decoded.uid],
       participants: {
         [decoded.uid]: { uid: decoded.uid, displayName, avatarUrl: memberAvatar },
