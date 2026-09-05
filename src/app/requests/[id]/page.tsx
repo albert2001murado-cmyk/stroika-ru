@@ -1,441 +1,667 @@
 "use client";
 
 import { useAuth } from "@/components/AuthProvider";
-import CatalogPathPicker from "@/components/CatalogPathPicker";
-import {
-  getCatalogSectionTitle,
-  getDefaultCatalogPath,
-  resolveCatalogPath,
-} from "@/data/catalogForm";
+import ReportDialog from "@/components/ReportDialog";
 import { db } from "@/lib/firebase";
-import type { CustomerRequest, CustomerRequestStatus } from "@/types";
-import { doc, getDoc, serverTimestamp, updateDoc } from "firebase/firestore";
+import { isPublicationApproved } from "@/lib/moderation";
+import type { CustomerRequest } from "@/types";
+import { firestoreDateToMillis } from "@/types";
+import {
+  doc,
+  getDoc,
+  onSnapshot,
+  serverTimestamp,
+  setDoc,
+} from "firebase/firestore";
 import {
   ArrowLeft,
+  BadgeCheck,
   CalendarDays,
-  ImagePlus,
-  Loader2,
+  ChevronLeft,
+  ChevronRight,
+  CircleDollarSign,
+  Clock3,
+  Edit3,
+  Eye,
+  ImageIcon,
   MapPin,
-  Save,
-  Trash2,
+  MessageCircle,
+  Phone,
+  Sparkles,
+  UserRound,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { ChangeEvent, FormEvent, useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-const MAX_IMAGES = 8;
-const DEFAULT_CATALOG_PATH = getDefaultCatalogPath("services");
+function formatBudget(request: CustomerRequest) {
+  const from = request.budgetFrom ?? request.budget ?? null;
+  const to = request.budgetTo ?? null;
 
-type ExistingImage = {
-  id: string;
-  url: string;
-  existing: true;
-};
-
-type LocalImage = {
-  id: string;
-  file: File;
-  previewUrl: string;
-  existing: false;
-};
-
-type EditableImage = ExistingImage | LocalImage;
-
-function parseMoney(value: string) {
-  const normalized = value.replace(/[^\d]/g, "");
-  return normalized ? Number(normalized) : null;
-}
-
-async function uploadImage(file: File) {
-  const formData = new FormData();
-  formData.append("file", file);
-  formData.append("folder", "customer-requests");
-
-  const response = await fetch("/api/upload", {
-    method: "POST",
-    body: formData,
-  });
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(data?.error || "Не получилось загрузить фотографию.");
+  if (from && to) {
+    return `${from.toLocaleString("ru-RU")}–${to.toLocaleString("ru-RU")} ₽`;
   }
 
-  const url = data?.url || data?.fileUrl || data?.media?.url;
-  if (!url) throw new Error("Сервер не вернул ссылку на фотографию.");
-  return url as string;
+  if (from) return `от ${from.toLocaleString("ru-RU")} ₽`;
+  if (to) return `до ${to.toLocaleString("ru-RU")} ₽`;
+  return "По договорённости";
 }
 
-function isLocalImage(image: EditableImage): image is LocalImage {
-  return image.existing === false;
+function formatDate(value: CustomerRequest["createdAt"]) {
+  const millis = firestoreDateToMillis(value);
+
+  if (!millis) return "Дата не указана";
+
+  return new Intl.DateTimeFormat("ru-RU", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(new Date(millis));
 }
 
-export default function EditCustomerRequestPage() {
+function makeRequestChatId(requestId: string, firstUid: string, secondUid: string) {
+  return `request_${requestId}_${[firstUid, secondUid].sort().join("_")}`;
+}
+
+export default function CustomerRequestPage() {
   const params = useParams();
   const router = useRouter();
-  const { user, loading: authLoading } = useAuth();
+  const { user, profile } = useAuth();
+
   const requestId =
     typeof params?.id === "string"
       ? params.id
       : Array.isArray(params?.id)
-      ? params.id[0]
-      : "";
+        ? params.id[0]
+        : "";
 
-  const [ownerId, setOwnerId] = useState("");
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [catalogPath, setCatalogPath] = useState(DEFAULT_CATALOG_PATH);
-  const [city, setCity] = useState("");
-  const [budgetFrom, setBudgetFrom] = useState("");
-  const [budgetTo, setBudgetTo] = useState("");
-  const [deadline, setDeadline] = useState("");
-  const [urgent, setUrgent] = useState(false);
-  const [status, setStatus] = useState<CustomerRequestStatus>("active");
-  const [images, setImages] = useState<EditableImage[]>([]);
-  const [pageLoading, setPageLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  const [request, setRequest] = useState<CustomerRequest | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [galleryOpen, setGalleryOpen] = useState(false);
+  const [customerPhone, setCustomerPhone] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+  const [chatError, setChatError] = useState("");
 
   useEffect(() => {
-    async function loadRequest() {
-      if (!requestId) {
-        setError("Заявка не найдена.");
-        setPageLoading(false);
-        return;
-      }
-
-      try {
-        const snapshot = await getDoc(doc(db, "customerRequests", requestId));
-        if (!snapshot.exists()) {
-          setError("Заявка не найдена.");
-          return;
-        }
-
-        const data = { id: snapshot.id, ...snapshot.data() } as CustomerRequest;
-        setOwnerId(data.customerId || "");
-        setTitle(data.title || "");
-        setDescription(data.description || "");
-        setCatalogPath(
-          resolveCatalogPath({
-            catalogSection: data.catalogSection,
-            catalogGroupId: data.catalogGroupId || undefined,
-            category: data.category,
-            subcategory: data.subcategory,
-          })
-        );
-        setCity(data.city || "");
-        setBudgetFrom(
-          data.budgetFrom != null
-            ? String(data.budgetFrom)
-            : data.budget != null
-            ? String(data.budget)
-            : ""
-        );
-        setBudgetTo(data.budgetTo != null ? String(data.budgetTo) : "");
-        setDeadline(data.deadline || "");
-        setUrgent(data.urgency === "urgent");
-        setStatus(data.status || "active");
-        setImages(
-          (data.imageUrls || []).map((url, index) => ({
-            id: `existing-${index}-${url}`,
-            url,
-            existing: true as const,
-          }))
-        );
-      } catch (loadError) {
-        console.error(loadError);
-        setError("Не получилось загрузить заявку.");
-      } finally {
-        setPageLoading(false);
-      }
-    }
-
-    loadRequest();
-  }, [requestId]);
-
-  useEffect(() => {
-    if (ownerId && user?.uid && ownerId !== user.uid) {
-      setError("У тебя нет доступа к редактированию этой заявки.");
-    }
-  }, [ownerId, user?.uid]);
-
-  function handleImages(event: ChangeEvent<HTMLInputElement>) {
-    const selected = Array.from(event.target.files || [])
-      .filter((file) => file.type.startsWith("image/"))
-      .slice(0, Math.max(0, MAX_IMAGES - images.length));
-
-    if (selected.some((file) => file.size > 10 * 1024 * 1024)) {
-      setError("Одна из фотографий больше 10 МБ.");
-      event.target.value = "";
+    if (!requestId) {
+      setLoading(false);
       return;
     }
 
-    const next = selected.map((file) => ({
-      id:
-        typeof crypto !== "undefined" && "randomUUID" in crypto
-          ? crypto.randomUUID()
-          : `${Date.now()}-${Math.random()}`,
-      file,
-      previewUrl: URL.createObjectURL(file),
-      existing: false as const,
-    }));
+    return onSnapshot(
+      doc(db, "customerRequests", requestId),
+      (snapshot) => {
+        if (!snapshot.exists()) {
+          setRequest(null);
+          setLoading(false);
+          return;
+        }
 
-    setImages((current) => [...current, ...next].slice(0, MAX_IMAGES));
-    setError("");
-    event.target.value = "";
-  }
+        const nextRequest = { id: snapshot.id, ...snapshot.data() } as CustomerRequest;
+        const moderator = profile?.role === "moderator" || profile?.role === "admin" || profile?.isModerator === true || profile?.isAdmin === true;
+        const canPreview = user?.uid === nextRequest.customerId || moderator;
+        setRequest(isPublicationApproved(nextRequest) || canPreview ? nextRequest : null);
+        setLoading(false);
+      },
+      () => setLoading(false)
+    );
+  }, [profile, requestId, user?.uid]);
 
-  function removeImage(id: string) {
-    setImages((current) => {
-      const found = current.find((image) => image.id === id);
-      if (found && isLocalImage(found)) URL.revokeObjectURL(found.previewUrl);
-      return current.filter((image) => image.id !== id);
-    });
-  }
+  useEffect(() => {
+    let cancelled = false;
 
-  async function submit(event: FormEvent) {
-    event.preventDefault();
+    const phoneFromRequest = request?.customerPhone?.trim() || "";
 
+    if (phoneFromRequest) {
+      setCustomerPhone(phoneFromRequest);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    if (!request?.customerId) {
+      setCustomerPhone("");
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    getDoc(doc(db, "users", request.customerId))
+      .then((snapshot) => {
+        if (cancelled) return;
+
+        const profile = snapshot.exists() ? snapshot.data() : null;
+        const phone =
+          typeof profile?.phone === "string" ? profile.phone.trim() : "";
+
+        setCustomerPhone(phone);
+      })
+      .catch(() => {
+        if (!cancelled) setCustomerPhone("");
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [request?.customerId, request?.customerPhone]);
+
+  async function openCustomerChat() {
     if (!user) {
       router.push("/auth");
       return;
     }
 
-    if (ownerId && ownerId !== user.uid) {
-      setError("У тебя нет доступа к редактированию этой заявки.");
+    if (!request?.customerId || user.uid === request.customerId || chatLoading) {
       return;
     }
-
-    if (title.trim().length < 5 || description.trim().length < 20 || city.trim().length < 2) {
-      setError("Заполни название, подробное описание и город.");
-      return;
-    }
-
-    if (!catalogPath.category || !catalogPath.subcategory) {
-      setError("Выбери каталог, категорию и точную подкатегорию заявки.");
-      return;
-    }
-
-    const from = parseMoney(budgetFrom);
-    const to = parseMoney(budgetTo);
-    if (from && to && from > to) {
-      setError("Бюджет «от» не может быть больше бюджета «до».");
-      return;
-    }
-
-    setSaving(true);
-    setError("");
 
     try {
-      const imageUrls = images
-        .filter((image): image is ExistingImage => image.existing)
-        .map((image) => image.url);
+      setChatLoading(true);
+      setChatError("");
 
-      for (const image of images.filter(isLocalImage)) {
-        imageUrls.push(await uploadImage(image.file));
+      const chatId = makeRequestChatId(request.id, user.uid, request.customerId);
+      const currentName =
+        profile?.displayName ||
+        profile?.name ||
+        user.displayName ||
+        user.email?.split("@")[0] ||
+        "Пользователь";
+      const currentAvatar =
+        profile?.avatarUrl || profile?.photoURL || user.photoURL || "";
+      const customerName = request.customerName || "Заказчик";
+      const customerAvatar = request.customerAvatar || "";
+      const chatRef = doc(db, "chats", chatId);
+      let chatExists = false;
+
+      try {
+        chatExists = (await getDoc(chatRef)).exists();
+      } catch {
+        // Firestore может запретить get для ещё не существующего документа.
+        // В таком случае ниже выполняется безопасная попытка create.
       }
 
-      const catalogTitle = getCatalogSectionTitle(catalogPath.catalogSection);
-      const searchText = [
-        title,
-        description,
-        catalogTitle,
-        catalogPath.catalogCategoryTitle,
-        catalogPath.category,
-        catalogPath.subcategory,
-        city,
-      ]
-        .join(" ")
-        .trim()
-        .toLocaleLowerCase("ru-RU");
+      if (chatExists) {
+        await setDoc(
+          chatRef,
+          {
+            relatedRequestId: request.id,
+            relatedRequestTitle: request.title || "",
+            listingTitle: request.title || "",
+            listingImageUrl: request.imageUrls?.[0] || "",
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true }
+        );
+      } else {
+        await setDoc(chatRef, {
+          id: chatId,
+          chatType: "direct",
+          participantIds: [user.uid, request.customerId],
+          participants: {
+            [user.uid]: {
+              uid: user.uid,
+              displayName: currentName,
+              avatarUrl: currentAvatar,
+            },
+            [request.customerId]: {
+              uid: request.customerId,
+              displayName: customerName,
+              avatarUrl: customerAvatar,
+            },
+          },
+          buyerId: user.uid,
+          sellerId: request.customerId,
+          clientId: user.uid,
+          ownerId: request.customerId,
+          relatedRequestId: request.id,
+          relatedRequestTitle: request.title || "",
+          listingTitle: request.title || "",
+          listingImageUrl: request.imageUrls?.[0] || "",
+          updatedAt: serverTimestamp(),
+          createdAt: serverTimestamp(),
+        });
+      }
 
-      await updateDoc(doc(db, "customerRequests", requestId), {
-        title: title.trim(),
-        description: description.trim(),
-        category: catalogPath.category,
-        subcategory: catalogPath.subcategory,
-        catalogSection: catalogPath.catalogSection,
-        catalogCategoryId: catalogPath.catalogCategoryId,
-        catalogCategoryTitle: catalogPath.catalogCategoryTitle,
-        catalogGroupId: catalogPath.catalogGroupId || null,
-        catalogGroupTitle: catalogPath.catalogGroupId
-          ? catalogPath.catalogCategoryTitle
-          : "",
-        catalogPath: [
-          catalogTitle,
-          catalogPath.catalogCategoryTitle,
-          catalogPath.subcategory,
-        ].filter(Boolean),
-        searchText,
-        moderationStatus: "pending",
-        moderationReason: "",
-        moderationSubmittedAt: serverTimestamp(),
-        moderationSource: "web",
-        city: city.trim(),
-        budget: from,
-        budgetFrom: from,
-        budgetTo: to,
-        deadline: deadline.trim(),
-        urgency: urgent ? "urgent" : "normal",
-        status,
-        imageUrls,
-        updatedAt: serverTimestamp(),
-      });
-
-      images.forEach((image) => {
-        if (isLocalImage(image)) URL.revokeObjectURL(image.previewUrl);
-      });
-
-      alert("Изменения отправлены на повторную модерацию.");
-      router.push("/profile");
-    } catch (saveError) {
-      console.error(saveError);
-      setError(
-        saveError instanceof Error
-          ? saveError.message
-          : "Не получилось сохранить заявку."
-      );
+      router.push(`/messages/${encodeURIComponent(chatId)}`);
+    } catch (openChatError) {
+      console.error("[request] Failed to open chat", openChatError);
+      setChatError("Не получилось открыть чат. Повторите попытку.");
     } finally {
-      setSaving(false);
+      setChatLoading(false);
     }
   }
 
-  if (authLoading || pageLoading) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-[#f5f7fb]">
-        <Loader2 className="animate-spin text-[#0057ff]" size={38} />
-      </main>
+  const images = useMemo(() => request?.imageUrls?.filter(Boolean) || [], [request]);
+
+  useEffect(() => {
+    if (activeImageIndex >= images.length) {
+      setActiveImageIndex(0);
+    }
+  }, [activeImageIndex, images.length]);
+
+  useEffect(() => {
+    if (!galleryOpen) return;
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setGalleryOpen(false);
+      if (event.key === "ArrowLeft") {
+        setActiveImageIndex((current) =>
+          images.length ? (current - 1 + images.length) % images.length : 0
+        );
+      }
+      if (event.key === "ArrowRight") {
+        setActiveImageIndex((current) =>
+          images.length ? (current + 1) % images.length : 0
+        );
+      }
+    }
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKeyDown);
+
+    return () => {
+      document.body.style.overflow = "";
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [galleryOpen, images.length]);
+
+  function showPreviousImage() {
+    setActiveImageIndex((current) =>
+      images.length ? (current - 1 + images.length) % images.length : 0
     );
   }
 
-  if (!user) {
+  function showNextImage() {
+    setActiveImageIndex((current) =>
+      images.length ? (current + 1) % images.length : 0
+    );
+  }
+
+  if (loading) {
     return (
-      <main className="app-page">
-        <div className="empty-card">
-          <h1>Сначала войди в аккаунт</h1>
-          <Link href="/auth" className="btn-primary mt-5">Войти</Link>
+      <main className="flex min-h-screen items-center justify-center bg-[#f2f6fd] px-3 sm:px-5">
+        <div className="flex items-center gap-3 rounded-[24px] bg-white px-7 py-5 font-black text-slate-700 shadow-[0_18px_60px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70">
+          <span className="h-5 w-5 animate-spin rounded-full border-[3px] border-blue-100 border-t-[#0057ff]" />
+          Загружаем заявку...
         </div>
       </main>
     );
   }
+
+  if (!request) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[#f2f6fd] px-3 sm:px-5">
+        <div className="w-full max-w-lg rounded-[24px] bg-white p-6 sm:rounded-[34px] sm:p-9 text-center shadow-[0_24px_80px_rgba(15,23,42,0.10)] ring-1 ring-slate-200/70">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-50 text-[#0057ff]">
+            <ImageIcon size={31} />
+          </div>
+          <h1 className="mt-5 text-2xl font-black text-slate-950 sm:text-3xl">Заявка не найдена</h1>
+          <p className="mt-3 text-slate-500">Возможно, публикация была удалена или закрыта.</p>
+          <Link
+            href="/requests"
+            className="mt-7 inline-flex items-center gap-2 rounded-2xl bg-[#0057ff] px-6 py-3.5 font-black text-white transition hover:-translate-y-0.5 hover:bg-[#004de6] hover:shadow-lg active:scale-95"
+          >
+            <ArrowLeft size={18} />
+            Вернуться к заявкам
+          </Link>
+        </div>
+      </main>
+    );
+  }
+
+  const isOwner = user?.uid === request.customerId;
+  const isActive = request.status === "active";
+  const currentImage = images[activeImageIndex] || "";
 
   return (
-    <main className="min-h-screen bg-[#f5f7fb] px-3 py-6 sm:px-5 sm:py-10">
-      <div className="mx-auto max-w-4xl">
-        <div className="flex items-start gap-3 sm:items-center sm:gap-4">
-          <Link href={`/requests/${requestId}`} className="icon-button">
-            <ArrowLeft size={21} />
+    <main className="min-h-screen bg-[#f2f6fd] pb-10 sm:pb-16">
+      <div className="pointer-events-none fixed inset-x-0 top-0 h-[520px] bg-[radial-gradient(circle_at_15%_10%,rgba(0,87,255,0.14),transparent_34%),radial-gradient(circle_at_85%_12%,rgba(56,189,248,0.14),transparent_30%)]" />
+
+      <div className="relative mx-auto max-w-7xl px-3 py-4 sm:px-6 sm:py-6 lg:px-8">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <Link
+            href="/requests"
+            className="group inline-flex items-center gap-2 rounded-2xl bg-white px-5 py-3 font-black text-slate-800 shadow-sm ring-1 ring-slate-200/80 transition duration-300 hover:-translate-y-0.5 hover:text-[#0057ff] hover:shadow-lg active:scale-95"
+          >
+            <ArrowLeft className="transition-transform duration-300 group-hover:-translate-x-1" size={18} />
+            Назад
           </Link>
-          <div>
-            <p className="page-eyebrow">Редактирование</p>
-            <h1 className="page-title">Изменить заявку</h1>
-          </div>
+
+          {isOwner ? (
+            <Link
+              href={`/requests/${request.id}/edit`}
+              className="group inline-flex items-center gap-2 rounded-2xl bg-[#0057ff] px-5 py-3 font-black text-white shadow-lg shadow-blue-600/20 transition duration-300 hover:-translate-y-0.5 hover:bg-[#004de6] hover:shadow-xl active:scale-95"
+            >
+              <Edit3 className="transition-transform duration-300 group-hover:-rotate-6" size={18} />
+              Редактировать
+            </Link>
+          ) : null}
         </div>
 
-        <form
-          onSubmit={submit}
-          className="mt-5 space-y-5 rounded-[24px] bg-white p-4 shadow-sm ring-1 ring-gray-100 sm:mt-7 sm:space-y-6 sm:rounded-[34px] sm:p-6 md:p-8"
-        >
-          <div className="grid gap-5 md:grid-cols-2">
-            <label className="md:col-span-2">
-              <span className="mb-2 block text-sm font-black text-gray-700">Название задачи</span>
-              <input className="input" value={title} onChange={(event) => setTitle(event.target.value)} />
-            </label>
+        <section className="relative mt-4 overflow-hidden rounded-[26px] bg-gradient-to-br from-[#0864ff] via-[#0057ff] to-[#0044cf] px-4 py-6 text-white shadow-[0_28px_90px_rgba(0,87,255,0.20)] sm:mt-5 sm:rounded-[40px] sm:px-8 sm:py-8 md:py-10 lg:px-11">
+          <div className="pointer-events-none absolute -right-24 -top-28 h-80 w-80 rounded-full bg-white/10 blur-2xl" />
+          <div className="pointer-events-none absolute -bottom-32 left-1/3 h-72 w-72 rounded-full bg-cyan-300/10 blur-3xl" />
 
-            <div className="md:col-span-2">
-              <CatalogPathPicker
-                mode="customer"
-                value={catalogPath}
-                onChange={setCatalogPath}
-              />
+          <div className="relative grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-end">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-full bg-white px-3.5 py-1.5 text-xs font-black text-[#0057ff] shadow-sm">
+                  {request.category || "Строительные работы"}
+                </span>
+
+                {request.urgency === "urgent" ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-500 px-3.5 py-1.5 text-xs font-black text-white shadow-sm">
+                    <Sparkles size={14} />
+                    Срочно
+                  </span>
+                ) : null}
+
+                <span
+                  className={`rounded-full px-3.5 py-1.5 text-xs font-black shadow-sm ${
+                    isActive ? "bg-emerald-500 text-white" : "bg-slate-900/25 text-white"
+                  }`}
+                >
+                  {isActive ? "Открыта" : "Закрыта"}
+                </span>
+              </div>
+
+              <h1 className="mt-5 max-w-4xl text-3xl font-black leading-[1.06] tracking-[-0.035em] sm:mt-6 sm:text-5xl lg:text-6xl">
+                {request.title}
+              </h1>
+
+              <div className="mt-7 flex flex-wrap gap-3 text-sm font-bold text-blue-50">
+                <span className="inline-flex items-center gap-2 rounded-2xl bg-white/10 px-4 py-2.5 ring-1 ring-white/15 backdrop-blur-sm">
+                  <MapPin size={17} />
+                  {request.city || "Город не указан"}
+                </span>
+                <span className="inline-flex items-center gap-2 rounded-2xl bg-white/10 px-4 py-2.5 ring-1 ring-white/15 backdrop-blur-sm">
+                  <CalendarDays size={17} />
+                  {request.deadline || "Срок по договорённости"}
+                </span>
+              </div>
             </div>
 
-            <label>
-              <span className="mb-2 block text-sm font-black text-gray-700">Статус</span>
-              <select className="input bg-white" value={status} onChange={(event) => setStatus(event.target.value as CustomerRequestStatus)}>
-                <option value="active">Активна</option>
-                <option value="closed">Закрыта</option>
-              </select>
-            </label>
+            <div className="rounded-[22px] bg-white/12 p-4 sm:rounded-[28px] ring-1 ring-white/15 backdrop-blur-md">
+              <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-100">Заказчик</p>
+              <div className="mt-3 flex items-center gap-4">
+                <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-[22px] bg-white/15 ring-1 ring-white/20">
+                  {request.customerAvatar ? (
+                    <img
+                      src={request.customerAvatar}
+                      alt={request.customerName || "Заказчик"}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <UserRound size={30} />
+                  )}
+                </div>
 
-            <label className="md:col-span-2">
-              <span className="mb-2 block text-sm font-black text-gray-700">Описание</span>
-              <textarea className="input min-h-40 resize-none" value={description} onChange={(event) => setDescription(event.target.value)} />
-            </label>
-
-            <label>
-              <span className="mb-2 block text-sm font-black text-gray-700">Город</span>
-              <div className="relative">
-                <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={19} />
-                <input className="input pl-12" value={city} onChange={(event) => setCity(event.target.value)} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-xl font-black">
+                    {request.customerName || "Заказчик"}
+                  </p>
+                  <span className="mt-1.5 inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-[11px] font-black text-[#0057ff]">
+                    <BadgeCheck size={14} />
+                    Автор заявки
+                  </span>
+                </div>
               </div>
-            </label>
+            </div>
+          </div>
+        </section>
 
-            <label>
-              <span className="mb-2 block text-sm font-black text-gray-700">Срок</span>
-              <div className="relative">
-                <CalendarDays className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={19} />
-                <input className="input pl-12" value={deadline} onChange={(event) => setDeadline(event.target.value)} />
+        <div className="mt-5 grid gap-5 sm:mt-6 sm:gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
+          <div className="space-y-6">
+            <section className="overflow-hidden rounded-[24px] bg-white p-3 shadow-[0_22px_70px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 sm:rounded-[34px] sm:p-5">
+              {images.length ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setGalleryOpen(true)}
+                    className="group relative block aspect-[4/3] w-full overflow-hidden rounded-[20px] sm:aspect-[16/10] sm:rounded-[28px] bg-slate-100 text-left"
+                  >
+                    <img
+                      src={currentImage}
+                      alt={`Фото заявки ${activeImageIndex + 1}`}
+                      className="h-full w-full object-cover transition duration-700 ease-out group-hover:scale-[1.025]"
+                    />
+                    <span className="absolute inset-0 bg-gradient-to-t from-slate-950/45 via-transparent to-transparent opacity-80" />
+
+                    <span className="absolute bottom-4 left-4 inline-flex items-center gap-2 rounded-2xl bg-slate-950/65 px-3.5 py-2 text-xs font-black text-white backdrop-blur-md">
+                      <ImageIcon size={15} />
+                      Открыть фото
+                    </span>
+
+                    <span className="absolute bottom-4 right-4 rounded-2xl bg-white px-3.5 py-2 text-xs font-black text-slate-950 shadow-lg">
+                      {activeImageIndex + 1} / {images.length}
+                    </span>
+                  </button>
+
+                  {images.length > 1 ? (
+                    <div className="mt-4 flex gap-3 overflow-x-auto pb-1">
+                      {images.map((image, index) => (
+                        <button
+                          type="button"
+                          key={`${image}-${index}`}
+                          onClick={() => setActiveImageIndex(index)}
+                          className={`relative h-20 w-28 shrink-0 overflow-hidden rounded-2xl transition duration-300 hover:-translate-y-0.5 active:scale-95 ${
+                            activeImageIndex === index
+                              ? "ring-[3px] ring-[#0057ff] ring-offset-2"
+                              : "opacity-70 hover:opacity-100"
+                          }`}
+                        >
+                          <img
+                            src={image}
+                            alt={`Миниатюра ${index + 1}`}
+                            className="h-full w-full object-cover"
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </>
+              ) : (
+                <div className="flex min-h-72 flex-col items-center justify-center rounded-[28px] bg-gradient-to-br from-blue-50 to-slate-50 px-6 text-center">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white text-[#0057ff] shadow-sm">
+                    <ImageIcon size={30} />
+                  </div>
+                  <h2 className="mt-4 text-xl font-black text-slate-950">Фотографии не добавлены</h2>
+                  <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">
+                    Заказчик подробно описал задачу ниже.
+                  </p>
+                </div>
+              )}
+            </section>
+
+            <section className="rounded-[24px] bg-white p-4 shadow-[0_22px_70px_rgba(15,23,42,0.07)] ring-1 ring-slate-200/70 sm:rounded-[34px] sm:p-8">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-50 text-[#0057ff]">
+                  <MessageCircle size={21} />
+                </div>
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.15em] text-[#0057ff]">Подробности</p>
+                  <h2 className="mt-1 text-2xl font-black text-slate-950">Описание задачи</h2>
+                </div>
               </div>
-            </label>
 
-            <label>
-              <span className="mb-2 block text-sm font-black text-gray-700">Бюджет от, ₽</span>
-              <input className="input" inputMode="numeric" value={budgetFrom} onChange={(event) => setBudgetFrom(event.target.value.replace(/\D/g, ""))} />
-            </label>
-
-            <label>
-              <span className="mb-2 block text-sm font-black text-gray-700">Бюджет до, ₽</span>
-              <input className="input" inputMode="numeric" value={budgetTo} onChange={(event) => setBudgetTo(event.target.value.replace(/\D/g, ""))} />
-            </label>
-
-            <label className="md:col-span-2 flex cursor-pointer items-center justify-between rounded-2xl border border-gray-200 bg-gray-50 px-5 py-4">
-              <span>
-                <span className="block font-black text-gray-950">Срочная заявка</span>
-                <span className="mt-1 block text-sm text-gray-500">Пометка отображается на карточке и странице заявки.</span>
-              </span>
-              <input type="checkbox" checked={urgent} onChange={(event) => setUrgent(event.target.checked)} className="h-6 w-6 accent-[#0057ff]" />
-            </label>
+              <p className="mt-5 whitespace-pre-wrap text-base leading-7 text-slate-600 sm:mt-6 sm:leading-8">
+                {request.description}
+              </p>
+            </section>
           </div>
 
-          <section>
-            <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
-              <div>
-                <h2 className="text-xl font-black text-gray-950">Фотографии</h2>
-                <p className="mt-1 text-sm text-gray-500">До {MAX_IMAGES} фотографий.</p>
-              </div>
-              <label className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-2xl bg-blue-50 px-4 py-3 sm:inline-flex sm:w-auto text-sm font-black text-[#0057ff] transition hover:bg-blue-100 active:scale-95">
-                <ImagePlus size={19} />
-                Добавить фото
-                <input type="file" accept="image/*" multiple className="hidden" onChange={handleImages} disabled={images.length >= MAX_IMAGES} />
-              </label>
-            </div>
+          <aside className="space-y-5 lg:sticky lg:top-28">
+            <section className="rounded-[24px] bg-white p-4 shadow-[0_22px_70px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 sm:rounded-[34px] sm:p-6">
+              <p className="text-xs font-black uppercase tracking-[0.15em] text-[#0057ff]">Условия заказа</p>
 
-            {images.length ? (
-              <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                {images.map((image) => {
-                  const url = image.existing ? image.url : image.previewUrl;
-                  return (
-                    <div key={image.id} className="relative aspect-square overflow-hidden rounded-2xl bg-gray-100">
-                      <img src={url} alt="Фото заявки" className="h-full w-full object-cover" />
-                      <button type="button" onClick={() => removeImage(image.id)} className="absolute right-2 top-2 flex h-9 w-9 items-center justify-center rounded-xl bg-white/95 text-red-500 shadow-lg transition hover:scale-105">
-                        <Trash2 size={17} />
-                      </button>
+              <div className="mt-5 space-y-3">
+                <div className="flex items-start gap-4 rounded-[22px] bg-[#f4f7fc] p-4">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-[#0057ff] shadow-sm">
+                    <CircleDollarSign size={21} />
+                  </span>
+                  <div>
+                    <p className="text-xs font-bold text-slate-500">Бюджет</p>
+                    <p className="mt-1 text-lg font-black text-slate-950">{formatBudget(request)}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-4 rounded-[22px] bg-[#f4f7fc] p-4">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-[#0057ff] shadow-sm">
+                    <MapPin size={21} />
+                  </span>
+                  <div>
+                    <p className="text-xs font-bold text-slate-500">Город</p>
+                    <p className="mt-1 text-lg font-black text-slate-950">{request.city || "Не указан"}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-4 rounded-[22px] bg-[#f4f7fc] p-4">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-[#0057ff] shadow-sm">
+                    <CalendarDays size={21} />
+                  </span>
+                  <div>
+                    <p className="text-xs font-bold text-slate-500">Желаемый срок</p>
+                    <p className="mt-1 text-lg font-black text-slate-950">
+                      {request.deadline || "По договорённости"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-4 rounded-[22px] bg-[#f4f7fc] p-4">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-[#0057ff] shadow-sm">
+                    <Clock3 size={21} />
+                  </span>
+                  <div>
+                    <p className="text-xs font-bold text-slate-500">Опубликовано</p>
+                    <p className="mt-1 text-base font-black text-slate-950">{formatDate(request.createdAt)}</p>
+                  </div>
+                </div>
+              </div>
+
+              {(request.viewsCount || request.offersCount) ? (
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {typeof request.viewsCount === "number" ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-black text-slate-600">
+                      <Eye size={14} />
+                      {request.viewsCount} просмотров
+                    </span>
+                  ) : null}
+                  {typeof request.offersCount === "number" ? (
+                    <span className="rounded-full bg-blue-50 px-3 py-1.5 text-xs font-black text-[#0057ff]">
+                      Откликов: {request.offersCount}
+                    </span>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {!isOwner && isActive ? (
+                <div className="mt-5 space-y-3">
+                  <button
+                    type="button"
+                    onClick={() => void openCustomerChat()}
+                    disabled={chatLoading}
+                    className="group flex w-full items-center justify-center gap-2 rounded-2xl bg-[#0057ff] px-5 py-4 text-base font-black text-white shadow-lg shadow-blue-600/20 transition duration-300 hover:-translate-y-0.5 hover:bg-[#004de6] hover:shadow-xl active:scale-[0.98] disabled:cursor-wait disabled:opacity-65"
+                  >
+                    <MessageCircle
+                      className="transition-transform duration-300 group-hover:scale-110"
+                      size={20}
+                    />
+                    {chatLoading ? "Открываем чат..." : "Написать заказчику"}
+                  </button>
+
+                  {chatError ? (
+                    <p className="rounded-2xl bg-red-50 px-4 py-3 text-center text-sm font-bold text-red-600">
+                      {chatError}
+                    </p>
+                  ) : null}
+
+                  {customerPhone ? (
+                    <a
+                      href={`tel:${customerPhone.replace(/[^\d+]/g, "")}`}
+                      className="group flex w-full items-center justify-center gap-2 rounded-2xl bg-[#ffd43b] px-5 py-4 text-base font-black text-slate-950 shadow-lg shadow-yellow-400/25 transition duration-300 hover:-translate-y-0.5 hover:bg-[#ffca0a] hover:shadow-xl active:scale-[0.98]"
+                    >
+                      <Phone
+                        className="transition-transform duration-300 group-hover:rotate-[-8deg] group-hover:scale-110"
+                        size={20}
+                      />
+                      Позвонить
+                    </a>
+                  ) : (
+                    <div className="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-100 px-5 py-4 text-sm font-black text-slate-400">
+                      <Phone size={19} />
+                      Телефон не указан
                     </div>
-                  );
-                })}
-              </div>
-            ) : null}
-          </section>
+                  )}
+                </div>
+              ) : null}
 
-          {error ? <p className="rounded-2xl bg-red-50 p-4 text-sm font-black text-red-600">{error}</p> : null}
+              {!isOwner && user ? (
+                <div className="mt-3">
+                  <ReportDialog targetType="request" targetId={requestId} targetOwnerId={request.customerId || ""} targetTitle={request.title || "Заявка"} buttonClassName="flex w-full items-center justify-center gap-2 rounded-2xl bg-red-50 px-5 py-4 text-sm font-black text-red-600 ring-1 ring-red-100 transition hover:bg-red-100" />
+                </div>
+              ) : null}
 
-          <button disabled={saving || (!!ownerId && ownerId !== user.uid)} className="btn-primary w-full justify-center py-4 text-base disabled:opacity-60">
-            {saving ? <Loader2 className="animate-spin" size={19} /> : <Save size={19} />}
-            {saving ? "Сохраняем..." : "Сохранить изменения"}
-          </button>
-        </form>
+              {isOwner ? (
+                <div className="mt-5 rounded-2xl bg-blue-50 px-4 py-3 text-center text-sm font-bold leading-6 text-[#0057ff]">
+                  Это ваша заявка. Изменить данные можно кнопкой «Редактировать» сверху.
+                </div>
+              ) : null}
+            </section>
+          </aside>
+        </div>
       </div>
+
+      {galleryOpen && currentImage ? (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/95 p-4 backdrop-blur-sm"
+          onMouseDown={(event) => {
+            if (event.currentTarget === event.target) setGalleryOpen(false);
+          }}
+        >
+          <div className="absolute left-4 top-4 rounded-2xl bg-white/10 px-4 py-2 text-sm font-black text-white ring-1 ring-white/15 backdrop-blur-md sm:left-6 sm:top-6">
+            {activeImageIndex + 1} из {images.length}
+          </div>
+
+          <button
+            type="button"
+            aria-label="Закрыть галерею"
+            onClick={() => setGalleryOpen(false)}
+            className="absolute right-4 top-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 text-white ring-1 ring-white/20 transition duration-300 hover:rotate-90 hover:bg-white/20 active:scale-90 sm:right-6 sm:top-6"
+          >
+            <X size={25} />
+          </button>
+
+          {images.length > 1 ? (
+            <button
+              type="button"
+              aria-label="Предыдущее фото"
+              onClick={showPreviousImage}
+              className="absolute left-3 top-1/2 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-2xl bg-white/10 text-white ring-1 ring-white/20 transition hover:bg-white hover:text-slate-950 active:scale-90 sm:left-6 sm:h-14 sm:w-14"
+            >
+              <ChevronLeft size={28} />
+            </button>
+          ) : null}
+
+          <img
+            src={currentImage}
+            alt={`Фотография заявки ${activeImageIndex + 1}`}
+            className="max-h-[88vh] max-w-[88vw] rounded-[24px] object-contain shadow-2xl"
+          />
+
+          {images.length > 1 ? (
+            <button
+              type="button"
+              aria-label="Следующее фото"
+              onClick={showNextImage}
+              className="absolute right-3 top-1/2 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-2xl bg-white/10 text-white ring-1 ring-white/20 transition hover:bg-white hover:text-slate-950 active:scale-90 sm:right-6 sm:h-14 sm:w-14"
+            >
+              <ChevronRight size={28} />
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </main>
   );
 }

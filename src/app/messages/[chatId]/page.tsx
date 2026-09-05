@@ -68,7 +68,14 @@ type Chat = {
   groupAvatarUrl?: string;
   participantIds?: string[];
   participants?: Record<string, ChatParticipant> | string[];
-  users?: Record<string, ChatParticipant>;
+  users?: Record<string, ChatParticipant> | string[];
+  buyerId?: string;
+  sellerId?: string;
+  clientId?: string;
+  customerId?: string;
+  contractorId?: string;
+  authorId?: string;
+  ownerId?: string;
   listingId?: string;
   listingTitle?: string;
   listingImageUrl?: string;
@@ -139,13 +146,45 @@ function hasUserMarker(
 
 function getParticipantIds(chat: Chat | null) {
   if (!chat) return [];
-  if (Array.isArray(chat.participantIds)) return chat.participantIds;
-  if (Array.isArray(chat.participants)) return chat.participants;
-  if (chat.users) return Object.keys(chat.users);
-  if (chat.participants && !Array.isArray(chat.participants)) {
-    return Object.keys(chat.participants);
+  const ids = new Set<string>();
+
+  if (Array.isArray(chat.participantIds)) {
+    chat.participantIds.forEach((uid) => {
+      if (typeof uid === "string" && uid) ids.add(uid);
+    });
   }
-  return [];
+
+  if (Array.isArray(chat.participants)) {
+    chat.participants.forEach((uid) => {
+      if (typeof uid === "string" && uid) ids.add(uid);
+    });
+  }
+
+  if (Array.isArray(chat.users)) {
+    chat.users.forEach((uid) => {
+      if (typeof uid === "string" && uid) ids.add(uid);
+    });
+  } else if (chat.users) {
+    Object.keys(chat.users).forEach((uid) => ids.add(uid));
+  }
+
+  if (chat.participants && !Array.isArray(chat.participants)) {
+    Object.keys(chat.participants).forEach((uid) => ids.add(uid));
+  }
+
+  [
+    chat.buyerId,
+    chat.sellerId,
+    chat.clientId,
+    chat.customerId,
+    chat.contractorId,
+    chat.authorId,
+    chat.ownerId,
+  ].forEach((uid) => {
+    if (typeof uid === "string" && uid) ids.add(uid);
+  });
+
+  return Array.from(ids);
 }
 
 function getParticipant(chat: Chat | null, uid: string) {
@@ -154,7 +193,8 @@ function getParticipant(chat: Chat | null, uid: string) {
     chat.participants && !Array.isArray(chat.participants)
       ? chat.participants
       : undefined;
-  return participantMap?.[uid] || chat.users?.[uid] || null;
+  const usersMap = chat.users && !Array.isArray(chat.users) ? chat.users : undefined;
+  return participantMap?.[uid] || usersMap?.[uid] || null;
 }
 
 function timestampMillis(value?: Timestamp) {
@@ -520,10 +560,12 @@ export default function ChatPage() {
           return;
         }
 
+        setError("");
         setChat(next);
         setPageLoading(false);
       },
-      () => {
+      (snapshotError) => {
+        console.error("[chat] Firestore subscription failed", snapshotError);
         setError("Не получилось открыть чат.");
         setPageLoading(false);
       }
@@ -963,9 +1005,21 @@ export default function ChatPage() {
       <main className="min-h-[calc(100dvh-64px)] bg-[#f4f7ff] px-3 py-5 sm:px-5 sm:py-8 lg:min-h-[calc(100dvh-82px)]">
         <div className="empty-card mx-auto max-w-xl">
           <h1>{error}</h1>
-          <Link href="/messages" className="btn-primary mt-5">
-            К сообщениям
-          </Link>
+          <p className="mt-3 text-slate-500">
+            Переписка не удалена. Обновите страницу или вернитесь к списку сообщений.
+          </p>
+          <div className="mt-5 flex flex-wrap justify-center gap-3">
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="rounded-2xl border border-blue-200 bg-white px-5 py-3 font-black text-[#0057ff] transition hover:bg-blue-50"
+            >
+              Повторить
+            </button>
+            <a href="/messages" className="btn-primary">
+              К сообщениям
+            </a>
+          </div>
         </div>
       </main>
     );
