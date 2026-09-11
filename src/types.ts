@@ -148,7 +148,7 @@ export type Listing = {
   lat?: number | null;
   lng?: number | null;
   geocodedAddress?: string;
-  moderationStatus?: "pending" | "approved" | "rejected";
+  moderationStatus?: "pending" | "manual_review" | "approved" | "rejected";
   moderationReason?: string;
   moderationSubmittedAt?: FirestoreDate;
   moderationReviewedAt?: FirestoreDate;
@@ -188,7 +188,7 @@ export type CustomerRequest = {
   imageUrls?: string[];
   offersCount?: number;
   viewsCount?: number;
-  moderationStatus?: "pending" | "approved" | "rejected";
+  moderationStatus?: "pending" | "manual_review" | "approved" | "rejected";
   moderationReason?: string;
   moderationSubmittedAt?: FirestoreDate;
   moderationReviewedAt?: FirestoreDate;

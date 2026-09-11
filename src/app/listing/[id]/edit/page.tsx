@@ -10,6 +10,7 @@ import {
 import type { CatalogPathValue } from "@/data/catalogForm";
 import { db } from "@/lib/firebase";
 import { getApiUrl } from "@/lib/getApiUrl";
+import { requestPublicationModeration } from "@/lib/publicationModerationClient";
 import {
   buildListingSearchTags,
   getOfferActions,
@@ -269,12 +270,12 @@ export default function EditListingPage() {
         const loadedSubcategory =
           data.subcategory || DEFAULT_CATALOG_PATH.subcategory;
         setCatalogPath(
-          resolveCatalogPath({
+          { ...resolveCatalogPath({
             catalogSection: data.catalogSection,
             catalogGroupId: data.catalogGroupId,
             category: loadedCategory,
             subcategory: loadedSubcategory,
-          })
+          }), category: String(data.category || ""), subcategory: String(data.subcategory || "") }
         );
         const loadedGroup = getOfferGroup(loadedCategory);
         const legacyOffer = inferOfferFromLegacy({
@@ -449,13 +450,13 @@ export default function EditListingPage() {
       return;
     }
 
-    if (!title.trim() || !description.trim() || !category || !subcategory) {
-      setError("Заполни название, описание, категорию и подкатегорию.");
+    if (title.trim().length < 5 || description.trim().length < 20 || !category || !subcategory) {
+      setError("Название — от 5 символов, описание — от 20; выбери категорию и подкатегорию.");
       return;
     }
 
-    if (!city.trim()) {
-      setError("Укажи город.");
+    if (city.trim().length < 2) {
+      setError("Укажи корректный город.");
       return;
     }
 
@@ -551,13 +552,15 @@ export default function EditListingPage() {
         updatedAt: serverTimestamp(),
       });
 
+      void requestPublicationModeration("listing", listingId);
+
       mediaFiles.forEach((item) => {
         if (isLocalMedia(item)) {
           URL.revokeObjectURL(item.previewUrl);
         }
       });
 
-      alert("Изменения отправлены на повторную модерацию.");
+      alert("Изменения проверяются автоматически. Обычно это занимает до 5 минут.");
       router.push("/profile");
     } catch (saveError) {
       console.error(saveError);
@@ -639,11 +642,10 @@ export default function EditListingPage() {
 
               <div className="grid gap-5 md:grid-cols-2">
                 <div className="md:col-span-2">
-                  <CatalogPathPicker
-                    mode="executor"
-                    value={catalogPath}
-                    onChange={handleCatalogPathChange}
-                  />
+                  <div className="rounded-2xl bg-blue-50 p-4 text-sm font-bold text-blue-800">
+                    {[catalogPath.category, catalogPath.subcategory].filter(Boolean).join(" · ")}
+                    <p className="mt-1 text-xs font-medium">Категория после публикации не изменяется.</p>
+                  </div>
                 </div>
 
                 <div className="relative">

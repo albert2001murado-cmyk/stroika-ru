@@ -1,11 +1,18 @@
 "use client";
+import { publicationCatalogSelection } from "@/lib/catalogSelection";
 
 import CustomerRequestCard from "@/components/CustomerRequestCard";
+import CatalogSearchFilter from "@/components/CatalogSearchFilter";
 import ListingCard from "@/components/ListingCard";
 import NearbyWorkerButton from "@/components/NearbyWorkerButton";
 import PremiumCategoryGrid from "@/components/PremiumCategoryGrid";
 import SolutionWidgets, { type SolutionSelection } from "@/components/SolutionWidgets";
 import { categories } from "@/data/categories";
+import {
+  getCatalogFormCategories,
+  resolveCatalogPath,
+  type CatalogSectionId,
+} from "@/data/catalogForm";
 import { db } from "@/lib/firebase";
 import { isPublicationApproved } from "@/lib/moderation";
 import {
@@ -334,6 +341,8 @@ export default function HomePage() {
   const [requests, setRequests] = useState<CustomerRequest[]>([]);
   const [feedMode, setFeedMode] = useState<FeedMode>("contractors");
   const [search, setSearch] = useState("");
+  const [catalogSection, setCatalogSection] = useState<CatalogSectionId | "">("");
+  const [catalogCategoryId, setCatalogCategoryId] = useState("");
   const [category, setCategory] = useState("");
   const [subcategory, setSubcategory] = useState("");
   const [subcategoryQuery, setSubcategoryQuery] = useState("");
@@ -388,19 +397,25 @@ export default function HomePage() {
     };
   }, []);
 
-  const selectedCategory = categories.find((item) => item.name === category);
-  const filteredSubcategoryOptions = useMemo(() => {
-    const options = selectedCategory?.subcategories || [];
-    const value = normalizeCatalogValue(subcategoryQuery);
-
-    if (!value) return options.slice(0, 12);
-    return options
-      .filter((item) => normalizeCatalogValue(item).includes(value))
-      .slice(0, 30);
-  }, [selectedCategory, subcategoryQuery]);
+  const selectedCatalogCategory = useMemo(
+    () =>
+      catalogSection
+        ? getCatalogFormCategories(catalogSection).find(
+            (item) => item.id === catalogCategoryId
+          ) || null
+        : null,
+    [catalogCategoryId, catalogSection]
+  );
   const selectedOfferGroup = useMemo(
-    () => (category ? getOfferGroup(category) : null),
-    [category]
+    () => {
+      if (category) return getOfferGroup(category);
+      if (catalogSection === "materials") return "materials" as const;
+      if (catalogSection === "equipment") return "equipment" as const;
+      if (catalogSection === "solutions") return "complex" as const;
+      if (catalogSection === "services") return "services" as const;
+      return null;
+    },
+    [catalogSection, category]
   );
   const offerActionOptions = useMemo(
     () => (selectedOfferGroup ? getOfferActions(selectedOfferGroup) : []),
@@ -450,6 +465,9 @@ export default function HomePage() {
       const matchesCategory = category
         ? normalizeCatalogValue(listing.category) === normalizeCatalogValue(category)
         : true;
+      const catalogSelection = publicationCatalogSelection(listing);
+      const matchesCatalogCategory = !catalogCategoryId || catalogSelection.categoryId === catalogCategoryId;
+      const matchesCatalogSection = !catalogSection || catalogSelection.section === catalogSection;
       const matchesSubcategory = subcategory
         ? normalizeCatalogValue(listing.subcategory) ===
           normalizeCatalogValue(subcategory)
@@ -480,6 +498,8 @@ export default function HomePage() {
       return (
         matchesSearch &&
         matchesCategory &&
+        matchesCatalogCategory &&
+        matchesCatalogSection &&
         matchesSubcategory &&
         matchesOffer &&
         matchesCity &&
@@ -494,6 +514,8 @@ export default function HomePage() {
     listings,
     search,
     category,
+    catalogCategoryId,
+    catalogSection,
     subcategory,
     selectedOfferAction,
     requiredOfferFeatures,
@@ -504,6 +526,7 @@ export default function HomePage() {
     paymentMethod,
     verifiedOnly,
     withPhotosOnly,
+    selectedCatalogCategory,
   ]);
 
   const filteredRequests = useMemo(
@@ -515,7 +538,10 @@ export default function HomePage() {
           category,
           subcategory
         );
-        const matchesCity = cityMatches(request.city, city);
+        const catalogSelection = publicationCatalogSelection(request);
+      const matchesCatalogCategory = !catalogCategoryId || catalogSelection.categoryId === catalogCategoryId;
+      const matchesCatalogSection = !catalogSection || catalogSelection.section === catalogSection;
+      const matchesCity = cityMatches(request.city, city);
         const range = requestPriceRange(request);
         const matchesPrice = overlapsPriceRange(
           range.from,
@@ -530,6 +556,8 @@ export default function HomePage() {
 
         return (
           baseMatches &&
+          matchesCatalogCategory &&
+          matchesCatalogSection &&
           matchesCity &&
           matchesPrice &&
           matchesUrgency &&
@@ -540,12 +568,15 @@ export default function HomePage() {
       requests,
       search,
       category,
+      catalogCategoryId,
+      catalogSection,
       subcategory,
       city,
       priceFrom,
       priceTo,
       urgentOnly,
       withPhotosOnly,
+      selectedCatalogCategory,
     ]
   );
 
@@ -554,6 +585,7 @@ export default function HomePage() {
 
   const priceFilterActive = priceFrom > 0 || priceTo !== null;
   const activeFilterCount =
+    Number(Boolean(catalogSection)) +
     Number(Boolean(category)) +
     Number(Boolean(subcategory)) +
     Number(Boolean(city)) +
@@ -575,6 +607,8 @@ export default function HomePage() {
 
   function resetFilters() {
     setSearch("");
+    setCatalogSection("");
+    setCatalogCategoryId("");
     setCategory("");
     setSubcategory("");
     setSubcategoryQuery("");
@@ -591,12 +625,27 @@ export default function HomePage() {
     setSourceMaterial("");
   }
 
+  function applyCatalogValues(nextCategory: string, nextSubcategory = "") {
+    setCategory(nextCategory);
+    setSubcategory(nextSubcategory);
+    setSubcategoryQuery(nextSubcategory);
+    if (!nextCategory) {
+      setCatalogSection("");
+      setCatalogCategoryId("");
+      return;
+    }
+    const path = resolveCatalogPath({
+      category: nextCategory,
+      subcategory: nextSubcategory,
+    });
+    setCatalogSection(path.catalogSection);
+    setCatalogCategoryId(nextSubcategory ? path.catalogCategoryId : "");
+  }
+
   function applySolution(selection: SolutionSelection) {
     setFeedMode("contractors");
     setSearch("");
-    setCategory(selection.category);
-    setSubcategory(selection.subcategory || "");
-    setSubcategoryQuery(selection.subcategory || "");
+    applyCatalogValues(selection.category, selection.subcategory || "");
     setPriceFrom(0);
     setPriceTo(null);
     setAccountType("");
@@ -740,97 +789,41 @@ export default function HomePage() {
                   ))}
                 </datalist>
 
-                <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                  <label>
-                    <span className="mb-2 block text-xs font-black uppercase tracking-wide text-gray-500">
-                      Категория
-                    </span>
-                    <select
-                      className="input bg-white font-bold text-gray-950"
-                      value={category}
-                      onChange={(event) => {
-                        setCategory(event.target.value);
-                        setSubcategory("");
-                        setSubcategoryQuery("");
-                        setSelectedOfferAction("");
-                        setRequiredOfferFeatures([]);
-                        setSourceMaterial("");
-                      }}
-                    >
-                      <option value="">Все категории</option>
-                      {categories.map((item) => (
-                        <option key={item.name} value={item.name}>
-                          {item.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                <div className="mt-6">
+                  <CatalogSearchFilter
+                    section={catalogSection}
+                    categoryId={catalogCategoryId}
+                    subcategory={subcategory}
+                    query={subcategoryQuery}
+                    onQueryChange={setSubcategoryQuery}
+                    onSelectSection={(nextSection) => {
+                      const clear = nextSection === catalogSection;
+                      setCatalogSection(clear ? "" : nextSection);
+                      setCatalogCategoryId("");
+                      setCategory("");
+                      setSubcategory("");
+                      setSubcategoryQuery("");
+                      setSelectedOfferAction("");
+                      setRequiredOfferFeatures([]);
+                      setSourceMaterial("");
+                    }}
+                    onSelectCategory={(nextCategory) => {
+                      setCatalogCategoryId(nextCategory?.id || "");
+                      setCategory(nextCategory?.category || "");
+                      setSubcategory("");
+                      setSelectedOfferAction("");
+                      setRequiredOfferFeatures([]);
+                      setSourceMaterial("");
+                    }}
+                    onSelectSubcategory={(nextSubcategory) => {
+                      setSubcategory(nextSubcategory);
+                      setSubcategoryQuery("");
+                    }}
+                  />
+                </div>
 
-                  <div>
-                    <span className="mb-2 block text-xs font-black uppercase tracking-wide text-gray-500">
-                      Подкатегория
-                    </span>
-                    <div className="relative">
-                      <Search
-                        size={18}
-                        className="pointer-events-none absolute left-4 top-7 -translate-y-1/2 text-[#0057ff]"
-                      />
-                      <input
-                        value={subcategoryQuery}
-                        onChange={(event) => setSubcategoryQuery(event.target.value)}
-                        disabled={!category}
-                        placeholder={category ? "Найти подкатегорию" : "Сначала выберите категорию"}
-                        className="input bg-white font-bold text-gray-950 disabled:bg-gray-50 disabled:text-gray-400"
-                        style={{ paddingLeft: 48 }}
-                      />
-                    </div>
-
-                    {category ? (
-                      <div className="mt-2 max-h-44 overflow-y-auto rounded-2xl border border-gray-200 bg-white p-2 shadow-sm">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSubcategory("");
-                            setSubcategoryQuery("");
-                          }}
-                          className={`w-full rounded-xl px-3 py-2 text-left text-sm font-black transition ${
-                            !subcategory
-                              ? "bg-blue-50 text-[#0057ff]"
-                              : "text-gray-500 hover:bg-gray-50"
-                          }`}
-                        >
-                          Все подкатегории
-                        </button>
-
-                        {filteredSubcategoryOptions.map((item) => (
-                          <button
-                            key={item}
-                            type="button"
-                            onClick={() => {
-                              setSubcategory(item);
-                              setSubcategoryQuery(item);
-                            }}
-                            className={`mt-1 flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm font-bold transition ${
-                              subcategory === item
-                                ? "bg-[#0057ff] text-white"
-                                : "text-gray-800 hover:bg-blue-50 hover:text-[#0057ff]"
-                            }`}
-                          >
-                            <span>{item}</span>
-                            {subcategory === item ? <span aria-hidden="true">✓</span> : null}
-                          </button>
-                        ))}
-
-                        {filteredSubcategoryOptions.length === 0 ? (
-                          <p className="px-3 py-4 text-sm font-bold text-gray-400">
-                            Ничего не найдено
-                          </p>
-                        ) : null}
-                      </div>
-                    ) : null}
-                  </div>
-
-                  <label>
+                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  <label className="md:max-w-xl">
                     <span className="mb-2 block text-xs font-black uppercase tracking-wide text-gray-500">
                       Город
                     </span>
@@ -1135,9 +1128,7 @@ export default function HomePage() {
           selectedCategory={category}
           selectedSubcategory={subcategory}
           onSelectCategory={(value) => {
-            setCategory(value);
-            setSubcategory("");
-            setSubcategoryQuery("");
+            applyCatalogValues(value, "");
             setSelectedOfferAction("");
             setRequiredOfferFeatures([]);
             setSourceMaterial("");
@@ -1150,9 +1141,7 @@ export default function HomePage() {
             offerFeatures: nextOfferFeatures,
             sourceMaterial: nextSourceMaterial,
           }) => {
-            setCategory(nextCategory || "");
-            setSubcategory(nextSubcategory || "");
-            setSubcategoryQuery(nextSubcategory || "");
+            applyCatalogValues(nextCategory || "", nextSubcategory || "");
             setSearch(nextSearch || "");
             setSelectedOfferAction(nextOfferAction || "");
             setRequiredOfferFeatures(nextOfferFeatures || []);

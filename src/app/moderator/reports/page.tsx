@@ -8,36 +8,14 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 type ReportStatus = "open" | "in_progress" | "resolved" | "rejected";
-type PublicationStatus = "pending" | "approved" | "rejected";
+type PublicationStatus = "pending" | "manual_review" | "approved" | "rejected";
+type PublicationDecision = "approved" | "rejected";
 type Report = { id: string; reporterId?: string; reporterName?: string; targetType?: string; targetId?: string; targetOwnerId?: string; targetTitle?: string; reason?: string; comment?: string; source?: string; status?: ReportStatus; createdAt?: any; targetSnapshot?: { text?: string } };
 type Publication = { id: string; kind: "listing" | "request"; title?: string; description?: string; category?: string; subcategory?: string; city?: string; ownerId?: string; ownerName?: string; moderationStatus?: PublicationStatus; moderationReason?: string; createdAt?: any; updatedAt?: any };
 
 function canModerate(profile: any) { return profile?.role === "moderator" || profile?.role === "admin" || profile?.isModerator === true || profile?.isAdmin === true; }
 function reportUrl(item: Report) { if (item.targetType === "listing") return `/listing/${item.targetId}`; if (item.targetType === "profile") return `/user/${item.targetId}`; if (item.targetType === "request") return `/requests/${item.targetId}`; if (item.targetType === "chat") return `/messages/${item.targetId}`; return ""; }
 function publicationUrl(item: Publication) { return item.kind === "listing" ? `/listing/${item.id}` : `/requests/${item.id}`; }
-
-async function sendModerationNotification(sender: any, item: Publication, status: PublicationStatus, reason: string) {
-  if (!sender || !item.ownerId) return;
-  try {
-    const token = await sender.getIdToken();
-    await fetch("/api/push/send", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({
-        recipientId: item.ownerId,
-        type: "moderation",
-        entityId: item.id,
-        title: status === "approved" ? "Публикация одобрена" : "Публикация отклонена",
-        body: status === "approved"
-          ? `«${item.title || "Публикация"}» прошла модерацию и теперь доступна пользователям.`
-          : `«${item.title || "Публикация"}» не прошла модерацию. ${reason}`,
-        url: item.kind === "listing" ? `/listing/${item.id}` : `/requests/${item.id}`,
-      }),
-    });
-  } catch (error) {
-    console.warn("moderation notification error:", error);
-  }
-}
 
 export default function ModeratorReportsPage() {
   const { user, profile, loading } = useAuth();
@@ -81,27 +59,35 @@ export default function ModeratorReportsPage() {
     finally { setWorkingId(""); }
   }
 
-  async function reviewPublication(item: Publication, status: PublicationStatus) {
+  async function reviewPublication(item: Publication, status: PublicationDecision) {
     if (!user) return;
     let reason = "";
     if (status === "rejected") {
       reason = window.prompt("Укажите причину отклонения:", item.moderationReason || "Публикация не соответствует правилам размещения.")?.trim() || "";
       if (!reason) return;
     }
-    const collectionName = item.kind === "listing" ? "listings" : "customerRequests";
     try {
       setWorkingId(`publication-${item.kind}-${item.id}`);
-      await updateDoc(doc(db, collectionName, item.id), {
-        moderationStatus: status,
-        moderationReason: reason,
-        moderationReviewedBy: user.uid,
-        moderationReviewedAt: serverTimestamp(),
-        publishedAt: status === "approved" ? serverTimestamp() : null,
-        updatedAt: serverTimestamp(),
+      const token = await user.getIdToken();
+      const response = await fetch("/api/moderation/review", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          kind: item.kind,
+          publicationId: item.id,
+          status,
+          reason,
+        }),
       });
+      const responseData = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(responseData?.error || "Не удалось сохранить решение.");
       setPublications((current) => current.map((publication) => publication.id === item.id && publication.kind === item.kind ? { ...publication, moderationStatus: status, moderationReason: reason } : publication));
-      await sendModerationNotification(user, item, status, reason);
       setMessage(status === "approved" ? "Публикация одобрена." : "Публикация отклонена.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Не удалось сохранить решение.");
     } finally { setWorkingId(""); }
   }
 
@@ -132,7 +118,7 @@ export default function ModeratorReportsPage() {
 
         {mode === "publications" ? (
           <>
-            <section className="mt-6 grid gap-3 sm:grid-cols-3">{(["pending", "approved", "rejected"] as const).map((status) => <button key={status} onClick={() => setPublicationFilter(status)} className={`rounded-3xl p-5 text-left font-black ring-1 ${publicationFilter === status ? "bg-[#0057ff] text-white ring-blue-500" : "bg-white text-slate-900 ring-blue-100"}`}><div className="text-xl">{status === "pending" ? "На проверке" : status === "approved" ? "Одобрены" : "Отклонены"}</div><div className={`mt-1 text-sm ${publicationFilter === status ? "text-blue-100" : "text-slate-500"}`}>{publications.filter((item) => item.moderationStatus === status).length}</div></button>)}</section>
+            <section className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{(["pending", "manual_review", "approved", "rejected"] as const).map((status) => <button key={status} onClick={() => setPublicationFilter(status)} className={`rounded-3xl p-5 text-left font-black ring-1 ${publicationFilter === status ? "bg-[#0057ff] text-white ring-blue-500" : "bg-white text-slate-900 ring-blue-100"}`}><div className="text-xl">{status === "pending" ? "Автопроверка" : status === "manual_review" ? "Нужен модератор" : status === "approved" ? "Одобрены" : "Отклонены"}</div><div className={`mt-1 text-sm ${publicationFilter === status ? "text-blue-100" : "text-slate-500"}`}>{publications.filter((item) => item.moderationStatus === status).length}</div></button>)}</section>
             <section className="mt-6 space-y-4">
               {loadingData ? <div className="flex min-h-72 items-center justify-center"><Loader2 className="animate-spin text-blue-600" size={38} /></div> : visiblePublications.length === 0 ? <div className="rounded-[34px] bg-white p-10 text-center ring-1 ring-blue-100"><Clock3 className="mx-auto text-blue-600" size={44} /><h2 className="mt-3 text-2xl font-black">Публикаций нет</h2></div> : visiblePublications.map((item) => (
                 <article key={`${item.kind}-${item.id}`} className="rounded-[32px] bg-white p-6 shadow-sm ring-1 ring-blue-100">

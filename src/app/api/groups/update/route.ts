@@ -5,7 +5,6 @@ import { getAdminAuth, getAdminDb } from "@/lib/firebase-admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-const GROUP_API_VERSION = 2;
 
 type AdminPermission = "editInfo" | "inviteMembers" | "kickMembers" | "manageTags";
 type AdminPermissionSet = Record<AdminPermission, boolean>;
@@ -43,6 +42,16 @@ function stringList(value: unknown) {
     : [];
 }
 
+function participantIdsFrom(data: Record<string, any>) {
+  const ids = new Set<string>(stringList(data.participantIds));
+  stringList(data.participants).forEach((uid) => ids.add(uid));
+  stringList(data.users).forEach((uid) => ids.add(uid));
+  Object.keys(objectRecord(data.participants)).forEach((uid) => ids.add(uid));
+  Object.keys(objectRecord(data.users)).forEach((uid) => ids.add(uid));
+  if (typeof data.ownerId === "string" && data.ownerId) ids.add(data.ownerId);
+  return [...ids];
+}
+
 function cleanTargetUid(value: unknown) {
   return String(value || "").trim().slice(0, 128);
 }
@@ -57,13 +66,17 @@ function sanitizePermissions(value: unknown): AdminPermissionSet {
   };
 }
 
-function hasPermission(data: Record<string, any>, uid: string, permission: AdminPermission) {
+function hasPermission(
+  data: Record<string, any>,
+  uid: string,
+  permission: AdminPermission
+) {
   if (data.ownerId === uid) return true;
   const admins = stringList(data.adminIds);
   if (!admins.includes(uid)) return false;
 
   const permissions = objectRecord(data.adminPermissions);
-  // Старые группы не содержат adminPermissions. Сохраняем прежние права их администраторов.
+  // Администраторы групп, созданных до гранулярных прав, сохраняют полный доступ.
   if (!Object.prototype.hasOwnProperty.call(permissions, uid)) return true;
   return objectRecord(permissions[uid])[permission] === true;
 }
@@ -94,7 +107,7 @@ export async function POST(request: NextRequest) {
         throw new GroupActionError("Группа не найдена.", 404);
       }
 
-      const participantIds = stringList(data.participantIds);
+      const participantIds = participantIdsFrom(data);
       const admins = stringList(data.adminIds);
       const isOwner = data.ownerId === decoded.uid;
       if (!participantIds.includes(decoded.uid)) {
@@ -107,7 +120,7 @@ export async function POST(request: NextRequest) {
         if (!hasPermission(data, decoded.uid, "editInfo")) {
           throw new GroupActionError("Нет доступа к изменению названия и аватара.", 403);
         }
-        const title = String(body?.title || "").trim().slice(0, 80);
+        const title = String(body?.title || "").replace(/\s+/g, " ").trim().slice(0, 80);
         if (title.length < 2) {
           throw new GroupActionError("Введите название группы.", 400);
         }
@@ -130,7 +143,9 @@ export async function POST(request: NextRequest) {
       }
 
       if (action === "set-admin") {
-        if (!isOwner) throw new GroupActionError("Назначать администраторов может только владелец.", 403);
+        if (!isOwner) {
+          throw new GroupActionError("Назначать администраторов может только владелец.", 403);
+        }
         const targetUid = cleanTargetUid(body?.targetUid);
         if (!targetUid || !participantIds.includes(targetUid)) {
           throw new GroupActionError("Участник не найден.", 404);
@@ -144,15 +159,26 @@ export async function POST(request: NextRequest) {
           ? [...new Set([...admins, targetUid])]
           : admins.filter((uid) => uid !== targetUid);
         const adminPermissions = objectRecord(data.adminPermissions);
-        if (enabled) adminPermissions[targetUid] = sanitizePermissions(body?.permissions || FULL_PERMISSIONS);
-        else delete adminPermissions[targetUid];
+        if (enabled) {
+          adminPermissions[targetUid] = sanitizePermissions(
+            body?.permissions || FULL_PERMISSIONS
+          );
+        } else {
+          delete adminPermissions[targetUid];
+        }
 
-        transaction.update(ref, { adminIds: nextAdmins, adminPermissions, ...commonUpdate });
+        transaction.update(ref, {
+          adminIds: nextAdmins,
+          adminPermissions,
+          ...commonUpdate,
+        });
         return { ok: true };
       }
 
       if (action === "set-admin-permissions") {
-        if (!isOwner) throw new GroupActionError("Права администраторов меняет только владелец.", 403);
+        if (!isOwner) {
+          throw new GroupActionError("Права администраторов меняет только владелец.", 403);
+        }
         const targetUid = cleanTargetUid(body?.targetUid);
         if (!targetUid || targetUid === data.ownerId || !admins.includes(targetUid)) {
           throw new GroupActionError("Администратор не найден.", 404);
@@ -229,7 +255,9 @@ export async function POST(request: NextRequest) {
         delete memberTags[decoded.uid];
 
         let nextOwnerId = String(data.ownerId || "");
-        let nextAdmins = admins.filter((uid) => uid !== decoded.uid && nextParticipantIds.includes(uid));
+        let nextAdmins = admins.filter(
+          (uid) => uid !== decoded.uid && nextParticipantIds.includes(uid)
+        );
         if (isOwner) {
           nextOwnerId = nextAdmins[0] || nextParticipantIds[0] || "";
           if (nextOwnerId) {
@@ -257,12 +285,15 @@ export async function POST(request: NextRequest) {
       throw new GroupActionError("Неизвестное действие.", 400);
     });
 
-    return NextResponse.json({ ...result, apiVersion: GROUP_API_VERSION });
+    return NextResponse.json({ ...result, apiVersion: 2 });
   } catch (error) {
     if (error instanceof GroupActionError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
     console.error("group update error", error);
-    return NextResponse.json({ error: "Не получилось сохранить настройки группы." }, { status: 500 });
+    return NextResponse.json(
+      { error: "Не получилось сохранить настройки группы." },
+      { status: 500 }
+    );
   }
 }

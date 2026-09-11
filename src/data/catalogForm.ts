@@ -58,6 +58,27 @@ const SOLUTION_CATEGORY_TITLES = new Set([
   "Строительство",
 ]);
 
+// Эти идентификаторы совпадают с мобильным каталогом. Названия на сайте
+// могут содержать эмодзи, поэтому для данных и серверного подбора используем
+// стабильный id, а не текст заголовка.
+const CATEGORY_IDS: Record<string, string> = {
+  "Ремонт квартир": "repair",
+  "Дизайн и проектирование": "design",
+  "Отделочные работы": "finishing",
+  Электрика: "electric",
+  Сантехника: "plumbing",
+  Строительство: "construction",
+  Спецтехника: "equipment",
+  Материалы: "materials",
+  Полы: "floors",
+  "Крыша и фасад": "roof",
+  "Участок и благоустройство": "landscape",
+  "Инженерные системы": "engineering",
+  "Окна и двери": "windows",
+  Мебель: "furniture",
+  "Дополнительные услуги": "extra",
+};
+
 function compareRu(left: string, right: string) {
   return left.localeCompare(right, "ru", {
     numeric: true,
@@ -115,10 +136,12 @@ export function getCatalogFormCategories(
   }
 
   return sourceCategories.map((category) => ({
-    id: cleanCatalogCategoryTitle(category.name)
-      .toLocaleLowerCase("ru-RU")
-      .replace(/[^\p{L}\p{N}]+/gu, "-")
-      .replace(/(^-|-$)/g, ""),
+    id:
+      CATEGORY_IDS[cleanCatalogCategoryTitle(category.name)] ||
+      cleanCatalogCategoryTitle(category.name)
+        .toLocaleLowerCase("ru-RU")
+        .replace(/[^\p{L}\p{N}]+/gu, "-")
+        .replace(/(^-|-$)/g, ""),
     title: cleanCatalogCategoryTitle(category.name),
     description: `${category.subcategories.length} направлений`,
     category: category.name,
@@ -158,7 +181,7 @@ export function resolveCatalogPath(input: {
     : inferredSection;
   const options = getCatalogFormCategories(section);
   const option =
-    options.find((item) => item.groupId === input.catalogGroupId) ||
+    (input.catalogGroupId ? options.find((item) => item.groupId === input.catalogGroupId) : undefined) ||
     options.find((item) =>
       item.subcategories.includes(String(input.subcategory || ""))
     ) ||

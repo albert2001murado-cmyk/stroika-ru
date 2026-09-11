@@ -1,4 +1,5 @@
 "use client";
+import { requestPublicationModeration } from "@/lib/publicationModerationClient";
 
 import { useAuth } from "@/components/AuthProvider";
 import { db } from "@/lib/firebase";
@@ -253,7 +254,8 @@ export default function EditCustomerRequestPage() {
         if (isLocalImage(image)) URL.revokeObjectURL(image.previewUrl);
       });
 
-      alert("Изменения отправлены на повторную модерацию.");
+      void requestPublicationModeration("request", requestId);
+      alert("Изменения отправлены на модерацию. Обычно проверка занимает до 5 минут.");
       router.push("/profile");
     } catch (saveError) {
       console.error(saveError);

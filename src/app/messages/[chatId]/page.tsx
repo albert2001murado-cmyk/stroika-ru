@@ -7,17 +7,18 @@ import { db } from "@/lib/firebase";
 import { getApiUrl } from "@/lib/getApiUrl";
 import type { Timestamp } from "firebase/firestore";
 import {
-  addDoc,
   arrayUnion,
   collection,
   deleteDoc,
   doc,
   getDoc,
+  increment,
   onSnapshot,
   orderBy,
   query,
   serverTimestamp,
   updateDoc,
+  writeBatch,
 } from "firebase/firestore";
 import {
   ArrowLeft,
@@ -81,6 +82,8 @@ type Chat = {
   listingImageUrl?: string;
   listingImage?: string;
   pinnedBy?: string[] | Record<string, boolean> | string | null;
+  unreadBy?: string[] | Record<string, boolean>;
+  unreadCounts?: Record<string, number>;
 };
 
 type MessageType = "text" | "image" | "video" | "audio" | "document" | "mixed";
@@ -594,9 +597,15 @@ export default function ChatPage() {
         (item) =>
           item.senderId !== user.uid && !hasUserMarker(item.readBy, user.uid)
       );
+      const chatHasUnread =
+        hasUserMarker(chat.unreadBy, user.uid) ||
+        Number(chat.unreadCounts?.[user.uid] || 0) > 0;
 
-      await Promise.all(
-        unread.map((item) => {
+      if (unread.length === 0 && !chatHasUnread) return;
+
+      try {
+        const batch = writeBatch(db);
+        unread.slice(-450).forEach((item) => {
           const messageRef = doc(db, "chats", chatId, "messages", item.id);
           const readUpdate = Array.isArray(item.readBy)
             ? { readBy: arrayUnion(user.uid) }
@@ -605,13 +614,23 @@ export default function ChatPage() {
             ? { deliveredTo: arrayUnion(user.uid) }
             : { [`deliveredTo.${user.uid}`]: true };
 
-          return updateDoc(messageRef, {
+          batch.update(messageRef, {
             ...readUpdate,
             ...deliveredUpdate,
             updatedAt: serverTimestamp(),
-          }).catch(() => undefined);
-        })
-      );
+          });
+        });
+        const chatUnreadUpdate = Array.isArray(chat.unreadBy)
+          ? { unreadBy: chat.unreadBy.filter((uid) => uid !== user.uid) }
+          : { [`unreadBy.${user.uid}`]: false };
+        batch.update(doc(db, "chats", chatId), {
+          ...chatUnreadUpdate,
+          [`unreadCounts.${user.uid}`]: 0,
+        });
+        await batch.commit();
+      } catch (readError) {
+        console.error("[chat] Failed to mark messages as read", readError);
+      }
     });
   }, [chat, chatId, user]);
 
@@ -718,7 +737,13 @@ export default function ChatPage() {
       ? uploaded?.name || "Файл"
       : "Фото";
 
-    await addDoc(collection(db, "chats", chatId, "messages"), {
+    const recipients = participantIds.filter((uid) => uid !== user.uid);
+    const messageRef = doc(collection(db, "chats", chatId, "messages"));
+    const chatRef = doc(db, "chats", chatId);
+    const batch = writeBatch(db);
+
+    batch.set(messageRef, {
+      chatId,
       senderId: user.uid,
       senderName,
       senderAvatarUrl,
@@ -738,14 +763,25 @@ export default function ChatPage() {
       updatedAt: serverTimestamp(),
     });
 
-    await updateDoc(doc(db, "chats", chatId), {
+    const chatUpdates: Record<string, unknown> = {
       lastMessageText: preview,
       lastMessageType: type,
       lastMessageAt: serverTimestamp(),
+      lastSenderId: user.uid,
       updatedAt: serverTimestamp(),
+    };
+    if (Array.isArray(chat.unreadBy)) {
+      chatUpdates.unreadBy = arrayUnion(...recipients);
+    }
+    recipients.forEach((recipientId) => {
+      if (!Array.isArray(chat.unreadBy)) {
+        chatUpdates[`unreadBy.${recipientId}`] = true;
+      }
+      chatUpdates[`unreadCounts.${recipientId}`] = increment(1);
     });
+    batch.update(chatRef, chatUpdates);
+    await batch.commit();
 
-    const recipients = participantIds.filter((uid) => uid !== user.uid);
     if (recipients.length > 0) {
       user
         .getIdToken()
@@ -1067,9 +1103,16 @@ export default function ChatPage() {
             </div>
             <div className="min-w-0">
               <h1 className="truncate text-base font-black sm:text-lg">{headerName}</h1>
-              <p className="truncate text-xs font-bold text-blue-100 sm:text-sm">
-                {isGroup ? `${participantIds.length} участников` : chat?.listingTitle || "Личная переписка"}
-              </p>
+              {isGroup ? (
+                <span className="group-member-pill mt-1 inline-flex max-w-full items-center gap-1.5 rounded-full border border-white/20 bg-white/14 px-2.5 py-1 text-[11px] font-black text-white backdrop-blur sm:text-xs">
+                  <UsersRound size={13} className="shrink-0" />
+                  <span className="truncate">{memberCountLabel(participantIds.length)}</span>
+                </span>
+              ) : (
+                <p className="truncate text-xs font-bold text-blue-100 sm:text-sm">
+                  {chat?.listingTitle || "Личная переписка"}
+                </p>
+              )}
             </div>
           </Link>
 
@@ -1599,6 +1642,9 @@ export default function ChatPage() {
         .message-row {
           animation: messageIn 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
         }
+        .group-member-pill {
+          animation: memberPillIn 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+        }
         .message-menu {
           animation: menuIn 170ms cubic-bezier(0.22, 1, 0.36, 1) both;
           transform-origin: top right;
@@ -1644,6 +1690,16 @@ export default function ChatPage() {
             transform: translateY(0) scale(1);
           }
         }
+        @keyframes memberPillIn {
+          from {
+            opacity: 0;
+            transform: translateY(5px) scale(0.96);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+        }
         @keyframes menuIn {
           from {
             opacity: 0;
@@ -1677,6 +1733,7 @@ export default function ChatPage() {
         @media (prefers-reduced-motion: reduce) {
           .chat-shell,
           .message-row,
+          .group-member-pill,
           .message-menu,
           .media-preview,
           .recording-panel,

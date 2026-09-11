@@ -9,6 +9,7 @@ import {
 import type { CatalogPathValue } from "@/data/catalogForm";
 import { db } from "@/lib/firebase";
 import { getApiUrl } from "@/lib/getApiUrl";
+import { requestPublicationModeration } from "@/lib/publicationModerationClient";
 import {
   buildListingSearchTags,
   getOfferActions,
@@ -328,8 +329,8 @@ export default function NewListingPage() {
       return;
     }
 
-    if (!title.trim() || !description.trim() || !category || !subcategory) {
-      setError("Заполни название, описание, категорию и подкатегорию.");
+    if (title.trim().length < 5 || description.trim().length < 20 || !category || !subcategory) {
+      setError("Название — от 5 символов, описание — от 20; выбери категорию и подкатегорию.");
       return;
     }
 
@@ -338,8 +339,8 @@ export default function NewListingPage() {
       return;
     }
 
-    if (!city.trim()) {
-      setError("Укажи город.");
+    if (city.trim().length < 2) {
+      setError("Укажи корректный город.");
       return;
     }
 
@@ -450,7 +451,8 @@ export default function NewListingPage() {
         createdAt: serverTimestamp(),
       });
 
-      alert("Анкета отправлена на модерацию и появится после одобрения.");
+      void requestPublicationModeration("listing", listingRef.id);
+      alert("Анкета проверяется автоматически. Обычно это занимает до 5 минут.");
       router.push("/profile");
     } catch (uploadError) {
       console.error(uploadError);

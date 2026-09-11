@@ -8,6 +8,7 @@ import {
 } from "@/data/catalogForm";
 import type { CatalogPathValue } from "@/data/catalogForm";
 import { db } from "@/lib/firebase";
+import { requestPublicationModeration } from "@/lib/publicationModerationClient";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import {
   ArrowLeft,
@@ -216,7 +217,8 @@ export default function NewRequestPage() {
       });
 
       images.forEach((image) => URL.revokeObjectURL(image.previewUrl));
-      alert("Заявка отправлена на модерацию и появится после одобрения.");
+      void requestPublicationModeration("request", reference.id);
+      alert("Заявка проверяется автоматически. Обычно это занимает до 5 минут.");
       router.push("/profile");
     } catch (submitError) {
       console.error(submitError);

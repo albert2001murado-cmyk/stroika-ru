@@ -1,7 +1,8 @@
 "use client";
 
-import { auth } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
 import { signOut } from "firebase/auth";
+import { collection, onSnapshot, query, where } from "firebase/firestore";
 import {
   BadgeCheck,
   BarChart3,
@@ -44,6 +45,7 @@ export default function Header() {
   const pathname = usePathname();
   const [publicationMenuOpen, setPublicationMenuOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [unreadTotal, setUnreadTotal] = useState(0);
   const authContext = useAuth() as any;
 
   const user = authContext?.user || null;
@@ -72,6 +74,58 @@ export default function Header() {
   useEffect(() => {
     setMobileMenuOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    if (!user) {
+      setUnreadTotal(0);
+      return;
+    }
+
+    const results = new Map<string, Map<string, number>>();
+    const publish = () => {
+      const merged = new Map<string, number>();
+      results.forEach((source) => {
+        source.forEach((count, chatId) => merged.set(chatId, count));
+      });
+      setUnreadTotal([...merged.values()].reduce((sum, count) => sum + count, 0));
+    };
+    const subscribe = (key: string, field: "participantIds" | "participants") =>
+      onSnapshot(
+        query(collection(db, "chats"), where(field, "array-contains", user.uid)),
+        (snapshot) => {
+          const source = new Map<string, number>();
+          snapshot.docs.forEach((item) => {
+            const data = item.data() as any;
+            const hidden = Array.isArray(data.hiddenFor)
+              ? data.hiddenFor.includes(user.uid)
+              : data.hiddenFor?.[user.uid] === true;
+            if (hidden) return;
+            const stored = Number(data.unreadCounts?.[user.uid] || 0);
+            const legacyUnread = Array.isArray(data.unreadBy)
+              ? data.unreadBy.includes(user.uid)
+              : data.unreadBy?.[user.uid] === true;
+            const count = Number.isFinite(stored) && stored > 0
+              ? Math.floor(stored)
+              : legacyUnread
+                ? 1
+                : 0;
+            if (count > 0) source.set(item.id, count);
+          });
+          results.set(key, source);
+          publish();
+        },
+        () => {
+          results.set(key, new Map());
+          publish();
+        }
+      );
+
+    const unsubscribers = [
+      subscribe("participantIds", "participantIds"),
+      subscribe("participants", "participants"),
+    ];
+    return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
+  }, [user]);
 
   useEffect(() => {
     const shouldLock = mobileMenuOpen || publicationMenuOpen;
@@ -158,9 +212,14 @@ export default function Header() {
               Избранное
             </Link>
 
-            <Link href="/messages" className="header-desktop-link">
+            <Link href="/messages" className="header-desktop-link relative">
               <MessageCircle size={18} strokeWidth={2.8} />
               Сообщения
+              {unreadTotal > 0 ? (
+                <span className="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-[#0057ff] bg-white px-1 text-[9px] font-black text-[#0057ff] shadow-md">
+                  {unreadTotal > 99 ? "99+" : unreadTotal}
+                </span>
+              ) : null}
             </Link>
 
             <Link href="/portfolio" className="header-desktop-link px-4">
@@ -263,9 +322,14 @@ export default function Header() {
             <Link
               href="/messages"
               aria-label="Сообщения"
-              className={`mobile-header-button ${isActive("/messages") ? "bg-white text-[#0057ff]" : "bg-white/12 text-white"}`}
+              className={`mobile-header-button relative ${isActive("/messages") ? "bg-white text-[#0057ff]" : "bg-white/12 text-white"}`}
             >
               <MessageCircle size={20} strokeWidth={2.5} />
+              {unreadTotal > 0 ? (
+                <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-[#0057ff] bg-white px-1 text-[9px] font-black text-[#0057ff] shadow-md">
+                  {unreadTotal > 99 ? "99+" : unreadTotal}
+                </span>
+              ) : null}
             </Link>
 
             <Link
@@ -316,9 +380,14 @@ export default function Header() {
           <small>Разместить</small>
         </button>
 
-        <Link href="/messages" className={mobileNavClass("/messages")}>
+        <Link href="/messages" className={`${mobileNavClass("/messages")} relative`}>
           <MessageCircle size={21} strokeWidth={2.5} />
           <span>Сообщения</span>
+          {unreadTotal > 0 ? (
+            <span className="absolute right-2 top-1 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-[#0057ff] px-1 text-[9px] font-black text-white shadow-md">
+              {unreadTotal > 99 ? "99+" : unreadTotal}
+            </span>
+          ) : null}
         </Link>
 
         <Link

@@ -54,10 +54,13 @@ type Chat = {
   listingImageUrl?: string;
   lastMessageText?: string;
   lastMessageType?: "text" | "image" | "video" | "audio";
+  lastSenderId?: string;
   lastMessageAt?: Timestamp;
   updatedAt?: Timestamp;
   createdAt?: Timestamp;
   pinnedBy?: string[] | Record<string, boolean> | string | null;
+  unreadBy?: string[] | Record<string, boolean>;
+  unreadCounts?: Record<string, number>;
 };
 
 
@@ -79,6 +82,21 @@ function getPinnedUserIds(
 
 function isChatPinned(chat: Chat, uid: string) {
   return getPinnedUserIds(chat.pinnedBy).includes(uid);
+}
+
+function hasUserMarker(
+  value: string[] | Record<string, boolean> | undefined,
+  uid: string
+) {
+  if (!value || !uid) return false;
+  if (Array.isArray(value)) return value.includes(uid);
+  return value[uid] === true;
+}
+
+function getUnreadCount(chat: Chat, uid: string) {
+  const saved = Number(chat.unreadCounts?.[uid] || 0);
+  if (Number.isFinite(saved) && saved > 0) return Math.floor(saved);
+  return hasUserMarker(chat.unreadBy, uid) ? 1 : 0;
 }
 
 function getParticipantIds(chat: Chat) {
@@ -125,6 +143,16 @@ function getParticipantIds(chat: Chat) {
 
 function isGroupChat(chat: Chat) {
   return chat.chatType === "group" || chat.isGroup === true;
+}
+
+function memberCountLabel(value: number) {
+  const count = Math.max(0, Math.floor(value || 0));
+  const lastTwo = count % 100;
+  const last = count % 10;
+  if (lastTwo >= 11 && lastTwo <= 14) return `${count} участников`;
+  if (last === 1) return `${count} участник`;
+  if (last >= 2 && last <= 4) return `${count} участника`;
+  return `${count} участников`;
 }
 
 function getChatDisplay(chat: Chat, myUid: string) {
@@ -364,6 +392,14 @@ export default function MessagesPage() {
     });
   }, [chats, search, user]);
 
+  const totalUnread = useMemo(
+    () =>
+      user
+        ? chats.reduce((sum, chat) => sum + getUnreadCount(chat, user.uid), 0)
+        : 0,
+    [chats, user]
+  );
+
   async function toggleChatPin(chat: Chat) {
     if (!user || pinningId) return;
 
@@ -438,11 +474,16 @@ export default function MessagesPage() {
               </p>
             </div>
 
-            <div className="flex items-center gap-3 rounded-[24px] bg-white/12 px-4 py-3 ring-1 ring-white/20 backdrop-blur-md">
+            <div className="flex items-center gap-4 rounded-[24px] bg-white/12 px-4 py-3 ring-1 ring-white/20 backdrop-blur-md">
               <MessageCircle size={22} />
               <div>
                 <p className="text-2xl font-black leading-none">{chats.length}</p>
                 <p className="mt-1 text-xs font-bold text-blue-100">активных чатов</p>
+              </div>
+              <span className="h-9 w-px bg-white/20" />
+              <div>
+                <p className="text-2xl font-black leading-none">{totalUnread}</p>
+                <p className="mt-1 text-xs font-bold text-blue-100">непрочитанных</p>
               </div>
             </div>
           </div>
@@ -509,11 +550,18 @@ export default function MessagesPage() {
                 const other = getChatDisplay(chat, user.uid);
                 const pinned = isChatPinned(chat, user.uid);
                 const preview = chatPreview(chat);
+                const unreadCount = getUnreadCount(chat, user.uid);
+                const unread = unreadCount > 0;
+                const participantCount = getParticipantIds(chat).length;
 
                 return (
                   <article
                     key={chat.id}
-                    className="chat-card group relative overflow-hidden rounded-[20px] sm:rounded-[25px] border border-slate-100 bg-white shadow-[0_8px_26px_rgba(15,23,42,0.045)] transition duration-300 hover:-translate-y-1 hover:border-blue-200 hover:shadow-[0_18px_45px_rgba(0,87,255,0.12)]"
+                    className={`chat-card group relative overflow-hidden rounded-[20px] border transition duration-300 hover:-translate-y-1 hover:border-blue-200 hover:shadow-[0_18px_45px_rgba(0,87,255,0.12)] sm:rounded-[25px] ${
+                      unread
+                        ? "border-blue-300 bg-gradient-to-r from-[#eef5ff] via-white to-white shadow-[0_12px_34px_rgba(0,87,255,0.13)]"
+                        : "border-slate-100 bg-white shadow-[0_8px_26px_rgba(15,23,42,0.045)]"
+                    }`}
                     style={{ animationDelay: `${Math.min(index * 45, 360)}ms` }}
                   >
                     <Link
@@ -530,7 +578,9 @@ export default function MessagesPage() {
                         ) : (
                           other.isGroup ? <UsersRound size={28} /> : <UserRound size={28} />
                         )}
-                        <span className="absolute bottom-1 right-1 h-3 w-3 rounded-full border-2 border-white bg-emerald-400" />
+                        {!other.isGroup ? (
+                          <span className="absolute bottom-1 right-1 h-3 w-3 rounded-full border-2 border-white bg-emerald-400" />
+                        ) : null}
                       </div>
 
                       <div className="min-w-0 flex-1">
@@ -544,13 +594,19 @@ export default function MessagesPage() {
                                 <Pin className="shrink-0 text-[#0057ff]" size={14} fill="currentColor" />
                               ) : null}
                             </div>
+                            {other.isGroup ? (
+                              <p className="mt-0.5 flex items-center gap-1 text-[11px] font-extrabold text-blue-600 sm:text-xs">
+                                <UsersRound size={13} />
+                                {memberCountLabel(participantCount)}
+                              </p>
+                            ) : null}
                             {chat.listingTitle ? (
                               <p className="mt-0.5 truncate text-xs font-black text-[#0057ff] sm:text-sm">
                                 {chat.listingTitle}
                               </p>
                             ) : null}
                           </div>
-                          <time className="shrink-0 text-[11px] font-black text-slate-400 sm:text-xs">
+                          <time className={`shrink-0 text-[11px] font-black sm:text-xs ${unread ? "text-[#0057ff]" : "text-slate-400"}`}>
                             {formatTime(chat)}
                           </time>
                         </div>
@@ -559,9 +615,15 @@ export default function MessagesPage() {
                           {chat.lastMessageType === "audio" || preview.includes("Голосовое") ? (
                             <Mic2 className="shrink-0 text-[#0057ff]" size={15} />
                           ) : null}
-                          <p className="truncate text-sm font-semibold text-slate-500 sm:text-base">
+                          <p className={`min-w-0 flex-1 truncate text-sm sm:text-base ${unread ? "font-black text-slate-900" : "font-semibold text-slate-500"}`}>
+                            {chat.lastSenderId === user.uid ? "Вы: " : ""}
                             {preview}
                           </p>
+                          {unread ? (
+                            <span className="unread-badge flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full border-2 border-white bg-[#0057ff] px-1.5 text-[10px] font-black text-white shadow-[0_5px_14px_rgba(0,87,255,0.28)]">
+                              {unreadCount > 99 ? "99+" : unreadCount}
+                            </span>
+                          ) : null}
                         </div>
                       </div>
                     </Link>
@@ -598,6 +660,9 @@ export default function MessagesPage() {
         .chat-card {
           animation: chatCardIn 480ms cubic-bezier(0.22, 1, 0.36, 1) both;
         }
+        .unread-badge {
+          animation: unreadBadgeIn 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+        }
         @keyframes messagesRise {
           from {
             opacity: 0;
@@ -618,10 +683,21 @@ export default function MessagesPage() {
             transform: translateY(0);
           }
         }
+        @keyframes unreadBadgeIn {
+          from {
+            opacity: 0;
+            transform: scale(0.72);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
         @media (prefers-reduced-motion: reduce) {
           .messages-hero,
           .messages-panel,
-          .chat-card {
+          .chat-card,
+          .unread-badge {
             animation: none;
           }
         }

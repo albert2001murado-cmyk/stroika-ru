@@ -9,6 +9,7 @@ import {
   ChevronRight,
   ClipboardCheck,
   MessageCircle,
+  MapPin,
   ShieldCheck,
   Sparkles,
   Trash2,
@@ -64,6 +65,8 @@ function meta(type?: NotificationType) {
       return { Icon: MessageCircle, iconClass: "bg-blue-50 text-[#0057ff]", stripe: "bg-[#0057ff]" };
     case "moderation":
       return { Icon: ShieldCheck, iconClass: "bg-violet-50 text-violet-600", stripe: "bg-violet-500" };
+    case "match":
+      return { Icon: MapPin, iconClass: "bg-cyan-50 text-cyan-600", stripe: "bg-cyan-500" };
     case "request":
       return { Icon: ClipboardCheck, iconClass: "bg-amber-50 text-amber-600", stripe: "bg-amber-500" };
     case "calendar":
@@ -174,7 +177,7 @@ export default function NotificationsPage() {
               </div>
               <h1 className="mt-4 text-3xl font-black tracking-[-0.04em] sm:text-5xl">Уведомления</h1>
               <p className="mt-3 max-w-2xl font-semibold text-blue-100">
-                Сообщения, модерация, заявки и системные события синхронизируются с приложением.
+                Сообщения, модерация и новые совпадения по городу и категории синхронизируются с приложением.
               </p>
             </div>
             <div className="rounded-[24px] bg-white/13 px-5 py-4 text-center ring-1 ring-white/20 backdrop-blur-md">
