@@ -9,6 +9,7 @@ import PremiumCategoryGrid from "@/components/PremiumCategoryGrid";
 import SolutionWidgets, { type SolutionSelection } from "@/components/SolutionWidgets";
 import { categories } from "@/data/categories";
 import {
+  CATALOG_FORM_SECTIONS,
   getCatalogFormCategories,
   resolveCatalogPath,
   type CatalogSectionId,
@@ -33,8 +34,10 @@ import {
   Building2,
   ClipboardList,
   CreditCard,
+  ChevronRight,
   HardHat,
   Image as ImageIcon,
+  Layers3,
   MapPin,
   Search,
   SlidersHorizontal,
@@ -47,6 +50,16 @@ type SearchableListing = Listing & SearchableListingFields;
 type FeedMode = "contractors" | "customers";
 type AccountTypeFilter = "" | "individual" | "ip" | "ooo";
 type PaymentFilter = "" | "cash" | "transfer";
+
+type MainSearchSuggestion = {
+  id: string;
+  title: string;
+  path: string[];
+  section: CatalogSectionId;
+  categoryId: string;
+  category: string;
+  subcategory: string;
+};
 
 const POPULAR_CITIES = [
   "Москва",
@@ -341,6 +354,7 @@ export default function HomePage() {
   const [requests, setRequests] = useState<CustomerRequest[]>([]);
   const [feedMode, setFeedMode] = useState<FeedMode>("contractors");
   const [search, setSearch] = useState("");
+  const [searchFocused, setSearchFocused] = useState(false);
   const [catalogSection, setCatalogSection] = useState<CatalogSectionId | "">("");
   const [catalogCategoryId, setCatalogCategoryId] = useState("");
   const [category, setCategory] = useState("");
@@ -429,6 +443,58 @@ export default function HomePage() {
     () => (selectedOfferGroup ? getOfferGroupInfo(selectedOfferGroup) : null),
     [selectedOfferGroup]
   );
+
+  const mainSearchSuggestions = useMemo<MainSearchSuggestion[]>(() => {
+    const query = normalizeCatalogValue(search);
+    if (!query) return [];
+
+    const queryWords = query.split(" ").filter(Boolean);
+    const seen = new Set<string>();
+    const candidates = CATALOG_FORM_SECTIONS.flatMap((section) =>
+      getCatalogFormCategories(section.id).flatMap((catalogCategory) =>
+        catalogCategory.subcategories.map((catalogSubcategory) => ({
+          id: `${section.id}:${catalogCategory.id}:${catalogSubcategory}`,
+          title: catalogSubcategory,
+          path: [section.title, catalogCategory.title, catalogSubcategory],
+          section: section.id,
+          categoryId: catalogCategory.id,
+          category: catalogCategory.category,
+          subcategory: catalogSubcategory,
+        }))
+      )
+    ).filter((item) => {
+      const key = normalizeCatalogValue(
+        `${item.section}:${item.categoryId}:${item.subcategory}`
+      );
+      if (seen.has(key)) return false;
+      seen.add(key);
+
+      const searchable = normalizeCatalogValue(
+        [item.title, ...item.path].join(" ")
+      );
+      return queryWords.every((word) => searchable.includes(word));
+    });
+
+    return candidates
+      .sort((left, right) => {
+        const leftTitle = normalizeCatalogValue(left.title);
+        const rightTitle = normalizeCatalogValue(right.title);
+        const score = (title: string) => {
+          if (title === query) return 0;
+          if (title.startsWith(query)) return 1;
+          return 2;
+        };
+
+        return (
+          score(leftTitle) - score(rightTitle) ||
+          left.title.localeCompare(right.title, "ru", {
+            numeric: true,
+            sensitivity: "base",
+          })
+        );
+      })
+      .slice(0, 6);
+  }, [search]);
 
   const availableCities = useMemo(() => {
     const source = feedMode === "contractors" ? listings : requests;
@@ -605,6 +671,28 @@ export default function HomePage() {
       ?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
+  function submitMainSearch() {
+    setSearchFocused(false);
+    scrollToFeed();
+  }
+
+  function applyMainSearchSuggestion(suggestion: MainSearchSuggestion) {
+    setSearch(suggestion.title);
+    setCatalogSection(suggestion.section);
+    setCatalogCategoryId(suggestion.categoryId);
+    setCategory(suggestion.category);
+    setSubcategory(suggestion.subcategory);
+    setSubcategoryQuery(suggestion.subcategory);
+    setSelectedOfferAction("");
+    setRequiredOfferFeatures([]);
+    setSourceMaterial("");
+    setSearchFocused(false);
+
+    window.requestAnimationFrame(() => {
+      scrollToFeed();
+    });
+  }
+
   function resetFilters() {
     setSearch("");
     setCatalogSection("");
@@ -703,35 +791,103 @@ export default function HomePage() {
               ) : null}
             </button>
 
-            <div className="flex min-w-0 flex-1 overflow-hidden rounded-2xl border-2 border-[#00aaff] bg-white shadow-sm transition focus-within:border-[#0057ff] focus-within:shadow-[0_0_0_4px_rgba(0,87,255,0.10)]">
-              <div className="relative min-w-0 flex-1">
-                <Search
-                  className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 sm:left-5"
-                  size={21}
-                />
+            <div className="relative min-w-0 flex-1">
+              <div className="flex min-w-0 overflow-hidden rounded-2xl border-2 border-[#00aaff] bg-white shadow-sm transition focus-within:border-[#0057ff] focus-within:shadow-[0_0_0_4px_rgba(0,87,255,0.10)]">
+                <div className="relative min-w-0 flex-1">
+                  <Search
+                    className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 sm:left-5"
+                    size={21}
+                  />
 
-                <input
-                  className="h-full min-h-14 w-full border-0 bg-transparent py-3 pl-12 pr-2 text-base font-bold text-gray-950 outline-none placeholder:font-medium placeholder:text-gray-400 sm:pl-14 sm:pr-4"
-                  placeholder={
-                    feedMode === "contractors"
-                      ? "Поиск по анкетам исполнителей"
-                      : "Поиск по заявкам заказчиков"
-                  }
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") scrollToFeed();
-                  }}
-                />
+                  <input
+                    className="h-full min-h-14 w-full border-0 bg-transparent py-3 pl-12 pr-2 text-base font-bold text-gray-950 outline-none placeholder:font-medium placeholder:text-gray-400 sm:pl-14 sm:pr-4"
+                    placeholder={
+                      feedMode === "contractors"
+                        ? "Поиск по анкетам исполнителей"
+                        : "Поиск по заявкам заказчиков"
+                    }
+                    value={search}
+                    onFocus={() => setSearchFocused(true)}
+                    onBlur={() => window.setTimeout(() => setSearchFocused(false), 140)}
+                    onChange={(event) => {
+                      setSearch(event.target.value);
+                      setSearchFocused(true);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") submitMainSearch();
+                    }}
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={submitMainSearch}
+                  className="min-h-14 shrink-0 bg-[#00aaff] px-4 text-sm font-black text-white transition duration-200 hover:bg-[#0097e6] active:scale-[0.98] sm:px-7 md:px-10"
+                >
+                  Найти
+                </button>
               </div>
 
-              <button
-                type="button"
-                onClick={scrollToFeed}
-                className="min-h-14 shrink-0 bg-[#00aaff] px-4 text-sm font-black text-white transition duration-200 hover:bg-[#0097e6] active:scale-[0.98] sm:px-7 md:px-10"
-              >
-                Найти
-              </button>
+              {searchFocused && normalizeCatalogValue(search) ? (
+                <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-[90] max-h-[min(68dvh,440px)] overflow-y-auto rounded-[22px] border border-blue-100 bg-white p-2 shadow-[0_24px_70px_rgba(15,23,42,0.22)]">
+                  <div className="flex items-center gap-2 px-3 py-2 text-[10px] font-black uppercase tracking-[0.12em] text-gray-400">
+                    <Layers3 size={15} strokeWidth={2.8} className="text-[#0057ff]" />
+                    Путь по каталогу
+                  </div>
+
+                  {mainSearchSuggestions.map((suggestion) => (
+                    <button
+                      key={suggestion.id}
+                      type="button"
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => applyMainSearchSuggestion(suggestion)}
+                      className="group flex w-full items-center gap-3 rounded-2xl border-t border-blue-50 px-3 py-2.5 text-left transition duration-200 hover:bg-blue-50 active:scale-[0.99]"
+                    >
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#eef5ff] text-[#0057ff] transition duration-200 group-hover:scale-105 group-hover:bg-blue-100">
+                        <Search size={17} strokeWidth={2.8} />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-black text-gray-950">
+                          {suggestion.title}
+                        </span>
+                        <span className="mt-1 flex min-w-0 items-center gap-1 overflow-hidden whitespace-nowrap text-[10px] font-bold text-gray-500">
+                          <span className="shrink-0 text-[#0057ff]">Каталог</span>
+                          {suggestion.path.map((segment, index) => (
+                            <span key={`${suggestion.id}:${segment}`} className="contents">
+                              <ChevronRight size={11} strokeWidth={2.8} className="shrink-0 text-blue-300" />
+                              <span className={index === suggestion.path.length - 1 ? "truncate" : "shrink-0"}>
+                                {segment}
+                              </span>
+                            </span>
+                          ))}
+                        </span>
+                      </span>
+                      <ChevronRight
+                        size={18}
+                        strokeWidth={2.8}
+                        className="shrink-0 text-[#0057ff] transition duration-200 group-hover:translate-x-0.5"
+                      />
+                    </button>
+                  ))}
+
+                  <button
+                    type="button"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={submitMainSearch}
+                    className="flex w-full items-center justify-between gap-3 rounded-2xl border-t border-blue-100 px-3 py-3 text-left transition hover:bg-blue-50 active:scale-[0.99]"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-black text-gray-950">
+                        Искать «{search.trim()}»
+                      </span>
+                      <span className="mt-0.5 block text-[10px] font-bold text-gray-500">
+                        Во всех публикациях выбранного раздела
+                      </span>
+                    </span>
+                    <Search size={17} strokeWidth={2.8} className="shrink-0 text-[#0057ff]" />
+                  </button>
+                </div>
+              ) : null}
             </div>
 
             <label className="group relative flex min-h-14 min-w-[220px] shrink-0 items-center overflow-hidden rounded-2xl border-2 border-blue-100 bg-white shadow-sm transition duration-300 hover:-translate-y-0.5 hover:border-[#00aaff] hover:shadow-lg focus-within:border-[#0057ff] focus-within:shadow-[0_0_0_4px_rgba(0,87,255,0.10)]">

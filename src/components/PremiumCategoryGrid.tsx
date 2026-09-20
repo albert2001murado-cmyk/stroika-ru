@@ -200,7 +200,7 @@ function buildActions(
       },
       {
         title: "Заказать доставку",
-        description: `Доставка: ${subject.toLowerCase()}`,
+        description: "Та же покупка, только с доставкой на объект",
         image: CATEGORY_IMAGES.extra,
         selection: {
           category: categoryName,
