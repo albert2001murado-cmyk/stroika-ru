@@ -11,6 +11,7 @@ import type { CatalogPathValue } from "@/data/catalogForm";
 import { db } from "@/lib/firebase";
 import { getApiUrl } from "@/lib/getApiUrl";
 import { requestPublicationModeration } from "@/lib/publicationModerationClient";
+import { geocodePublicationLocation } from "@/lib/publication-location-client";
 import {
   buildListingSearchTags,
   getOfferActions,
@@ -208,6 +209,7 @@ export default function EditListingPage() {
   const category = catalogPath.category;
   const subcategory = catalogPath.subcategory;
   const [city, setCity] = useState("");
+  const [address, setAddress] = useState("");
   const [phone, setPhone] = useState("");
   const [priceFrom, setPriceFrom] = useState("");
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>(["cash"]);
@@ -300,6 +302,7 @@ export default function EditListingPage() {
         setOfferAction(loadedAction);
         setOfferFeatures(loadedFeatures);
         setCity(data.city || "");
+        setAddress(String(data.address || ""));
         setPhone(data.phone || "");
         setPriceFrom(
           data.priceFrom === null || data.priceFrom === undefined
@@ -511,12 +514,18 @@ export default function EditListingPage() {
         offerAction,
         offerFeatures
       );
+      const geo = await geocodePublicationLocation(city, address);
       await updateDoc(doc(db, "listings", listingId), {
         title: title.trim(),
         description: description.trim(),
         category,
         subcategory,
         city: city.trim(),
+        address: address.trim(),
+        location: geo,
+        lat: geo?.lat ?? null,
+        lng: geo?.lng ?? null,
+        geocodedAddress: geo?.address || "",
         phone: phone.trim(),
         priceFrom: priceFrom.trim() ? Number(priceFrom) : null,
         paymentMethods,
@@ -661,6 +670,13 @@ export default function EditListingPage() {
                     style={{ paddingLeft: "52px" }}
                   />
                 </div>
+
+                <label className="md:col-span-2">
+                  <span className="mb-2 block text-sm font-bold">Адрес вашей работы или базы (без квартиры)</span>
+                  <input className="input" value={address} maxLength={240}
+                    onChange={(event) => setAddress(event.target.value)} placeholder="Улица и номер дома" />
+                  <span className="mt-2 block text-xs leading-relaxed text-gray-500">По точному адресу подберём заказы в радиусе 10 км. Только город для такого подбора не подходит.</span>
+                </label>
 
                 <div className="relative">
                   <Phone

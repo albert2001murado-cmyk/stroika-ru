@@ -65,6 +65,7 @@ function meta(type?: NotificationType) {
       return { Icon: MessageCircle, iconClass: "bg-blue-50 text-[#0057ff]", stripe: "bg-[#0057ff]" };
     case "moderation":
       return { Icon: ShieldCheck, iconClass: "bg-violet-50 text-violet-600", stripe: "bg-violet-500" };
+    case "nearby_request":
     case "match":
       return { Icon: MapPin, iconClass: "bg-cyan-50 text-cyan-600", stripe: "bg-cyan-500" };
     case "request":
@@ -121,8 +122,9 @@ export default function NotificationsPage() {
   }
 
   async function openNotification(item: AppNotification) {
-    await markRead(item);
-    if (item.url) router.push(item.url);
+    // A delayed read-receipt must not prevent opening the actual request.
+    void markRead(item).catch((error) => console.error("notification read failed", error));
+    if (item.url?.startsWith("/") && !item.url.startsWith("//") && !/[\\\u0000-\u0020]/.test(item.url)) router.push(item.url);
   }
 
   async function markAllRead() {
@@ -177,7 +179,7 @@ export default function NotificationsPage() {
               </div>
               <h1 className="mt-4 text-3xl font-black tracking-[-0.04em] sm:text-5xl">Уведомления</h1>
               <p className="mt-3 max-w-2xl font-semibold text-blue-100">
-                Сообщения, модерация и новые совпадения по городу и категории синхронизируются с приложением.
+                Сообщения, модерация и подходящие заказы в радиусе 10 км — здесь и в приложении.
               </p>
             </div>
             <div className="rounded-[24px] bg-white/13 px-5 py-4 text-center ring-1 ring-white/20 backdrop-blur-md">
@@ -228,6 +230,7 @@ export default function NotificationsPage() {
                         {!item.read ? <span className="rounded-full bg-[#0057ff] px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.1em] text-white">Новое</span> : null}
                       </div>
                       <p className="mt-1.5 text-sm font-medium leading-6 text-slate-500">{item.body || "Новое событие"}</p>
+                      {item.type === "nearby_request" ? <span className="mt-3 inline-flex items-center gap-1 rounded-xl bg-cyan-50 px-3 py-2 text-xs font-black text-cyan-700">Открыть заявку <ChevronRight size={14} /></span> : null}
                       <p className="mt-2 text-xs font-black text-slate-400">{formatTime(item.createdAt)}</p>
                     </button>
                     <div className="flex shrink-0 items-center gap-1">

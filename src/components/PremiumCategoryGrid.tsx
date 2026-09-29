@@ -169,6 +169,17 @@ function buildActions(
   const normalized = normalize(categoryName);
   const subject = subcategory || cleanTitle(categoryName);
 
+  if (normalize(subcategory) === "аренда строительного инструмента") {
+    return [
+      {
+        title: "Найти инструменты",
+        description: "Инструменты в аренду рядом",
+        image: CATEGORY_IMAGES.extra,
+        selection: { category: categoryName, subcategory },
+      },
+    ];
+  }
+
   if (normalized.includes("материал")) {
     const serviceLink = getMaterialServiceLink(subcategory);
     const specialistActions = serviceLink

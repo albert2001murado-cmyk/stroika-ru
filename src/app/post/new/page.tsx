@@ -561,6 +561,10 @@ export default function NewListingPage() {
                   />
                 </div>
 
+                <p className="text-xs leading-relaxed text-gray-500 md:col-span-2">
+                  Укажите улицу и дом вашей работы или базы — подберём заказы в радиусе 10 км. Только город для такого подбора не подходит.
+                </p>
+
                 <div className="relative">
                   <Phone
                     size={19}

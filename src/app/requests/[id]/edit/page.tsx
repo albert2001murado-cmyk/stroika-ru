@@ -1,5 +1,6 @@
 "use client";
 import { requestPublicationModeration } from "@/lib/publicationModerationClient";
+import { geocodePublicationLocation } from "@/lib/publication-location-client";
 
 import { useAuth } from "@/components/AuthProvider";
 import { db } from "@/lib/firebase";
@@ -94,6 +95,7 @@ export default function EditCustomerRequestPage() {
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState(REQUEST_CATEGORIES[0]);
   const [city, setCity] = useState("");
+  const [address, setAddress] = useState("");
   const [budgetFrom, setBudgetFrom] = useState("");
   const [budgetTo, setBudgetTo] = useState("");
   const [deadline, setDeadline] = useState("");
@@ -125,6 +127,7 @@ export default function EditCustomerRequestPage() {
         setDescription(data.description || "");
         setCategory(data.category || REQUEST_CATEGORIES[0]);
         setCity(data.city || "");
+        setAddress(String(snapshot.data().address || ""));
         setBudgetFrom(
           data.budgetFrom != null
             ? String(data.budgetFrom)
@@ -231,6 +234,7 @@ export default function EditCustomerRequestPage() {
         imageUrls.push(await uploadImage(image.file));
       }
 
+      const geo = await geocodePublicationLocation(city, address);
       await updateDoc(doc(db, "customerRequests", requestId), {
         title: title.trim(),
         description: description.trim(),
@@ -240,6 +244,10 @@ export default function EditCustomerRequestPage() {
         moderationSubmittedAt: serverTimestamp(),
         moderationSource: "web",
         city: city.trim(),
+        address: address.trim(),
+        location: geo,
+        latitude: geo?.lat ?? null,
+        longitude: geo?.lng ?? null,
         budget: from,
         budgetFrom: from,
         budgetTo: to,
@@ -336,6 +344,13 @@ export default function EditCustomerRequestPage() {
                 <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={19} />
                 <input className="input pl-12" value={city} onChange={(event) => setCity(event.target.value)} />
               </div>
+            </label>
+
+            <label>
+              <span className="mb-2 block text-sm font-black text-gray-700">Адрес объекта (без квартиры)</span>
+              <input className="input" value={address} maxLength={240}
+                onChange={(event) => setAddress(event.target.value)} placeholder="Улица и номер дома" />
+              <span className="mt-2 block text-xs leading-relaxed text-gray-500">Точный адрес нужен для подбора исполнителей в радиусе 10 км. Без него подбор рядом недоступен.</span>
             </label>
 
             <label>

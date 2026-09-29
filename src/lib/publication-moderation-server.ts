@@ -22,10 +22,10 @@ import {
   mediaClassifierProvider,
 } from "@/lib/publication-media-moderation-server";
 import { deliverServerNotification } from "@/lib/server-notifications";
+import { notifyNearbyRequestMatches } from "@/lib/nearby-request-matches-server";
 
 const LEASE_MS = 6 * 60 * 1000;
 const BATCH_LIMIT = 30;
-const MATCH_LIMIT = 100;
 
 const CONFIG = {
   listing: {
@@ -103,7 +103,7 @@ function moderationInputFingerprint(data: Record<string, unknown>) {
     .sort();
   return createHash("sha256")
     .update(JSON.stringify({
-      title: data.title, description: data.description, city: data.city,
+      title: data.title, description: data.description, city: data.city, address: data.address,
       category: data.category, subcategory: data.subcategory, catalogSection: data.catalogSection,
       catalogCategoryId: data.catalogCategoryId, catalogGroupId: data.catalogGroupId,
       authorId: data.authorId, customerId: data.customerId, status: data.status,
@@ -223,117 +223,6 @@ async function notifyOwner(input: {
     entityId: input.id,
     dedupeKey: `moderation:${input.kind}:${input.id}:${input.fingerprint}:${input.decision}`,
   });
-}
-
-function approvedStatus(data: Record<string, unknown>) {
-  const status = safeText(data.moderationStatus, 32);
-  return status === "approved" || status === "";
-}
-
-function matchesPublication(
-  source: Record<string, unknown>,
-  candidate: Record<string, unknown>
-) {
-  const sourceCatalog = normalizePublicationCatalog(source);
-  const candidateCatalog = normalizePublicationCatalog(candidate);
-  if (!sourceCatalog.valid || !candidateCatalog.valid) return false;
-  return (
-    normalizeCityKey(source.city) !== "" &&
-    normalizeCityKey(source.city) === normalizeCityKey(candidate.city) &&
-    sourceCatalog.catalogKey === candidateCatalog.catalogKey &&
-    (!["materials", "equipment"].includes(sourceCatalog.section) ||
-      sourceCatalog.subcategoryKey === candidateCatalog.subcategoryKey)
-  );
-}
-
-async function notifyMatches(
-  kind: PublicationKind,
-  id: string,
-  data: Record<string, unknown>,
-  cursor = ""
-) {
-  const config = CONFIG[kind];
-  const sourceOwner = ownerId(kind, data);
-  if (!sourceOwner) return { matched: 0, cursor: "", done: true };
-  const cityKey = normalizeCityKey(data.city);
-  if (!cityKey) return { matched: 0, cursor: "", done: true };
-  // Cursor survives retries; legacy publications without cityKey are included.
-  let query = getAdminDb().collection(config.oppositeCollection)
-    .orderBy(FieldPath.documentId()).limit(MATCH_LIMIT);
-  if (cursor) query = query.startAfter(cursor);
-  const snapshot = await query.get();
-  const documents = snapshot.docs;
-  const page = {
-    cursor: documents.at(-1)?.id || cursor,
-    done: documents.length < MATCH_LIMIT,
-  };
-  const recipientPublications = new Map<
-    string,
-    { id: string; data: Record<string, unknown> }
-  >();
-
-  documents.forEach((document) => {
-    const candidate = dataObject(document.data());
-    const recipientId = safeText(candidate[config.oppositeOwnerField], 160);
-    if (!recipientId || recipientId === sourceOwner || !approvedStatus(candidate)) return;
-    if (kind === "listing" && candidate.status !== "active") return;
-    if (!matchesPublication(data, candidate)) return;
-    if (!recipientPublications.has(recipientId)) {
-      recipientPublications.set(recipientId, { id: document.id, data: candidate });
-    }
-  });
-
-  const entries = [...recipientPublications.entries()];
-  if (!entries.length) return { matched: 0, ...page };
-  const profiles = await getAdminDb().getAll(
-    ...entries.map(([recipientId]) => getAdminDb().doc(`users/${recipientId}`))
-  );
-  const allowed = entries.filter(([recipientId], index) => {
-    const profile = dataObject(profiles[index]?.data());
-    return (
-      profiles[index]?.exists &&
-      profile.matchNotificationsEnabled !== false &&
-      profile.moderationStatus !== "blocked" &&
-      recipientId !== sourceOwner
-    );
-  });
-  const sourceTitle = safeText(data.title, 80) || "Новая публикация";
-  const city = safeText(data.city, 80) || "вашем городе";
-  const url = kind === "request" ? `/requests/${id}` : `/listing/${id}`;
-  let matched = 0;
-
-  for (let offset = 0; offset < allowed.length; offset += 5) {
-    const chunk = allowed.slice(offset, offset + 5);
-    const results = await Promise.all(
-      chunk.map(([recipientId]) =>
-        deliverServerNotification({
-          recipientId,
-          actorId: sourceOwner,
-          actorName:
-            safeText(
-              kind === "request" ? data.customerName : data.authorName,
-              100
-            ) || "Пользователь",
-          title:
-            kind === "request"
-              ? "Новый подходящий заказ"
-              : "Новый подходящий исполнитель",
-          body:
-            kind === "request"
-              ? `В городе ${city} опубликована заявка «${sourceTitle}». Можно предложить свои услуги.`
-              : `В городе ${city} появилась анкета «${sourceTitle}», подходящая под вашу заявку.`,
-          url,
-          type: "match",
-          entityId: id,
-          dedupeKey: `match:${kind}:${id}:${recipientId}`,
-        })
-      )
-    );
-    matched += results.filter(
-      (result) => result.ok && "notificationId" in result && !("duplicate" in result)
-    ).length;
-  }
-  return { matched, ...page };
 }
 
 async function claimPublication(kind: PublicationKind, id: string, runId: string) {
@@ -666,12 +555,21 @@ export async function applyManualModerationDecision(input: {
   return { state: "reviewed" as const, status: input.status, matched: 0 };
 }
 
+// Round-robin prevents one geocoder outage from starving newer notifications.
+let notificationJobCursor = "";
 // Job data is written only by Admin SDK. Firestore clients have no access.
 export async function runPublicationNotificationJobs() {
-  const jobs = await getAdminDb().collection("publicationNotificationJobs")
-    .where("done", "==", false).limit(10).get();
+  const base = getAdminDb().collection("publicationNotificationJobs")
+    .where("done", "==", false).orderBy(FieldPath.documentId()).limit(10);
+  let jobs = await (notificationJobCursor ? base.startAfter(notificationJobCursor) : base).get();
+  if (jobs.empty && notificationJobCursor) {
+    notificationJobCursor = "";
+    jobs = await base.get();
+  }
   let completed = 0;
+  const started = Date.now();
   for (const job of jobs.docs) {
+    notificationJobCursor = job.id;
     try {
       const value = job.data();
       const kind = value.kind as PublicationKind;
@@ -691,7 +589,7 @@ export async function runPublicationNotificationJobs() {
       const canMatch = decision === "approved" && sourceProfile.exists &&
         sourceProfile.data()?.moderationStatus !== "blocked" && (kind !== "request" || data.status === "active");
       const result = canMatch
-        ? await notifyMatches(kind, publication.id, data, safeText(value.cursor, 160))
+        ? await notifyNearbyRequestMatches(kind, publication.id, data, safeText(value.cursor, 160))
         : { matched: 0, cursor: "", done: true };
       // Prevent an overlapping worker from moving the cursor backwards.
       await getAdminDb().runTransaction(async (transaction) => {
@@ -704,6 +602,7 @@ export async function runPublicationNotificationJobs() {
     } catch (error) {
       console.error("publication notification job will retry", job.id, error);
     }
+    if (Date.now() - started > 25000) break;
   }
   return { inspected: jobs.size, completed };
 }

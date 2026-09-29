@@ -9,6 +9,7 @@ import {
 import type { CatalogPathValue } from "@/data/catalogForm";
 import { db } from "@/lib/firebase";
 import { requestPublicationModeration } from "@/lib/publicationModerationClient";
+import { geocodePublicationLocation } from "@/lib/publication-location-client";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import {
   ArrowLeft,
@@ -65,6 +66,7 @@ export default function NewRequestPage() {
   const [description, setDescription] = useState("");
   const [catalogPath, setCatalogPath] = useState(defaultCatalogPath);
   const [city, setCity] = useState("");
+  const [address, setAddress] = useState("");
   const [budgetFrom, setBudgetFrom] = useState("");
   const [budgetTo, setBudgetTo] = useState("");
   const [deadline, setDeadline] = useState("");
@@ -167,6 +169,7 @@ export default function NewRequestPage() {
       const customerPhone =
         typeof profile?.phone === "string" ? profile.phone.trim() : "";
 
+      const geo = await geocodePublicationLocation(city, address);
       const reference = await addDoc(collection(db, "customerRequests"), {
         customerId: user.uid,
         customerName,
@@ -199,6 +202,10 @@ export default function NewRequestPage() {
           .join(" ")
           .toLocaleLowerCase("ru-RU"),
         city: city.trim(),
+        address: address.trim(),
+        location: geo,
+        latitude: geo?.lat ?? null,
+        longitude: geo?.lng ?? null,
         budget: from,
         budgetFrom: from,
         budgetTo: to,
@@ -301,6 +308,15 @@ export default function NewRequestPage() {
                   onChange={(event) => setCity(event.target.value)}
                 />
               </div>
+            </label>
+
+            <label>
+              <span className="mb-2 block text-sm font-black text-gray-700">Адрес объекта (без квартиры)</span>
+              <input className="input" value={address} maxLength={240}
+                onChange={(event) => setAddress(event.target.value)} placeholder="Улица и номер дома" />
+              <span className="mt-2 block text-xs leading-relaxed text-gray-500">
+                Укажите точный адрес — после проверки заявки уведомим подходящих исполнителей в радиусе 10 км. Без адреса подбор рядом недоступен.
+              </span>
             </label>
 
             <label className="md:col-span-2">

@@ -2,6 +2,7 @@ import { timingSafeEqual } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase-admin";
 import { runModerationBatch } from "@/lib/publication-moderation-server";
+import { runReviewModerationBatch } from "@/lib/review-moderation-server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -55,8 +56,11 @@ export async function POST(request: NextRequest) {
     const limit = Number.isFinite(requested)
       ? Math.max(1, Math.min(100, Math.floor(requested)))
       : 30;
-    const result = await runModerationBatch(limit);
-    return NextResponse.json({ ok: true, ...result });
+    const [result, reviews] = await Promise.all([
+      runModerationBatch(limit),
+      runReviewModerationBatch(limit),
+    ]);
+    return NextResponse.json({ ok: true, ...result, reviews });
   } catch (error) {
     console.error("moderation batch route error", error);
     return NextResponse.json({ error: "Не удалось выполнить очередь." }, { status: 500 });

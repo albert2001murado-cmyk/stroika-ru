@@ -1,5 +1,5 @@
 import { createHash } from "crypto";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue, type Transaction } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase-admin";
 
 export type ServerNotificationInput = {
@@ -13,6 +13,8 @@ export type ServerNotificationInput = {
   entityId?: string;
   chatId?: string;
   dedupeKey?: string;
+  durableDedupe?: boolean;
+  match?: { requestId: string; listingId: string; distanceKm: number };
 };
 
 function clean(value: unknown, maximum: number) {
@@ -50,6 +52,7 @@ async function sendExpoPush(
     entityId: string;
     chatId: string;
     notificationId: string;
+    recipientId: string;
   }
 ) {
   let sent = 0;
@@ -58,7 +61,7 @@ async function sendExpoPush(
     const messages = chunk.map((to) => ({
       to,
       sound: "default",
-      channelId: input.type === "message" ? "messages" : "default",
+      channelId: input.type === "message" ? "messages" : input.type === "nearby_request" ? "nearby-orders" : "default",
       title: input.title,
       body: input.body,
       data: {
@@ -67,6 +70,7 @@ async function sendExpoPush(
         type: input.type,
         entityId: input.entityId,
         notificationId: input.notificationId,
+        recipientId: input.recipientId,
       },
     }));
     try {
@@ -88,7 +92,10 @@ async function sendExpoPush(
   return sent;
 }
 
-export async function deliverServerNotification(raw: ServerNotificationInput) {
+export async function deliverServerNotification(
+  raw: ServerNotificationInput,
+  guard?: (transaction: Transaction) => Promise<boolean>
+) {
   const recipientId = clean(raw.recipientId, 160);
   const actorId = clean(raw.actorId || "system", 160) || "system";
   const title = clean(raw.title || "Стройка.ру", 80) || "Стройка.ру";
@@ -110,12 +117,16 @@ export async function deliverServerNotification(raw: ServerNotificationInput) {
   const reference = stableId
     ? db.doc(`users/${recipientId}/notifications/${stableId}`)
     : db.collection(`users/${recipientId}/notifications`).doc();
+  const receipt = raw.durableDedupe && stableId
+    ? db.doc(`nearbyMatchDeliveries/${stableId}`) : null;
 
   const created = await db.runTransaction(async (transaction) => {
+    if (receipt && (await transaction.get(receipt)).exists) return false;
     if (stableId) {
       const existing = await transaction.get(reference);
       if (existing.exists) return false;
     }
+    if (guard && !(await guard(transaction))) return false;
     transaction.create(reference, {
       userId: recipientId,
       actorId,
@@ -130,6 +141,11 @@ export async function deliverServerNotification(raw: ServerNotificationInput) {
       dedupeKey: clean(raw.dedupeKey, 300),
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
+      ...(raw.match ? { match: raw.match } : {}),
+    });
+    if (receipt) transaction.create(receipt, {
+      recipientId, entityId, notificationId: reference.id,
+      createdAt: FieldValue.serverTimestamp(),
     });
     return true;
   });
@@ -160,6 +176,7 @@ export async function deliverServerNotification(raw: ServerNotificationInput) {
     entityId,
     chatId,
     notificationId: reference.id,
+    recipientId,
   });
   await reference.set(
     {
