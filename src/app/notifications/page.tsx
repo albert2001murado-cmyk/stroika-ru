@@ -1,7 +1,9 @@
 "use client";
 
 import { useAuth } from "@/components/AuthProvider";
+import ToolsBackdrop from "@/components/ToolsBackdrop";
 import { db } from "@/lib/firebase";
+import { useNotifications, type AppNotification } from "@/lib/useNotifications";
 import {
   Bell,
   BellRing,
@@ -15,33 +17,17 @@ import {
   Trash2,
 } from "lucide-react";
 import {
-  collection,
   deleteDoc,
   doc,
-  limit,
-  onSnapshot,
-  orderBy,
-  query,
   serverTimestamp,
   updateDoc,
   writeBatch,
 } from "firebase/firestore";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 type NotificationType = "message" | "moderation" | "request" | "calendar" | "portfolio" | "system" | string;
-
-type AppNotification = {
-  id: string;
-  type?: NotificationType;
-  title?: string;
-  body?: string;
-  url?: string;
-  read?: boolean;
-  createdAt?: any;
-  actorName?: string;
-};
 
 function millis(value: any) {
   return value?.toMillis?.() || value?.seconds * 1000 || 0;
@@ -82,32 +68,10 @@ function meta(type?: NotificationType) {
 export default function NotificationsPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
-  const [items, setItems] = useState<AppNotification[]>([]);
+  const { items, unread, loading: fetching, error, retry } = useNotifications(user?.uid);
   const [filter, setFilter] = useState<"all" | "unread">("all");
   const [working, setWorking] = useState(false);
-
-  useEffect(() => {
-    if (!user) {
-      setItems([]);
-      return;
-    }
-
-    const notificationsQuery = query(
-      collection(db, "users", user.uid, "notifications"),
-      orderBy("createdAt", "desc"),
-      limit(100)
-    );
-
-    return onSnapshot(
-      notificationsQuery,
-      (snapshot) => {
-        setItems(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })) as AppNotification[]);
-      },
-      (error) => console.error("notifications snapshot error:", error)
-    );
-  }, [user]);
-
-  const unread = items.filter((item) => !item.read).length;
+  const [actionError, setActionError] = useState("");
   const shown = useMemo(
     () => (filter === "unread" ? items.filter((item) => !item.read) : items),
     [filter, items]
@@ -123,13 +87,15 @@ export default function NotificationsPage() {
 
   async function openNotification(item: AppNotification) {
     // A delayed read-receipt must not prevent opening the actual request.
-    void markRead(item).catch((error) => console.error("notification read failed", error));
+    setActionError("");
+    void markRead(item).catch(() => setActionError("Не удалось отметить уведомление прочитанным. Попробуйте ещё раз."));
     if (item.url?.startsWith("/") && !item.url.startsWith("//") && !/[\\\u0000-\u0020]/.test(item.url)) router.push(item.url);
   }
 
   async function markAllRead() {
     if (!user || unread === 0 || working) return;
     setWorking(true);
+    setActionError("");
     try {
       const batch = writeBatch(db);
       items.filter((item) => !item.read).forEach((item) => {
@@ -139,6 +105,8 @@ export default function NotificationsPage() {
         });
       });
       await batch.commit();
+    } catch {
+      setActionError("Не удалось отметить уведомления прочитанными. Попробуйте ещё раз.");
     } finally {
       setWorking(false);
     }
@@ -146,7 +114,12 @@ export default function NotificationsPage() {
 
   async function remove(item: AppNotification) {
     if (!user) return;
-    await deleteDoc(doc(db, "users", user.uid, "notifications", item.id));
+    setActionError("");
+    try {
+      await deleteDoc(doc(db, "users", user.uid, "notifications", item.id));
+    } catch {
+      setActionError("Не удалось удалить уведомление. Попробуйте ещё раз.");
+    }
   }
 
   if (loading) {
@@ -170,8 +143,7 @@ export default function NotificationsPage() {
     <main className="min-h-screen bg-[#f5f7fb] px-3 py-6 sm:px-5 sm:py-10">
       <div className="mx-auto max-w-5xl">
         <section className="relative overflow-hidden rounded-[30px] bg-gradient-to-br from-[#0048dc] via-[#0057ff] to-[#3182ff] p-5 text-white shadow-xl shadow-blue-900/15 sm:rounded-[38px] sm:p-9">
-          <div className="pointer-events-none absolute -right-16 -top-20 h-60 w-60 rounded-full bg-white/10" />
-          <div className="pointer-events-none absolute -bottom-24 left-1/4 h-56 w-56 rounded-full bg-cyan-300/10" />
+          <ToolsBackdrop />
           <div className="relative flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <div className="inline-flex items-center gap-2 rounded-full bg-white/13 px-3 py-1.5 text-xs font-black uppercase tracking-[0.14em] ring-1 ring-white/20">
@@ -179,7 +151,7 @@ export default function NotificationsPage() {
               </div>
               <h1 className="mt-4 text-3xl font-black tracking-[-0.04em] sm:text-5xl">Уведомления</h1>
               <p className="mt-3 max-w-2xl font-semibold text-blue-100">
-                Сообщения, модерация и подходящие заказы в радиусе 10 км — здесь и в приложении.
+                Сообщения, модерация и подходящие заказы в радиусе 10 км — здесь.
               </p>
             </div>
             <div className="rounded-[24px] bg-white/13 px-5 py-4 text-center ring-1 ring-white/20 backdrop-blur-md">
@@ -203,7 +175,15 @@ export default function NotificationsPage() {
           </button>
         </div>
 
-        {shown.length === 0 ? (
+        {actionError && <p role="alert" className="mt-4 rounded-2xl bg-red-50 p-4 text-sm text-red-700">{actionError}</p>}
+        {error ? (
+          <div role="alert" className="mt-5 rounded-2xl bg-white p-6 text-center ring-1 ring-slate-200">
+            <p className="text-slate-600">{error}</p>
+            <button type="button" onClick={retry} className="mt-4 rounded-xl bg-blue-50 px-5 py-3 font-bold text-[#0057ff]">Повторить</button>
+          </div>
+        ) : fetching ? (
+          <div role="status" className="mt-5 rounded-2xl bg-white p-8 text-center text-slate-500">Загружаем уведомления…</div>
+        ) : shown.length === 0 ? (
           <div className="mt-5 rounded-[30px] bg-white px-6 py-14 text-center shadow-sm ring-1 ring-dashed ring-blue-200">
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[24px] bg-blue-50 text-[#0057ff]"><Bell size={30} /></div>
             <h2 className="mt-5 text-2xl font-black text-slate-950">Здесь пока тихо</h2>

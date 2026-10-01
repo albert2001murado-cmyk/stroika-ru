@@ -6,14 +6,19 @@ import {
   type CatalogFormCategory,
   type CatalogSectionId,
 } from "@/data/catalogForm";
-import { Check, ChevronRight, Search, X } from "lucide-react";
+import { Building2, Check, ChevronRight, PackageOpen, Search, Truck, Wrench, X } from "lucide-react";
 
-const SECTION_ICONS: Record<CatalogSectionId, string> = {
-  materials: "🧱",
-  services: "🛠️",
-  equipment: "🚜",
-  solutions: "🏗️",
+const SECTION_ICONS = {
+  materials: PackageOpen,
+  services: Wrench,
+  equipment: Truck,
+  solutions: Building2,
 };
+
+function CatalogIcon({ section }: { section: CatalogSectionId }) {
+  const Icon = SECTION_ICONS[section];
+  return <Icon size={24} strokeWidth={1.8} aria-hidden="true" />;
+}
 
 function normalize(value: unknown) {
   return String(value || "")
@@ -83,15 +88,16 @@ export default function CatalogSearchFilter({
               type="button"
               key={item.id}
               onClick={() => onSelectSection(item.id)}
-              className={`group min-h-[104px] rounded-[22px] border p-3 text-left transition duration-300 hover:-translate-y-0.5 active:scale-[0.98] ${
+              aria-pressed={active}
+              className={`group min-w-0 min-h-[124px] rounded-[22px] border p-3 text-left transition duration-200 motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0057ff] ${
                 active
                   ? "border-[#0057ff] bg-[#0057ff] text-white shadow-lg shadow-blue-600/20"
                   : "border-white bg-white text-slate-900 shadow-sm hover:border-blue-200"
               }`}
             >
               <div className="flex items-start justify-between gap-2">
-                <span className="text-2xl transition duration-300 group-hover:scale-110">
-                  {SECTION_ICONS[item.id]}
+                <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl transition duration-200 motion-safe:group-hover:scale-105 ${active ? "bg-white/15 text-white" : "bg-blue-50 text-[#0057ff]"}`}>
+                  <CatalogIcon section={item.id} />
                 </span>
                 {active ? <Check size={17} strokeWidth={3} /> : null}
               </div>
@@ -135,8 +141,8 @@ export default function CatalogSearchFilter({
               }}
               className="group flex min-h-[86px] items-center gap-3 rounded-[20px] border border-white bg-white p-3 text-left shadow-sm transition duration-300 hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md active:scale-[0.99]"
             >
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-xl">
-                {SECTION_ICONS[section]}
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-[#0057ff]">
+                <CatalogIcon section={section} />
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block text-sm font-black text-slate-900">{item.title}</span>
@@ -158,8 +164,8 @@ export default function CatalogSearchFilter({
       {selected ? (
         <div className="mt-4">
           <div className="flex items-center gap-3 rounded-[20px] border border-blue-100 bg-white p-3 shadow-sm">
-            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-2xl">
-              {SECTION_ICONS[section as CatalogSectionId]}
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-[#0057ff]">
+              <CatalogIcon section={section as CatalogSectionId} />
             </span>
             <div className="min-w-0 flex-1">
               <p className="text-[10px] font-black uppercase tracking-[0.13em] text-[#0057ff]">Выбрано</p>

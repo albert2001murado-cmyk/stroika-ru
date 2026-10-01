@@ -5,6 +5,7 @@ import { signOut } from "firebase/auth";
 import { collection, onSnapshot, query, where } from "firebase/firestore";
 import {
   BadgeCheck,
+  Bell,
   BarChart3,
   BriefcaseBusiness,
   CalendarDays,
@@ -28,10 +29,12 @@ import { useEffect, useState, type MouseEvent } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "./AuthProvider";
 import VerifiedBadge from "./VerifiedBadge";
+import { useNotifications } from "@/lib/useNotifications";
 
 const menuItems = [
   { href: "/favorites", label: "Избранное", icon: Heart },
   { href: "/portfolio", label: "Портфолио", icon: BriefcaseBusiness },
+  { href: "/notifications", label: "Уведомления", icon: Bell },
   { href: "/availability", label: "Календарь", icon: CalendarDays },
   { href: "/analytics", label: "Статистика", icon: BarChart3 },
   { href: "/compare", label: "Сравнение", icon: GitCompareArrows },
@@ -49,6 +52,7 @@ export default function Header() {
   const authContext = useAuth() as any;
 
   const user = authContext?.user || null;
+  const { unread: unreadNotifications } = useNotifications(user?.uid);
   const profile = authContext?.profile || null;
 
   const isVerified = Boolean(
@@ -176,7 +180,7 @@ export default function Header() {
     <>
       <header className="sticky top-0 z-50 border-b border-white/10 bg-[#0057ff] text-white shadow-xl shadow-blue-950/10">
         {/* Полная шапка для компьютера */}
-        <div className="hidden h-[82px] w-full items-center justify-between gap-4 px-3 lg:flex lg:px-4">
+        <div className="hidden h-[82px] w-full items-center justify-between gap-4 px-4 min-[1800px]:flex">
           <Link
             href="/"
             onClick={handleHomeLogoClick}
@@ -227,9 +231,14 @@ export default function Header() {
               Портфолио
             </Link>
 
-            <Link href="/requests" className="header-desktop-link px-4">
-              <ClipboardList size={18} />
-              Заявки
+            <Link href="/notifications" className="header-desktop-link relative px-4" aria-label={`Уведомления${unreadNotifications ? `, непрочитанных: ${unreadNotifications}` : ""}`}>
+              <Bell size={18} />
+              Уведомления
+              {unreadNotifications > 0 && (
+                <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1 text-[10px] font-black text-[#0057ff] ring-2 ring-[#0057ff]">
+                  {unreadNotifications > 99 ? "99+" : unreadNotifications}
+                </span>
+              )}
             </Link>
 
             <Link href="/verification" className="header-desktop-link">
@@ -300,7 +309,7 @@ export default function Header() {
         </div>
 
         {/* Компактная шапка для телефона и планшета */}
-        <div className="flex h-16 items-center justify-between gap-3 px-3 lg:hidden">
+        <div className="flex h-16 items-center justify-between gap-3 px-3 min-[1800px]:hidden">
           <Link
             href="/"
             onClick={handleHomeLogoClick}
@@ -319,6 +328,12 @@ export default function Header() {
           </Link>
 
           <div className="flex shrink-0 items-center gap-2">
+            <span className="hidden lg:block">
+              <Link href="/notifications" aria-label={`Уведомления, непрочитанных: ${unreadNotifications}`} className="mobile-header-button relative bg-white/12 text-white">
+                <Bell size={20} />
+                {unreadNotifications > 0 && <span className="absolute -right-1 -top-1 rounded-full bg-white px-1.5 py-0.5 text-[10px] font-black text-[#0057ff]">{unreadNotifications > 99 ? "99+" : unreadNotifications}</span>}
+              </Link>
+            </span>
             <Link
               href="/messages"
               aria-label="Сообщения"
@@ -365,9 +380,10 @@ export default function Header() {
           <span>Главная</span>
         </Link>
 
-        <Link href="/requests" className={mobileNavClass("/requests")}>
-          <ClipboardList size={21} strokeWidth={2.5} />
-          <span>Заявки</span>
+        <Link href="/notifications" className={`${mobileNavClass("/notifications")} relative`} aria-label={`Уведомления${unreadNotifications ? `, непрочитанных: ${unreadNotifications}` : ""}`}>
+          <Bell size={21} strokeWidth={2.5} />
+          <span>Уведомления</span>
+          {unreadNotifications > 0 && <span className="absolute right-1 top-0 rounded-full bg-[#0057ff] px-1.5 text-[10px] font-black text-white">{unreadNotifications > 99 ? "99+" : unreadNotifications}</span>}
         </Link>
 
         <button
@@ -402,7 +418,7 @@ export default function Header() {
 
       {/* Выезжающее мобильное меню */}
       {mobileMenuOpen ? (
-        <div className="fixed inset-0 z-[110] lg:hidden" role="dialog" aria-modal="true" aria-label="Меню сайта">
+        <div className="fixed inset-0 z-[110] min-[1800px]:hidden" role="dialog" aria-modal="true" aria-label="Меню сайта">
           <button
             type="button"
             className="absolute inset-0 bg-slate-950/55 backdrop-blur-sm"
@@ -485,7 +501,10 @@ export default function Header() {
                           : "border-slate-100 bg-white text-slate-800"
                       }`}
                     >
-                      <Icon size={22} className={isActive(item.href) ? "text-[#0057ff]" : "text-slate-400"} />
+                      <span className="flex items-center justify-between gap-2">
+                        <Icon size={22} className={isActive(item.href) ? "text-[#0057ff]" : "text-slate-400"} />
+                        {item.href === "/notifications" && unreadNotifications > 0 && <span className="rounded-full bg-[#0057ff] px-2 py-1 text-xs font-black text-white">{unreadNotifications > 99 ? "99+" : unreadNotifications}</span>}
+                      </span>
                       <span className="text-sm font-black">{item.label}</span>
                     </Link>
                   );

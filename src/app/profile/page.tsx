@@ -23,6 +23,10 @@ import {
   Clock3,
   ClipboardList,
   HardHat,
+  Hammer,
+  PaintRoller,
+  Ruler,
+  Wrench,
   Loader2,
   Mail,
   MapPin,
@@ -289,21 +293,12 @@ export default function ProfilePage() {
           from { opacity: 0; transform: translateY(20px) scale(.992); }
           to { opacity: 1; transform: translateY(0) scale(1); }
         }
-        @keyframes my-profile-grid {
-          from { background-position: 0 0, 0 0; }
-          to { background-position: 48px 32px, -48px 32px; }
-        }
-        @keyframes my-profile-glow {
-          0%, 100% { transform: translate3d(0, 0, 0) scale(1); opacity: .18; }
-          50% { transform: translate3d(-14px, 8px, 0) scale(1.08); opacity: .3; }
+        @keyframes my-profile-tool {
+          0%, 100% { transform: translateY(0) rotate(-4deg); }
+          50% { transform: translateY(-7px) rotate(3deg); }
         }
         .my-profile-enter { animation: my-profile-enter .62s cubic-bezier(.22,1,.36,1) both; }
-        .my-profile-blueprint {
-          background-image: linear-gradient(rgba(255,255,255,.075) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.075) 1px, transparent 1px);
-          background-size: 32px 32px;
-          animation: my-profile-grid 18s linear infinite;
-        }
-        .my-profile-glow { animation: my-profile-glow 7s ease-in-out infinite; }
+        .my-profile-tool { position: absolute; animation: my-profile-tool 9s ease-in-out infinite; }
         .my-profile-card { transition: transform .35s ease, box-shadow .35s ease, border-color .35s ease; }
         .my-profile-card:hover { transform: translateY(-3px); box-shadow: 0 22px 55px rgba(15,23,42,.09); }
         .my-profile-action { position: relative; overflow: hidden; transition: transform .26s ease, box-shadow .26s ease, background-color .26s ease; }
@@ -312,7 +307,7 @@ export default function ProfilePage() {
         .my-profile-action:hover::after { transform: translateX(120%) skewX(-18deg); }
         .my-profile-action:active { transform: scale(.975); }
         @media (prefers-reduced-motion: reduce) {
-          .my-profile-enter, .my-profile-blueprint, .my-profile-glow { animation: none !important; }
+          .my-profile-enter, .my-profile-tool { animation: none !important; }
           .my-profile-card, .my-profile-action { transition: none !important; }
         }
       `}</style>
@@ -322,10 +317,13 @@ export default function ProfilePage() {
 
       <div className="relative mx-auto max-w-7xl">
         <div className="my-profile-enter relative overflow-hidden rounded-[26px] bg-gradient-to-br from-[#004bdc] via-[#0057ff] to-[#397eff] p-5 sm:rounded-[34px] sm:p-8 text-white shadow-xl shadow-blue-900/15">
-          <div className="my-profile-blueprint pointer-events-none absolute inset-0" />
-          <div className="my-profile-glow pointer-events-none absolute -right-20 -top-28 h-72 w-72 rounded-full bg-white" />
-          <span className="pointer-events-none absolute bottom-7 right-8 h-14 w-14 border-b-2 border-r-2 border-[#ffd233]/75" />
-          <div className="relative">
+          <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-4 w-20 text-white/15 sm:right-8 sm:w-48 lg:w-72">
+            <Hammer className="my-profile-tool right-1 top-5 h-12 w-12 sm:right-5 sm:h-16 sm:w-16" strokeWidth={1.3} />
+            <Wrench className="my-profile-tool bottom-7 right-2 h-12 w-12 sm:right-20 sm:h-16 sm:w-16" strokeWidth={1.3} style={{ animationDelay: "-3s" }} />
+            <PaintRoller className="my-profile-tool left-0 top-8 hidden h-14 w-14 sm:block" strokeWidth={1.3} style={{ animationDelay: "-5s" }} />
+            <Ruler className="my-profile-tool bottom-6 left-0 hidden h-12 w-12 lg:block" strokeWidth={1.3} style={{ animationDelay: "-7s" }} />
+          </div>
+          <div className="relative pr-16 sm:pr-52 lg:pr-72">
           <p className="font-black text-[#ffd233]">Личный кабинет</p>
 
           <h1 className="mt-3 text-3xl font-black sm:text-4xl md:text-5xl">

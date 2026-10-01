@@ -49,6 +49,10 @@ export default function NewGroupPage() {
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!user || sending) return;
+    if (title.trim().length < 2) {
+      setError("Введите название группы — минимум 2 символа.");
+      return;
+    }
     setSending(true);
     setError("");
 
@@ -167,10 +171,10 @@ export default function NewGroupPage() {
               <p className="mt-3 text-sm font-bold text-slate-500">Аватар можно добавить сейчас или позже</p>
             </div>
 
-            <label className="mt-7 block text-sm font-black text-slate-700">Название группы</label>
-            <input className="input mt-2 w-full" maxLength={80} placeholder="Например: Бригада — дом на Лесной" value={title} onChange={(event) => setTitle(event.target.value)} required />
+            <label htmlFor="group-title" className="mt-7 block text-sm font-black text-slate-700">Название группы</label>
+            <input id="group-title" className="input mt-2 w-full" minLength={2} maxLength={80} placeholder="Например: Бригада — дом на Лесной" value={title} onChange={(event) => setTitle(event.target.value)} required />
 
-            {error ? <p className="mt-4 rounded-2xl bg-red-50 p-4 text-sm font-black text-red-600 ring-1 ring-red-100">{error}</p> : null}
+            {error ? <p role="alert" className="mt-4 rounded-2xl bg-red-50 p-4 text-sm font-black text-red-600 ring-1 ring-red-100">{error}</p> : null}
 
             <button disabled={sending || title.trim().length < 2} className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#0057ff] px-5 py-4 text-base font-black text-white shadow-lg shadow-blue-600/20 transition hover:-translate-y-1 hover:bg-[#004de6] active:scale-[.98] disabled:cursor-not-allowed disabled:opacity-50">
               {sending ? <Loader2 className="animate-spin" size={21} /> : <MessageCircleMore size={21} />}

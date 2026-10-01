@@ -1,6 +1,7 @@
 "use client";
 
 import { useAuth } from "@/components/AuthProvider";
+import ToolsBackdrop from "@/components/ToolsBackdrop";
 import { db } from "@/lib/firebase";
 import type { Timestamp } from "firebase/firestore";
 import {
@@ -17,7 +18,7 @@ import {
   Mic2,
   Pin,
   Search,
-  Sparkles,
+  Plus,
   UserRound,
   UsersRound,
   X,
@@ -223,6 +224,7 @@ function chatPreview(chat: Chat) {
 }
 
 export default function MessagesPage() {
+  const [filter, setFilter] = useState<"all" | "unread" | "groups">("all");
   const { user, loading } = useAuth();
   const [chats, setChats] = useState<Chat[]>([]);
   const [chatsLoading, setChatsLoading] = useState(true);
@@ -374,6 +376,8 @@ export default function MessagesPage() {
 
     const value = search.trim().toLowerCase();
     const visible = chats.filter((chat) => {
+      if (filter === "unread" && getUnreadCount(chat, user.uid) === 0) return false;
+      if (filter === "groups" && !isGroupChat(chat)) return false;
       if (!value) return true;
       const other = getChatDisplay(chat, user.uid);
 
@@ -390,7 +394,7 @@ export default function MessagesPage() {
       if (aPinned !== bPinned) return bPinned - aPinned;
       return getTime(b) - getTime(a);
     });
-  }, [chats, search, user]);
+  }, [chats, search, user, filter]);
 
   const totalUnread = useMemo(
     () =>
@@ -449,47 +453,37 @@ export default function MessagesPage() {
   }
 
   return (
-    <main className="min-h-screen overflow-hidden bg-[#f4f7ff] px-3 py-4 sm:px-6 sm:py-9">
-      <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -left-28 top-24 h-80 w-80 rounded-full bg-blue-200/35 blur-3xl" />
-        <div className="absolute -right-24 top-80 h-96 w-96 rounded-full bg-indigo-200/30 blur-3xl" />
-      </div>
-
+    <main className="min-h-screen bg-[#f5f7fb] px-3 py-5 sm:px-6 sm:py-9">
       <div className="relative mx-auto max-w-6xl">
-        <section className="messages-hero relative overflow-hidden rounded-[26px] bg-gradient-to-br from-[#0057ff] via-[#1266ff] to-[#4c6fff] px-4 py-6 text-white shadow-[0_24px_70px_rgba(0,87,255,0.25)] sm:rounded-[40px] sm:px-10 sm:py-10">
-          <div className="absolute -right-20 -top-24 h-72 w-72 rounded-full bg-white/10 blur-2xl" />
-          <div className="absolute -bottom-24 left-1/3 h-56 w-56 rounded-full bg-cyan-300/15 blur-2xl" />
-
-          <div className="relative flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <div className="inline-flex items-center gap-2 rounded-full bg-white/14 px-4 py-2 text-xs font-black uppercase tracking-[0.14em] ring-1 ring-white/20 backdrop-blur">
-                <Sparkles size={15} />
-                Стройка.ру
-              </div>
-              <h1 className="mt-4 text-3xl font-black tracking-tight sm:mt-5 sm:text-5xl">
+        <section className="messages-hero relative overflow-hidden rounded-[28px] bg-gradient-to-br from-[#004bdc] to-[#1768ff] px-5 py-7 text-white shadow-lg shadow-blue-900/10 sm:px-8 sm:py-8">
+          <ToolsBackdrop />
+          <div className="relative flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <h1 className="text-3xl font-black tracking-tight sm:text-4xl">
                 Сообщения
               </h1>
-              <p className="mt-3 max-w-2xl text-sm font-semibold leading-6 text-blue-50 sm:text-base">
-                Переписка с заказчиками и исполнителями — быстро, удобно и в одном месте.
-              </p>
+              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-blue-100">
+                <span className="inline-flex items-center gap-2"><MessageCircle size={16} />Чатов: {chats.length}</span>
+                {totalUnread > 0 && <span className="rounded-lg bg-white/15 px-2.5 py-1 font-bold text-white">Непрочитанных: {totalUnread}</span>}
+              </div>
             </div>
 
-            <div className="flex items-center gap-4 rounded-[24px] bg-white/12 px-4 py-3 ring-1 ring-white/20 backdrop-blur-md">
-              <MessageCircle size={22} />
-              <div>
-                <p className="text-2xl font-black leading-none">{chats.length}</p>
-                <p className="mt-1 text-xs font-bold text-blue-100">активных чатов</p>
-              </div>
-              <span className="h-9 w-px bg-white/20" />
-              <div>
-                <p className="text-2xl font-black leading-none">{totalUnread}</p>
-                <p className="mt-1 text-xs font-bold text-blue-100">непрочитанных</p>
-              </div>
+            <div className="shrink-0">
+              <Link
+                href="/messages/new-group"
+                className="group inline-flex min-h-14 w-full items-center justify-center gap-3 rounded-2xl bg-white px-5 py-3 font-bold text-[#0057ff] shadow-sm transition duration-200 hover:bg-blue-50 motion-safe:active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white sm:w-auto"
+              >
+                <span className="flex h-9 w-9 items-center justify-center rounded-[13px] bg-blue-50 transition duration-300 group-hover:bg-blue-100">
+                  <Plus size={21} strokeWidth={2.5} />
+                </span>
+                <span className="pr-1 text-sm sm:text-base">Создать группу</span>
+              </Link>
+
             </div>
           </div>
         </section>
 
-        <section className="messages-panel mt-4 rounded-[24px] border border-white/80 bg-white/90 p-3 shadow-[0_26px_80px_rgba(15,23,42,0.10)] backdrop-blur-xl sm:mt-6 sm:rounded-[38px] sm:p-6">
+        <section aria-label="Список чатов" className="messages-panel mt-5 rounded-[28px] border border-slate-200/80 bg-white p-3 shadow-sm sm:p-6">
           <div className="relative">
             <Search
               className="pointer-events-none absolute left-5 top-1/2 -translate-y-1/2 text-slate-400"
@@ -498,6 +492,7 @@ export default function MessagesPage() {
             <input
               className="h-14 w-full rounded-[22px] border border-slate-200 bg-slate-50/80 pl-14 pr-12 text-sm font-bold text-slate-900 outline-none transition duration-300 placeholder:text-slate-400 focus:border-blue-300 focus:bg-white focus:shadow-[0_0_0_5px_rgba(0,87,255,0.08)] sm:h-16 sm:rounded-[24px] sm:text-base"
               placeholder="Поиск по чатам"
+              aria-label="Поиск по чатам"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
             />
@@ -513,7 +508,18 @@ export default function MessagesPage() {
             ) : null}
           </div>
 
-          <div className="mt-5 space-y-3">
+          <div className="mt-4 flex flex-wrap gap-2 border-b border-slate-100 pb-4" aria-label="Фильтр чатов">
+            {([
+              ["all", "Все", chats.length],
+              ["unread", "Непрочитанные", chats.filter((chat) => getUnreadCount(chat, user.uid) > 0).length],
+              ["groups", "Группы", chats.filter(isGroupChat).length],
+            ] as const).map(([value, label, count]) => (
+              <button key={value} type="button" aria-pressed={filter === value} onClick={() => setFilter(value)} className={`inline-flex min-h-10 items-center gap-2 rounded-xl px-3 text-xs font-bold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0057ff] sm:text-sm ${filter === value ? "bg-[#0057ff] text-white" : "bg-slate-50 text-slate-600 hover:bg-blue-50"}`}>
+                {label}<span className={`rounded-md px-1.5 py-0.5 text-[11px] ${filter === value ? "bg-white/15" : "bg-white text-slate-500"}`}>{count}</span>
+              </button>
+            ))}
+          </div>
+          <div className="mt-4 space-y-2">
             {chatsError ? (
               <div className="rounded-[22px] border border-red-200 bg-red-50 p-6 text-center sm:rounded-[28px] sm:p-10">
                 <MessageCircle className="mx-auto text-red-500" size={34} />
@@ -537,13 +543,16 @@ export default function MessagesPage() {
                   <MessageCircle size={32} />
                 </div>
                 <h2 className="mt-5 text-2xl font-black text-gray-950">
-                  {search ? "Ничего не найдено" : "Чатов пока нет"}
+                  {search ? "Ничего не найдено" : filter === "unread" ? "Всё прочитано" : filter === "groups" ? "Групп пока нет" : "Чатов пока нет"}
                 </h2>
                 <p className="mx-auto mt-2 max-w-md text-gray-500">
                   {search
                     ? "Попробуй изменить запрос."
-                    : "Открой объявление другого пользователя и нажми «Написать»."}
+                    : filter === "unread" ? "Здесь появятся чаты с новыми сообщениями."
+                    : filter === "groups" ? "Создайте группу и пригласите участников по ссылке."
+                    : "Откройте объявление и нажмите «Написать» или создайте свою группу."}
                 </p>
+                {!search && filter !== "unread" && <Link href="/messages/new-group" className="mt-5 inline-flex min-h-12 items-center gap-2 rounded-xl bg-[#0057ff] px-5 font-bold text-white"><Plus size={18} />Создать группу</Link>}
               </div>
             ) : (
               sortedChats.map((chat, index) => {
@@ -557,10 +566,10 @@ export default function MessagesPage() {
                 return (
                   <article
                     key={chat.id}
-                    className={`chat-card group relative overflow-hidden rounded-[20px] border transition duration-300 hover:-translate-y-1 hover:border-blue-200 hover:shadow-[0_18px_45px_rgba(0,87,255,0.12)] sm:rounded-[25px] ${
+                    className={`chat-card group relative overflow-hidden rounded-2xl border transition-colors duration-200 hover:border-blue-200 hover:bg-blue-50/40 focus-within:ring-2 focus-within:ring-blue-300 ${
                       unread
-                        ? "border-blue-300 bg-gradient-to-r from-[#eef5ff] via-white to-white shadow-[0_12px_34px_rgba(0,87,255,0.13)]"
-                        : "border-slate-100 bg-white shadow-[0_8px_26px_rgba(15,23,42,0.045)]"
+                        ? "border-blue-200 bg-blue-50/60"
+                        : "border-slate-100 bg-white"
                     }`}
                     style={{ animationDelay: `${Math.min(index * 45, 360)}ms` }}
                   >
@@ -578,9 +587,6 @@ export default function MessagesPage() {
                         ) : (
                           other.isGroup ? <UsersRound size={28} /> : <UserRound size={28} />
                         )}
-                        {!other.isGroup ? (
-                          <span className="absolute bottom-1 right-1 h-3 w-3 rounded-full border-2 border-white bg-emerald-400" />
-                        ) : null}
                       </div>
 
                       <div className="min-w-0 flex-1">
@@ -635,7 +641,7 @@ export default function MessagesPage() {
                       className={`absolute right-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-2xl transition duration-300 sm:right-4 ${
                         pinned
                           ? "bg-blue-50 text-[#0057ff] opacity-100"
-                          : "bg-slate-50 text-slate-400 opacity-100 hover:bg-blue-50 hover:text-[#0057ff] sm:opacity-0 sm:group-hover:opacity-100"
+                          : "bg-slate-50 text-slate-400 hover:bg-blue-50 hover:text-[#0057ff]"
                       } disabled:opacity-50`}
                       title={pinned ? "Открепить чат" : "Закрепить чат"}
                       aria-label={pinned ? "Открепить чат" : "Закрепить чат"}
