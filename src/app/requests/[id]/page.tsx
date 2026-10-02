@@ -1,4 +1,5 @@
 "use client";
+import SharePublicationButton from "@/components/SharePublicationButton";
 
 import { useAuth } from "@/components/AuthProvider";
 import ReportDialog from "@/components/ReportDialog";
@@ -370,6 +371,7 @@ export default function CustomerRequestPage() {
               <h1 className="mt-5 max-w-4xl text-3xl font-black leading-[1.06] tracking-[-0.035em] sm:mt-6 sm:text-5xl lg:text-6xl">
                 {request.title}
               </h1>
+              {isPublicationApproved(request) ? <SharePublicationButton kind="request" id={requestId} title={request.title || "Объявление"} /> : null}
 
               <div className="mt-7 flex flex-wrap gap-3 text-sm font-bold text-blue-50">
                 <span className="inline-flex items-center gap-2 rounded-2xl bg-white/10 px-4 py-2.5 ring-1 ring-white/15 backdrop-blur-sm">

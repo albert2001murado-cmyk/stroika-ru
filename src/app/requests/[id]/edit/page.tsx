@@ -1,4 +1,6 @@
 "use client";
+import { checkCatalogConsistency, type CatalogConsistencyInput } from "@/lib/catalogConsistency";
+import CatalogConsistencyHint from "@/components/CatalogConsistencyHint";
 import { requestPublicationModeration } from "@/lib/publicationModerationClient";
 import { geocodePublicationLocation } from "@/lib/publication-location-client";
 
@@ -91,6 +93,7 @@ export default function EditCustomerRequestPage() {
       : "";
 
   const [ownerId, setOwnerId] = useState("");
+  const [catalogMetadata, setCatalogMetadata] = useState<CatalogConsistencyInput>({});
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState(REQUEST_CATEGORIES[0]);
@@ -123,6 +126,7 @@ export default function EditCustomerRequestPage() {
 
         const data = { id: snapshot.id, ...snapshot.data() } as CustomerRequest;
         setOwnerId(data.customerId || "");
+        setCatalogMetadata(snapshot.data());
         setTitle(data.title || "");
         setDescription(data.description || "");
         setCategory(data.category || REQUEST_CATEGORIES[0]);
@@ -197,8 +201,13 @@ export default function EditCustomerRequestPage() {
     });
   }
 
+  const catalogCheckValue: CatalogConsistencyInput = { ...catalogMetadata, category, title, description };
+
   async function submit(event: FormEvent) {
     event.preventDefault();
+    const catalogIssue = checkCatalogConsistency(catalogCheckValue);
+    if (catalogIssue) { setError(catalogIssue.message); return; }
+
 
     if (!user) {
       router.push("/auth");
@@ -337,6 +346,7 @@ export default function EditCustomerRequestPage() {
               <span className="mb-2 block text-sm font-black text-gray-700">Описание</span>
               <textarea className="input min-h-40 resize-none" value={description} onChange={(event) => setDescription(event.target.value)} />
             </label>
+          <CatalogConsistencyHint value={catalogCheckValue} />
 
             <label>
               <span className="mb-2 block text-sm font-black text-gray-700">Город</span>

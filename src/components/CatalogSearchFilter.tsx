@@ -22,7 +22,7 @@ function CatalogIcon({ section }: { section: CatalogSectionId }) {
 
 function normalize(value: unknown) {
   return String(value || "")
-    .toLocaleLowerCase("ru-RU")
+    .toLocaleLowerCase("ru-RU").replace(/\bosb\b/g, "осб")
     .replaceAll("ё", "е")
     .replace(/[^\p{L}\p{N}]+/gu, " ")
     .trim();

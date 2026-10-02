@@ -1,4 +1,5 @@
 "use client";
+import { matchesSearchKeywords, publicationSearchText } from "./searchKeywords";
 
 export type OfferGroup = "materials" | "services" | "equipment" | "complex";
 
@@ -282,7 +283,7 @@ const GENERIC_INTENT_WORDS = new Set([
 
 function normalize(value: unknown) {
   return String(value || "")
-    .toLowerCase()
+    .toLowerCase().replace(/\bosb\b/g, "осб")
     .replaceAll("ё", "е")
     .replace(/[^\p{L}\p{N}\s]/gu, " ")
     .replace(/\s+/g, " ")
@@ -461,114 +462,6 @@ function featureWords(features?: Record<string, boolean>) {
     .join(" ");
 }
 
-export function matchesListingSearch(
-  listing: Record<string, any>,
-  search: string,
-  selectedCategory = "",
-  selectedSubcategory = ""
-) {
-  const normalizedQuery = normalize(search);
-
-  if (!normalizedQuery) return true;
-
-  const structured = Boolean(
-    listing.searchVersion ||
-      listing.searchText ||
-      listing.searchTags?.length ||
-      listing.offerAction
-  );
-
-  const text = normalize(
-    [
-      listing.title,
-      listing.description,
-      listing.authorName,
-      listing.category,
-      listing.subcategory,
-      listing.city,
-      listing.phone,
-      listing.searchGroup,
-      listing.offerAction,
-      listing.offerActionLabel,
-      listing.searchText,
-      Array.isArray(listing.searchTags) ? listing.searchTags.join(" ") : "",
-      featureWords(listing.offerFeatures),
-    ]
-      .filter(Boolean)
-      .join(" ")
-  );
-
-  const words = normalizedQuery.split(" ").filter(Boolean);
-
-  const requiresDelivery = words.includes("доставка");
-  const requiresOperator = words.includes("оператор");
-  const requiresCost =
-    words.includes("стоимость") ||
-    words.includes("смета") ||
-    words.includes("расчет");
-  const requiresTurnkey =
-    normalizedQuery.includes("под ключ") ||
-    (words.includes("под") && words.includes("ключ"));
-
-  if (structured) {
-    if (requiresDelivery && !text.includes("достав")) return false;
-    if (requiresOperator && !text.includes("оператор")) return false;
-
-    if (
-      requiresCost &&
-      !["стоимость", "смета", "расчет"].some((item) => text.includes(item))
-    ) {
-      return false;
-    }
-
-    if (requiresTurnkey) {
-      const offerAction = normalize(listing.offerAction);
-      const offerActionLabel = normalize(listing.offerActionLabel);
-
-      const isTurnkeyOffer =
-        offerAction === "complex_turnkey" ||
-        offerAction === "service_turnkey" ||
-        offerActionLabel === "выполнение под ключ" ||
-        offerActionLabel === "работа под ключ";
-
-      if (!isTurnkeyOffer) return false;
-    }
-  }
-
-  if (text.includes(normalizedQuery)) return true;
-
-  const actionWords = new Set([
-    "доставка",
-    "оператор",
-    "стоимость",
-    "смета",
-    "расчет",
-    "под",
-    "ключ",
-  ]);
-
-  const contentWords = words.filter(
-    (word) =>
-      !GENERIC_INTENT_WORDS.has(word) &&
-      !actionWords.has(word)
-  );
-
-  if (!structured) {
-    if (!contentWords.length) return true;
-    return contentWords.every((word) => text.includes(word));
-  }
-
-  if (selectedSubcategory) {
-    return true;
-  }
-
-  if (!contentWords.length) {
-    return true;
-  }
-
-  if (contentWords.length >= 3 || selectedCategory) {
-    return contentWords.some((word) => text.includes(word));
-  }
-
-  return contentWords.every((word) => text.includes(word));
+export function matchesListingSearch(listing: Record<string, any>, search: string, _selectedCategory = "", _selectedSubcategory = "") {
+  return matchesSearchKeywords(publicationSearchText(listing), search);
 }

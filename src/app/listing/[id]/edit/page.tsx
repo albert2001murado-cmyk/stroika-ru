@@ -1,4 +1,8 @@
 "use client";
+import { EMPTY_BANK_DETAILS, bankDetailsFromProfile, normalizeBankDetails, normalizePaymentChoice, paymentLabel, validatePayment, validateBankOwner, type BankDetails } from "@/lib/payments";
+import PaymentFields from "@/components/PaymentFields";
+import { checkCatalogConsistency, type CatalogConsistencyInput } from "@/lib/catalogConsistency";
+import CatalogConsistencyHint from "@/components/CatalogConsistencyHint";
 
 import { useAuth } from "@/components/AuthProvider";
 import CatalogPathPicker from "@/components/CatalogPathPicker";
@@ -194,7 +198,7 @@ async function uploadOneFile(item: LocalMediaFile): Promise<ListingMedia> {
 export default function EditListingPage() {
   const router = useRouter();
   const params = useParams();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
 
   const listingId =
     typeof params?.id === "string"
@@ -212,7 +216,9 @@ export default function EditListingPage() {
   const [address, setAddress] = useState("");
   const [phone, setPhone] = useState("");
   const [priceFrom, setPriceFrom] = useState("");
-  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>(["cash"]);
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>(["cash_or_transfer"]);
+  const [bankDetails, setBankDetails] = useState<BankDetails>({ ...EMPTY_BANK_DETAILS });
+  const [bankConfirmed, setBankConfirmed] = useState(false);
   const initialOfferGroup = getOfferGroup(DEFAULT_CATALOG_PATH.category);
   const [offerAction, setOfferAction] = useState(
     getOfferActions(initialOfferGroup)[0]?.id || ""
@@ -309,11 +315,9 @@ export default function EditListingPage() {
             ? ""
             : String(data.priceFrom)
         );
-        setPaymentMethods(
-          Array.isArray(data.paymentMethods) && data.paymentMethods.length
-            ? data.paymentMethods
-            : ["cash"]
-        );
+        setPaymentMethods([normalizePaymentChoice(data.paymentMethods)]);
+        setBankDetails(normalizeBankDetails(data.bankDetails || bankDetailsFromProfile(profile)));
+        setBankConfirmed(false);
         setAuthorId(data.authorId || "");
         setMediaFiles(normalizeExistingMedia(data));
       } catch (loadError) {
@@ -352,15 +356,11 @@ export default function EditListingPage() {
   }
 
   function togglePaymentMethod(method: PaymentMethod) {
-    setPaymentMethods((current) => {
-      if (current.includes(method)) {
-        const next = current.filter((item) => item !== method);
-
-        return next.length ? next : current;
-      }
-
-      return [...current, method];
-    });
+    setPaymentMethods([method]); setBankConfirmed(false);
+    if (method === "bank_account") {
+      const defaults = bankDetailsFromProfile(profile);
+      setBankDetails(current => ({ ...current, recipientName: current.recipientName || defaults.recipientName, inn: current.inn || defaults.inn, kpp: current.kpp || defaults.kpp }));
+    }
   }
 
   function handleMediaSelect(event: ChangeEvent<HTMLInputElement>) {
@@ -435,8 +435,13 @@ export default function EditListingPage() {
     });
   }
 
+  const catalogCheckValue: CatalogConsistencyInput = { ...catalogPath, title, description };
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const catalogIssue = checkCatalogConsistency(catalogCheckValue);
+    if (catalogIssue) { setError(catalogIssue.message); return; }
+
 
     if (!user) {
       router.push("/auth");
@@ -473,6 +478,8 @@ export default function EditListingPage() {
       return;
     }
 
+    const paymentError = validatePayment(paymentMethods, bankDetails, profile?.accountType, bankConfirmed) || validateBankOwner(paymentMethods, bankDetails, profile);
+    if (paymentError) { setError(paymentError); return; }
     setIsSaving(true);
     setError("");
 
@@ -529,6 +536,10 @@ export default function EditListingPage() {
         phone: phone.trim(),
         priceFrom: priceFrom.trim() ? Number(priceFrom) : null,
         paymentMethods,
+        paymentSchemaVersion: 2,
+        bankDetails: paymentMethods[0] === "bank_account" ? normalizeBankDetails(bankDetails) : null,
+        bankDetailsConfirmed: paymentMethods[0] === "bank_account" && bankConfirmed,
+        bankDetailsConfirmedAt: paymentMethods[0] === "bank_account" ? serverTimestamp() : null,
 
         catalogSection: catalogPath.catalogSection,
         catalogCategoryId: catalogPath.catalogCategoryId,
@@ -648,6 +659,7 @@ export default function EditListingPage() {
                 placeholder="Описание услуги"
                 className="input min-h-40 resize-none"
               />
+          <CatalogConsistencyHint value={catalogCheckValue} />
 
               <div className="grid gap-5 md:grid-cols-2">
                 <div className="md:col-span-2">
@@ -894,33 +906,8 @@ export default function EditListingPage() {
                   className="input"
                 />
 
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <button
-                    type="button"
-                    onClick={() => togglePaymentMethod("cash")}
-                    className={`flex items-center justify-center gap-2 rounded-2xl border px-4 py-4 font-black ${
-                      paymentMethods.includes("cash")
-                        ? "border-[#0057ff] bg-blue-50 text-[#0057ff]"
-                        : "border-gray-200 bg-white text-gray-500"
-                    }`}
-                  >
-                    <Banknote size={18} />
-                    Наличными
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => togglePaymentMethod("transfer")}
-                    className={`flex items-center justify-center gap-2 rounded-2xl border px-4 py-4 font-black ${
-                      paymentMethods.includes("transfer")
-                        ? "border-[#0057ff] bg-blue-50 text-[#0057ff]"
-                        : "border-gray-200 bg-white text-gray-500"
-                    }`}
-                  >
-                    <CreditCard size={18} />
-                    Переводом
-                  </button>
-                </div>
+                <div className="md:col-span-2"><PaymentFields methods={paymentMethods} onMethod={togglePaymentMethod}
+                  bank={bankDetails} onBank={setBankDetails} confirmed={bankConfirmed} onConfirm={setBankConfirmed} accountType={profile?.accountType} /></div>
               </div>
             </section>
 

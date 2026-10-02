@@ -1,4 +1,8 @@
 "use client";
+import BankDetailsCard from "@/components/BankDetailsCard";
+import { paymentLabel, normalizePaymentChoice } from "@/lib/payments";
+import SharePublicationButton from "@/components/SharePublicationButton";
+import { catalogLabel } from "@/data/catalogLabels";
 
 import { useAuth } from "@/components/AuthProvider";
 import ReportDialog from "@/components/ReportDialog";
@@ -44,24 +48,12 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
-function paymentText(listing: Listing) {
-  const methods = listing.paymentMethods || [];
-
-  if (methods.includes("cash") && methods.includes("transfer")) {
-    return "Наличными или переводом";
-  }
-
-  if (methods.includes("transfer")) {
-    return "Переводом";
-  }
-
-  return "Наличными";
-}
+function paymentText(listing: Listing) { return paymentLabel(listing.paymentMethods); }
 
 function paymentIcon(listing: Listing) {
   const methods = listing.paymentMethods || [];
 
-  if (methods.includes("transfer")) {
+  if (normalizePaymentChoice(methods) === "bank_account") {
     return <CreditCard size={20} />;
   }
 
@@ -483,12 +475,13 @@ export default function ListingPage() {
 
             <div className="rounded-[24px] bg-white p-4 shadow-sm sm:rounded-[34px] sm:p-8">
               <p className="font-black text-[#0057ff]">
-                {listing.category} · {listing.subcategory}
+                {listing.category} · {catalogLabel(listing.subcategory)}
               </p>
 
               <h1 className="mt-3 text-3xl font-black text-gray-950 sm:text-4xl">
                 {listing.title}
               </h1>
+              {isPublicationApproved(listing) ? <SharePublicationButton kind="listing" id={listing.id} title={listing.title || "Объявление"} /> : null}
 
               <p className="mt-4 whitespace-pre-wrap text-base leading-7 text-gray-600 sm:mt-5 sm:text-lg sm:leading-8">
                 {listing.description}
@@ -704,6 +697,7 @@ export default function ListingPage() {
               </p>
 
               <p className="mt-2 font-bold">{paymentText(listing)}</p>
+              {listing.paymentMethods?.includes("bank_account") ? <BankDetailsCard value={listing.bankDetails} /> : null}
             </div>
 
             {user?.uid === listing.authorId && (

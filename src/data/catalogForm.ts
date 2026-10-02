@@ -1,3 +1,4 @@
+import { catalogLabel } from "./catalogLabels";
 import { categories } from "./categories";
 import { groupsForSection } from "./catalogGroups";
 
@@ -183,7 +184,7 @@ export function resolveCatalogPath(input: {
   const option =
     (input.catalogGroupId ? options.find((item) => item.groupId === input.catalogGroupId) : undefined) ||
     options.find((item) =>
-      item.subcategories.includes(String(input.subcategory || ""))
+      item.subcategories.includes(catalogLabel(input.subcategory))
     ) ||
     options.find((item) => item.category === input.category) ||
     options[0];
@@ -195,8 +196,8 @@ export function resolveCatalogPath(input: {
     catalogGroupId: option?.groupId || "",
     category: option?.category || input.category || "",
     subcategory:
-      option?.subcategories.includes(String(input.subcategory || ""))
-        ? String(input.subcategory)
+      option?.subcategories.includes(catalogLabel(input.subcategory))
+        ? catalogLabel(input.subcategory)
         : option?.subcategories[0] || "",
   };
 }

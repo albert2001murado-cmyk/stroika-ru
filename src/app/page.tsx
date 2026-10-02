@@ -1,4 +1,6 @@
 "use client";
+import { matchesSearchKeywords, publicationSearchText } from "@/lib/searchKeywords";
+import { normalizePaymentChoice } from "@/lib/payments";
 import { publicationCatalogSelection } from "@/lib/catalogSelection";
 
 import CustomerRequestCard from "@/components/CustomerRequestCard";
@@ -49,7 +51,7 @@ import { useEffect, useMemo, useState } from "react";
 type SearchableListing = Listing & SearchableListingFields;
 type FeedMode = "contractors" | "customers";
 type AccountTypeFilter = "" | "individual" | "ip" | "ooo";
-type PaymentFilter = "" | "cash" | "transfer";
+type PaymentFilter = "" | "cash_or_transfer" | "bank_account";
 
 type MainSearchSuggestion = {
   id: string;
@@ -79,13 +81,13 @@ const POPULAR_CITIES = [
 function normalize(value: unknown) {
   return String(value || "")
     .trim()
-    .toLocaleLowerCase("ru-RU")
+    .toLocaleLowerCase("ru-RU").replace(/\bosb\b/g, "осб")
     .replace(/^г\.?\s*/i, "");
 }
 
 function normalizeCatalogValue(value: unknown) {
   return String(value || "")
-    .toLocaleLowerCase("ru-RU")
+    .toLocaleLowerCase("ru-RU").replace(/\bosb\b/g, "осб")
     .replaceAll("ё", "е")
     .replace(/[^\p{L}\p{N}\s]/gu, " ")
     .replace(/\s+/g, " ")
@@ -174,9 +176,9 @@ function requestMatches(
   ]
     .filter(Boolean)
     .join(" ")
-    .toLocaleLowerCase("ru-RU");
+    .toLocaleLowerCase("ru-RU").replace(/\bosb\b/g, "осб");
 
-  const matchesText = normalizedSearch ? haystack.includes(normalizedSearch) : true;
+  const matchesText = matchesSearchKeywords(publicationSearchText(request), search);
   const matchesCategory = category
     ? normalizeCatalogValue(request.category) === normalizeCatalogValue(category)
     : true;
@@ -555,8 +557,7 @@ export default function HomePage() {
         ? listing.accountType === accountType
         : true;
       const matchesPayment = paymentMethod
-        ? Array.isArray(listing.paymentMethods) &&
-          listing.paymentMethods.includes(paymentMethod)
+        ? normalizePaymentChoice(listing.paymentMethods) === paymentMethod
         : true;
       const matchesVerified = verifiedOnly ? isListingVerified(listing) : true;
       const matchesPhotos = withPhotosOnly ? hasImages(listing) : true;
@@ -1131,7 +1132,7 @@ export default function HomePage() {
                       </label>
 
                       <label className="group flex cursor-pointer items-center gap-3 rounded-2xl bg-white p-3.5 shadow-sm ring-1 ring-gray-200 transition hover:-translate-y-0.5 hover:ring-blue-200">
-                        {paymentMethod === "transfer" ? (
+                        {paymentMethod === "bank_account" ? (
                           <CreditCard size={20} className="text-[#0057ff]" />
                         ) : (
                           <Banknote size={20} className="text-[#0057ff]" />
@@ -1144,8 +1145,8 @@ export default function HomePage() {
                           className="min-w-0 flex-1 cursor-pointer border-0 bg-transparent text-sm font-black text-gray-800 outline-none"
                         >
                           <option value="">Любой способ оплаты</option>
-                          <option value="cash">Наличными</option>
-                          <option value="transfer">Переводом</option>
+                          <option value="cash_or_transfer">Наличка или перевод</option>
+                          <option value="bank_account">Оплата на расчётный счёт</option>
                         </select>
                       </label>
 

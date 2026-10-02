@@ -1,4 +1,8 @@
 "use client";
+import { EMPTY_BANK_DETAILS, bankDetailsFromProfile, normalizeBankDetails, normalizePaymentChoice, paymentLabel, validatePayment, validateBankOwner, type BankDetails } from "@/lib/payments";
+import PaymentFields from "@/components/PaymentFields";
+import { checkCatalogConsistency, type CatalogConsistencyInput } from "@/lib/catalogConsistency";
+import CatalogConsistencyHint from "@/components/CatalogConsistencyHint";
 
 import { useAuth } from "@/components/AuthProvider";
 import CatalogPathPicker from "@/components/CatalogPathPicker";
@@ -37,7 +41,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChangeEvent, FormEvent, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 
 type LocalMediaFile = {
   id: string;
@@ -176,9 +180,13 @@ export default function NewListingPage() {
   const [address, setAddress] = useState("");
   const [phone, setPhone] = useState(profile?.phone || "");
   const [priceFrom, setPriceFrom] = useState("");
-  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([
-    "cash",
-  ]);
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>(["cash_or_transfer"]);
+  const [bankDetails, setBankDetails] = useState<BankDetails>({ ...EMPTY_BANK_DETAILS });
+  const [bankConfirmed, setBankConfirmed] = useState(false);
+  useEffect(() => {
+    const defaults = bankDetailsFromProfile(profile);
+    setBankDetails(current => ({ ...current, recipientName: current.recipientName || defaults.recipientName, inn: current.inn || defaults.inn, kpp: current.kpp || defaults.kpp }));
+  }, [profile?.companyOfficialName, profile?.companyName, profile?.companyInn, profile?.companyKpp, profile?.displayName]);
 
   const initialOfferGroup = getOfferGroup(defaultCatalogPath.category);
   const [offerAction, setOfferAction] = useState(
@@ -238,15 +246,11 @@ export default function NewListingPage() {
   }
 
   function togglePaymentMethod(method: PaymentMethod) {
-    setPaymentMethods((current) => {
-      if (current.includes(method)) {
-        const next = current.filter((item) => item !== method);
-
-        return next.length ? next : current;
-      }
-
-      return [...current, method];
-    });
+    setPaymentMethods([method]); setBankConfirmed(false);
+    if (method === "bank_account") {
+      const defaults = bankDetailsFromProfile(profile);
+      setBankDetails(current => ({ ...current, recipientName: current.recipientName || defaults.recipientName, inn: current.inn || defaults.inn, kpp: current.kpp || defaults.kpp }));
+    }
   }
 
   function handleMediaSelect(event: ChangeEvent<HTMLInputElement>) {
@@ -321,8 +325,13 @@ export default function NewListingPage() {
     });
   }
 
+  const catalogCheckValue: CatalogConsistencyInput = { title, description, catalogSection, catalogCategoryId, catalogGroupId, category, subcategory };
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const catalogIssue = checkCatalogConsistency(catalogCheckValue);
+    if (catalogIssue) { setError(catalogIssue.message); return; }
+
 
     if (!user) {
       router.push("/auth");
@@ -349,6 +358,8 @@ export default function NewListingPage() {
       return;
     }
 
+    const paymentError = validatePayment(paymentMethods, bankDetails, profile?.accountType, bankConfirmed) || validateBankOwner(paymentMethods, bankDetails, profile);
+    if (paymentError) { setError(paymentError); return; }
     setIsSaving(true);
     setError("");
 
@@ -411,6 +422,10 @@ export default function NewListingPage() {
         phone: phone.trim(),
         priceFrom: priceFrom.trim() ? Number(priceFrom) : null,
         paymentMethods,
+        paymentSchemaVersion: 2,
+        bankDetails: paymentMethods[0] === "bank_account" ? normalizeBankDetails(bankDetails) : null,
+        bankDetailsConfirmed: paymentMethods[0] === "bank_account" && bankConfirmed,
+        bankDetailsConfirmedAt: paymentMethods[0] === "bank_account" ? serverTimestamp() : null,
 
         catalogSection,
         catalogCategoryId,
@@ -518,6 +533,7 @@ export default function NewListingPage() {
                 placeholder="Описание предложения"
                 className="input min-h-40 resize-none"
               />
+          <CatalogConsistencyHint value={catalogCheckValue} />
 
               <CatalogPathPicker
                 mode="executor"
@@ -793,33 +809,8 @@ export default function NewListingPage() {
                   className="input"
                 />
 
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <button
-                    type="button"
-                    onClick={() => togglePaymentMethod("cash")}
-                    className={`flex items-center justify-center gap-2 rounded-2xl border px-4 py-4 font-black ${
-                      paymentMethods.includes("cash")
-                        ? "border-[#0057ff] bg-blue-50 text-[#0057ff]"
-                        : "border-gray-200 bg-white text-gray-500"
-                    }`}
-                  >
-                    <Banknote size={18} />
-                    Наличными
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => togglePaymentMethod("transfer")}
-                    className={`flex items-center justify-center gap-2 rounded-2xl border px-4 py-4 font-black ${
-                      paymentMethods.includes("transfer")
-                        ? "border-[#0057ff] bg-blue-50 text-[#0057ff]"
-                        : "border-gray-200 bg-white text-gray-500"
-                    }`}
-                  >
-                    <CreditCard size={18} />
-                    Переводом
-                  </button>
-                </div>
+                <div className="md:col-span-2"><PaymentFields methods={paymentMethods} onMethod={togglePaymentMethod}
+                  bank={bankDetails} onBank={setBankDetails} confirmed={bankConfirmed} onConfirm={setBankConfirmed} accountType={profile?.accountType} /></div>
               </div>
             </section>
 
@@ -880,12 +871,7 @@ export default function NewListingPage() {
               <div className="flex items-center justify-between">
                 <span>Оплата</span>
                 <span className="text-gray-950">
-                  {paymentMethods.includes("cash") &&
-                  paymentMethods.includes("transfer")
-                    ? "Наличные / перевод"
-                    : paymentMethods.includes("transfer")
-                    ? "Перевод"
-                    : "Наличные"}
+                  {paymentLabel(paymentMethods)}
                 </span>
               </div>
             </div>

@@ -1,4 +1,6 @@
 "use client";
+import { matchesSearchKeywords } from "@/lib/searchKeywords";
+import { mapProfileLink } from "@/lib/mapProfileLink";
 
 import { db } from "@/lib/firebase";
 import { isPublicationApproved } from "@/lib/moderation";
@@ -232,8 +234,7 @@ function getProfileId(item: ListingLike) {
 }
 
 function getProfileLink(item: ListingLike) {
-  const profileId = getProfileId(item);
-  return profileId ? `/player/${profileId}` : `/listing/${item.id}`;
+  return mapProfileLink(item);
 }
 
 function getLocation(item: ListingLike) {
@@ -339,6 +340,9 @@ export default function NearbyPage() {
   const mapRef = useRef<any>(null);
   const clustererRef = useRef<any>(null);
   const userPlacemarkRef = useRef<any>(null);
+  const focusUserRef = useRef(false);
+  const geoRequestRef = useRef(0);
+  const [locating, setLocating] = useState(false);
 
   const [items, setItems] = useState<ListingLike[]>([]);
   const [activeId, setActiveId] = useState("");
@@ -355,6 +359,22 @@ export default function NearbyPage() {
   const [isMapReady, setIsMapReady] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+
+  useEffect(() => () => {
+    geoRequestRef.current += 1;
+    mapRef.current?.destroy();
+    mapRef.current = null;
+  }, []);
+
+  useEffect(() => { focusUserRef.current = false; }, [city, category, searchText, onlyUrgent, onlyVerified]);
+
+  function selectMapItem(id: string) {
+    focusUserRef.current = false;
+    setActiveId(id);
+    const item = items.find(value => value.id === id);
+    const coords = item && getResolvedItemCoords(item, resolvedCoords);
+    if (coords && mapRef.current) mapRef.current.setCenter([coords.lat, coords.lng], Math.max(mapRef.current.getZoom(), 12), { duration: 300 });
+  }
 
   useEffect(() => {
     async function loadListings() {
@@ -565,7 +585,7 @@ export default function NearbyPage() {
 
       const cityOk = !cityValue || location.includes(cityValue);
       const categoryOk = !categoryValue || itemCategory.includes(categoryValue);
-      const searchOk = !searchValue || fullText.includes(searchValue);
+      const searchOk = matchesSearchKeywords(fullText, searchText);
       const urgentOk = !onlyUrgent || Boolean(item.isUrgent);
       const verifiedOk = !onlyVerified || Boolean(item.verified);
 
@@ -588,10 +608,12 @@ export default function NearbyPage() {
   }, [filteredItems, activeId, activeItem]);
 
   useEffect(() => {
+    let cancelled = false;
     async function redrawMap() {
       if (!isMapReady || !mapRef.current) return;
 
       const ymaps = await loadYandexMaps();
+      if (cancelled || !mapRef.current) return;
       const map = mapRef.current;
 
       if (clustererRef.current) {
@@ -677,7 +699,7 @@ export default function NearbyPage() {
         );
 
         placemark.events.add("click", () => {
-          setActiveId(item.id);
+          selectMapItem(item.id);
         });
 
         return [placemark];
@@ -694,7 +716,9 @@ export default function NearbyPage() {
       clustererRef.current = clusterer;
       map.geoObjects.add(clusterer);
 
-      if (placemarks.length > 0) {
+      if (focusUserRef.current && userCoords) {
+        map.setCenter([userCoords.lat, userCoords.lng], 15, { duration: 300 });
+      } else if (placemarks.length > 0) {
         const bounds = clusterer.getBounds();
 
         if (bounds) {
@@ -709,11 +733,12 @@ export default function NearbyPage() {
     }
 
     redrawMap();
+    return () => { cancelled = true; };
   }, [filteredItems, userCoords, mapCenter, isMapReady, resolvedCoords]);
 
   useEffect(() => {
     async function focusActiveItem() {
-      if (!isMapReady || !mapRef.current || !activeItem) return;
+      if (!isMapReady || !mapRef.current || !activeItem || focusUserRef.current) return;
 
       const coords = getResolvedItemCoords(activeItem, resolvedCoords);
 
@@ -728,15 +753,21 @@ export default function NearbyPage() {
   }, [activeItem?.id, resolvedCoords]);
 
   function useMyLocation() {
+    if (locating) return;
     if (typeof navigator === "undefined" || !navigator.geolocation) {
       setGeoStatus("Геолокация недоступна. Выбери город вручную.");
       return;
     }
 
     setGeoStatus("Запрашиваем геолокацию...");
+    setLocating(true);
+    const requestId = ++geoRequestRef.current;
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
+        if (requestId !== geoRequestRef.current) return;
+        setLocating(false);
+        focusUserRef.current = true;
         const coords = {
           lat: position.coords.latitude,
           lng: position.coords.longitude,
@@ -747,17 +778,22 @@ export default function NearbyPage() {
         setGeoStatus("Геолокация включена. Карта перестроена вокруг вас.");
 
         if (mapRef.current) {
-          mapRef.current.setCenter([coords.lat, coords.lng], 12, {
+          mapRef.current.setCenter([coords.lat, coords.lng], 15, {
             duration: 300,
           });
         }
       },
-      () => {
-        setGeoStatus("Не удалось получить геолокацию. Выбери город вручную.");
+      (error) => {
+        if (requestId !== geoRequestRef.current) return;
+        setLocating(false);
+        setGeoStatus(error.code === 1 ? "Разрешите доступ к геопозиции в настройках браузера и нажмите кнопку ещё раз."
+          : error.code === 3 ? "Определение местоположения заняло слишком много времени. Попробуйте ещё раз."
+          : "Не удалось определить местоположение. Проверьте, включена ли геолокация, и повторите попытку.");
       },
       {
         enableHighAccuracy: true,
         timeout: 9000,
+        maximumAge: 0,
       }
     );
   }
@@ -812,10 +848,11 @@ export default function NearbyPage() {
                 <button
                   type="button"
                   onClick={useMyLocation}
+                  disabled={locating}
                   className="inline-flex items-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-black text-[#0057ff] shadow-lg shadow-blue-950/10 transition hover:bg-blue-50"
                 >
                   <LocateFixed size={18} />
-                  Я рядом
+                  {locating ? "Определяем…" : "Моё местоположение"}
                 </button>
 
                 <button
@@ -846,7 +883,7 @@ export default function NearbyPage() {
               </div>
 
               {geoStatus && (
-                <div className="mt-5 flex max-w-2xl gap-3 rounded-3xl bg-white/10 px-5 py-4 text-sm font-bold leading-6 text-blue-50 ring-1 ring-white/10">
+                <div role="status" aria-live="polite" className="mt-5 flex max-w-2xl gap-3 rounded-3xl bg-white/10 px-5 py-4 text-sm font-bold leading-6 text-blue-50 ring-1 ring-white/10">
                   <AlertCircle className="mt-0.5 shrink-0" size={18} />
                   {geoStatus}
                 </div>
@@ -993,6 +1030,11 @@ export default function NearbyPage() {
 
             <div className="relative h-[420px] overflow-hidden rounded-[22px] sm:h-[520px] sm:rounded-[32px] lg:h-[620px] border border-blue-100 bg-slate-100">
               <div ref={mapNodeRef} className="absolute inset-0" />
+              <button type="button" onClick={useMyLocation} disabled={locating || !isMapReady}
+                title="Показать моё местоположение" aria-label="Показать моё местоположение" aria-busy={locating}
+                className="absolute right-4 top-16 z-30 flex h-12 w-12 items-center justify-center rounded-2xl border border-blue-100 bg-white text-blue-600 shadow-lg transition hover:bg-blue-50 disabled:opacity-60">
+                {locating ? <Loader2 size={23} className="animate-spin" /> : <LocateFixed size={23} />}
+              </button>
 
               {(mapStatus || isLoading) && (
                 <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/80 p-6 text-center backdrop-blur-sm">
@@ -1152,7 +1194,7 @@ export default function NearbyPage() {
                   <button
                     key={item.id}
                     type="button"
-                    onClick={() => setActiveId(item.id)}
+                    onClick={() => selectMapItem(item.id)}
                     className={`w-full rounded-3xl p-3 text-left transition ${
                       activeItem?.id === item.id
                         ? "bg-blue-50 ring-2 ring-blue-500"

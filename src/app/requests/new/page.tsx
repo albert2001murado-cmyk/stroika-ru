@@ -1,4 +1,6 @@
 "use client";
+import { checkCatalogConsistency, type CatalogConsistencyInput } from "@/lib/catalogConsistency";
+import CatalogConsistencyHint from "@/components/CatalogConsistencyHint";
 
 import { useAuth } from "@/components/AuthProvider";
 import CatalogPathPicker from "@/components/CatalogPathPicker";
@@ -115,8 +117,13 @@ export default function NewRequestPage() {
     });
   }
 
+  const catalogCheckValue: CatalogConsistencyInput = { ...catalogPath, title, description };
+
   async function submit(event: FormEvent) {
     event.preventDefault();
+    const catalogIssue = checkCatalogConsistency(catalogCheckValue);
+    if (catalogIssue) { setError(catalogIssue.message); return; }
+
     if (!user) return;
 
     if (title.trim().length < 5) {
@@ -330,6 +337,7 @@ export default function NewRequestPage() {
                 onChange={(event) => setDescription(event.target.value)}
               />
             </label>
+          <CatalogConsistencyHint value={catalogCheckValue} />
 
             <label>
               <span className="mb-2 block text-sm font-black text-gray-700">

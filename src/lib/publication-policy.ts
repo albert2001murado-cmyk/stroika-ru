@@ -1,3 +1,5 @@
+import { validatePayment } from "./payments";
+import { checkCatalogConsistency } from "./catalogConsistency";
 import {
   CATALOG_FORM_SECTIONS,
   getCatalogFormCategories,
@@ -43,7 +45,7 @@ export type LocalModerationResult = {
   media: Array<{ type: "image" | "video"; url: string }>;
 };
 
-export const MODERATION_POLICY_VERSION = "ru-service-2026-09-09.1";
+export const MODERATION_POLICY_VERSION = "ru-service-2026-10-02.1";
 
 const SERVICE_RULES = "Правила публикации Стройка.ру";
 const LAW_INFORMATION = "149-ФЗ «Об информации, информационных технологиях и о защите информации»";
@@ -141,7 +143,7 @@ function text(value: unknown, max = 10_000) {
 
 export function normalizeModerationText(value: unknown) {
   return text(value)
-    .toLocaleLowerCase("ru-RU")
+    .toLocaleLowerCase("ru-RU").replace(/\bosb\b/g, "осб")
     .replaceAll("ё", "е")
     .replace(/[\u200B-\u200D\uFEFF]/g, "")
     .replace(/[^\p{L}\p{N}]+/gu, " ")
@@ -339,6 +341,12 @@ export function evaluatePublicationLocally(
   const media = collectMedia(data);
   const flags: ModerationFlag[] = [];
   const add = (flag: ModerationFlag) => flags.push(flag);
+  if (kind === "listing" && (data.paymentSchemaVersion === 2 || (Array.isArray(data.paymentMethods) && data.paymentMethods.includes("bank_account")))) {
+    const paymentError = validatePayment(data.paymentMethods, data.bankDetails, data.accountType, data.bankDetailsConfirmed);
+    if (paymentError) add({ code: "invalid-payment", field: "payment", severity: "changes", message: paymentError, legalBasis: SERVICE_RULES });
+  }
+  const catalogIssue = checkCatalogConsistency(data);
+  if (catalogIssue) add({ ...catalogIssue, field: "category", severity: "changes", legalBasis: SERVICE_RULES });
 
   if (title.length < 5 || title.length > 120) {
     add({

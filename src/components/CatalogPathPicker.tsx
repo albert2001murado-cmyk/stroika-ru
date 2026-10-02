@@ -36,7 +36,7 @@ const SECTION_ICONS = {
 function normalize(value: string) {
   return value
     .trim()
-    .toLocaleLowerCase("ru-RU")
+    .toLocaleLowerCase("ru-RU").replace(/\bosb\b/g, "осб")
     .replaceAll("ё", "е");
 }
 
@@ -230,7 +230,7 @@ export default function CatalogPathPicker({
         {visibleSubcategories.length ? (
           <div className="flex flex-wrap gap-2">
             {visibleSubcategories.map((item) => {
-              const active = item === value.subcategory;
+              const active = normalize(item) === normalize(value.subcategory);
               return (
                 <button
                   key={item}

@@ -2,7 +2,7 @@ import type { Timestamp } from "firebase/firestore";
 
 export type AccountType = "individual" | "ip" | "ooo";
 
-export type PaymentMethod = "cash" | "transfer";
+export type PaymentMethod = "cash" | "transfer" | "cash_or_transfer" | "bank_account";
 
 export type ListingMedia = {
   type: "image" | "video";

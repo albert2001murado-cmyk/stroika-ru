@@ -2,7 +2,7 @@ import { getCatalogFormCategories, type CatalogSectionId } from "@/data/catalogF
 
 const sections: CatalogSectionId[] = ["materials", "services", "equipment", "solutions"];
 export function normalizeCatalogText(value: unknown) {
-  return String(value || "").toLocaleLowerCase("ru-RU").replaceAll("ё", "е")
+  return String(value || "").toLocaleLowerCase("ru-RU").replace(/\bosb\b/g, "осб").replaceAll("ё", "е")
     .replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 }
 export function publicationCatalogSelection(data: {

@@ -1,4 +1,5 @@
 "use client";
+import { paymentLabel, normalizePaymentChoice } from "@/lib/payments";
 
 import FavoriteButton from "@/components/FavoriteButton";
 import ListingAuthorVerifiedBadge from "@/components/ListingAuthorVerifiedBadge";
@@ -31,19 +32,10 @@ function getImageUrl(listing: Listing) {
   );
 }
 
-function paymentText(listing: Listing) {
-  const methods = listing.paymentMethods || [];
-
-  if (methods.includes("cash") && methods.includes("transfer")) {
-    return "Наличные / перевод";
-  }
-
-  if (methods.includes("transfer")) return "Переводом";
-  return "Наличными";
-}
+function paymentText(listing: Listing) { return paymentLabel(listing.paymentMethods); }
 
 function paymentIcon(listing: Listing) {
-  if ((listing.paymentMethods || []).includes("transfer")) {
+  if (normalizePaymentChoice(listing.paymentMethods) === "bank_account") {
     return <CreditCard size={14} />;
   }
 
