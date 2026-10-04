@@ -9,6 +9,7 @@ export type AppNotification = {
   type?: string;
   title?: string;
   body?: string;
+  actionLabel?: string;
   url?: string;
   read?: boolean;
   createdAt?: Timestamp;
