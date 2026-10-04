@@ -1,4 +1,6 @@
 "use client";
+
+import PublicationLocationPicker, { type PublicationLocation } from "@/components/PublicationLocationPicker";
 import { checkCatalogConsistency, type CatalogConsistencyInput } from "@/lib/catalogConsistency";
 import CatalogConsistencyHint from "@/components/CatalogConsistencyHint";
 import { requestPublicationModeration } from "@/lib/publicationModerationClient";
@@ -99,6 +101,8 @@ export default function EditCustomerRequestPage() {
   const [category, setCategory] = useState(REQUEST_CATEGORIES[0]);
   const [city, setCity] = useState("");
   const [address, setAddress] = useState("");
+  const [pickedLocation, setPickedLocation] = useState<PublicationLocation | null>(null);
+  const [locationBusy, setLocationBusy] = useState(false);
   const [budgetFrom, setBudgetFrom] = useState("");
   const [budgetTo, setBudgetTo] = useState("");
   const [deadline, setDeadline] = useState("");
@@ -205,6 +209,7 @@ export default function EditCustomerRequestPage() {
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (locationBusy) return;
     const catalogIssue = checkCatalogConsistency(catalogCheckValue);
     if (catalogIssue) { setError(catalogIssue.message); return; }
 
@@ -243,7 +248,7 @@ export default function EditCustomerRequestPage() {
         imageUrls.push(await uploadImage(image.file));
       }
 
-      const geo = await geocodePublicationLocation(city, address);
+      const geo = pickedLocation || await geocodePublicationLocation(city, address);
       await updateDoc(doc(db, "customerRequests", requestId), {
         title: title.trim(),
         description: description.trim(),
@@ -348,20 +353,8 @@ export default function EditCustomerRequestPage() {
             </label>
           <CatalogConsistencyHint value={catalogCheckValue} />
 
-            <label>
-              <span className="mb-2 block text-sm font-black text-gray-700">Город</span>
-              <div className="relative">
-                <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={19} />
-                <input className="input pl-12" value={city} onChange={(event) => setCity(event.target.value)} />
-              </div>
-            </label>
+              <PublicationLocationPicker city={city} address={address} onCity={setCity} onAddress={setAddress} onLocation={setPickedLocation} onBusy={setLocationBusy} />
 
-            <label>
-              <span className="mb-2 block text-sm font-black text-gray-700">Адрес объекта (без квартиры)</span>
-              <input className="input" value={address} maxLength={240}
-                onChange={(event) => setAddress(event.target.value)} placeholder="Улица и номер дома" />
-              <span className="mt-2 block text-xs leading-relaxed text-gray-500">Точный адрес нужен для подбора исполнителей в радиусе 10 км. Без него подбор рядом недоступен.</span>
-            </label>
 
             <label>
               <span className="mb-2 block text-sm font-black text-gray-700">Срок</span>
@@ -422,7 +415,7 @@ export default function EditCustomerRequestPage() {
 
           {error ? <p className="rounded-2xl bg-red-50 p-4 text-sm font-black text-red-600">{error}</p> : null}
 
-          <button disabled={saving || (!!ownerId && ownerId !== user.uid)} className="btn-primary w-full justify-center py-4 text-base disabled:opacity-60">
+          <button disabled={saving || locationBusy || (!!ownerId && ownerId !== user.uid)} className="btn-primary w-full justify-center py-4 text-base disabled:opacity-60">
             {saving ? <Loader2 className="animate-spin" size={19} /> : <Save size={19} />}
             {saving ? "Сохраняем..." : "Сохранить изменения"}
           </button>

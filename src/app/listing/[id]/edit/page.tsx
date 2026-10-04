@@ -1,4 +1,6 @@
 "use client";
+
+import PublicationLocationPicker, { type PublicationLocation } from "@/components/PublicationLocationPicker";
 import { EMPTY_BANK_DETAILS, bankDetailsFromProfile, normalizeBankDetails, normalizePaymentChoice, paymentLabel, validatePayment, validateBankOwner, type BankDetails } from "@/lib/payments";
 import { formatRussianPhoneInput, normalizeRussianPhone, russianPhoneError } from "@/lib/phone";
 import PaymentFields from "@/components/PaymentFields";
@@ -215,6 +217,8 @@ export default function EditListingPage() {
   const subcategory = catalogPath.subcategory;
   const [city, setCity] = useState("");
   const [address, setAddress] = useState("");
+  const [pickedLocation, setPickedLocation] = useState<PublicationLocation | null>(null);
+  const [locationBusy, setLocationBusy] = useState(false);
   const [phone, setPhone] = useState("");
   const [priceFrom, setPriceFrom] = useState("");
   const [minimumWorkAmount, setMinimumWorkAmount] = useState("");
@@ -468,6 +472,7 @@ export default function EditListingPage() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (locationBusy) return;
     const catalogIssue = checkCatalogConsistency(catalogCheckValue);
     if (catalogIssue) { setError(catalogIssue.message); return; }
 
@@ -557,7 +562,7 @@ export default function EditListingPage() {
         enabledFeatureIds,
       });
       const capabilities = Array.from(new Set(offerActionIds.flatMap((actionId) => legacyCapabilitiesFromOffer(offerGroup, actionId, offerFeatures))));
-      const geo = await geocodePublicationLocation(city, address);
+      const geo = pickedLocation || await geocodePublicationLocation(city, address);
       await updateDoc(doc(db, "listings", listingId), {
         title: title.trim(),
         description: description.trim(),
@@ -708,26 +713,8 @@ export default function EditListingPage() {
                   </div>
                 </div>
 
-                <div className="relative">
-                  <MapPin
-                    size={19}
-                    className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400"
-                  />
-                  <input
-                    value={city}
-                    onChange={(event) => setCity(event.target.value)}
-                    placeholder="Город"
-                    className="input"
-                    style={{ paddingLeft: "52px" }}
-                  />
-                </div>
+              <PublicationLocationPicker city={city} address={address} onCity={setCity} onAddress={setAddress} onLocation={setPickedLocation} onBusy={setLocationBusy} />
 
-                <label className="md:col-span-2">
-                  <span className="mb-2 block text-sm font-bold">Адрес вашей работы или базы (без квартиры)</span>
-                  <input className="input" value={address} maxLength={240}
-                    onChange={(event) => setAddress(event.target.value)} placeholder="Улица и номер дома" />
-                  <span className="mt-2 block text-xs leading-relaxed text-gray-500">По точному адресу подберём заказы в радиусе 10 км. Только город для такого подбора не подходит.</span>
-                </label>
 
                 <div className="relative">
                   <Phone
@@ -965,7 +952,7 @@ export default function EditListingPage() {
 
             <button
               type="submit"
-              disabled={isSaving}
+              disabled={isSaving || locationBusy}
               className="mt-6 flex w-full items-center justify-center gap-3 rounded-2xl sm:mt-8 sm:rounded-3xl bg-[#0057ff] px-6 py-5 text-lg font-black text-white shadow-xl shadow-blue-500/20 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isSaving ? (

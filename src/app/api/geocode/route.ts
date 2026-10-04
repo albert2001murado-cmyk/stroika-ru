@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { cityFromAddress } from "@/lib/geocodeCity";
 
 export const runtime = "nodejs";
 
@@ -45,6 +46,7 @@ export async function GET(request: NextRequest) {
     const response = await fetch(url.toString(), {
       method: "GET",
       cache: "no-store",
+      signal: AbortSignal.timeout(10000),
     });
 
     const text = await response.text();
@@ -117,10 +119,24 @@ export async function GET(request: NextRequest) {
     const foundAddress =
       geoObject?.metaDataProperty?.GeocoderMetaData?.text || address;
 
+    const metadata = geoObject?.metaDataProperty?.GeocoderMetaData;
+    const components = metadata?.Address?.Components || [];
+    // Some geocoder responses use the older nested AddressDetails schema.
+    function localityName(value: any): string {
+      if (!value || typeof value !== "object") return "";
+      if (typeof value.LocalityName === "string") return value.LocalityName;
+      for (const child of Object.values(value)) { const name = localityName(child); if (name) return name; }
+      return "";
+    }
+    const city = components.find((part: any) => part.kind === "locality")?.name
+      || localityName(metadata?.AddressDetails)
+      || cityFromAddress(foundAddress);
+
     return NextResponse.json({
       ok: true,
       lat,
       lng,
+      city,
       address: foundAddress,
       rawAddress: address,
     });

@@ -1,4 +1,6 @@
 "use client";
+
+import PublicationLocationPicker, { type PublicationLocation } from "@/components/PublicationLocationPicker";
 import { EMPTY_BANK_DETAILS, bankDetailsFromProfile, normalizeBankDetails, normalizePaymentChoice, paymentLabel, validatePayment, validateBankOwner, type BankDetails } from "@/lib/payments";
 import { formatRussianPhoneInput, normalizeRussianPhone, russianPhoneError } from "@/lib/phone";
 import PaymentFields from "@/components/PaymentFields";
@@ -179,6 +181,8 @@ export default function NewListingPage() {
   );
   const [city, setCity] = useState("");
   const [address, setAddress] = useState("");
+  const [pickedLocation, setPickedLocation] = useState<PublicationLocation | null>(null);
+  const [locationBusy, setLocationBusy] = useState(false);
   const [phone, setPhone] = useState(profile?.phone || "");
   const [priceFrom, setPriceFrom] = useState("");
   const [minimumWorkAmount, setMinimumWorkAmount] = useState("");
@@ -355,6 +359,7 @@ export default function NewListingPage() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (locationBusy) return;
     const catalogIssue = checkCatalogConsistency(catalogCheckValue);
     if (catalogIssue) { setError(catalogIssue.message); return; }
 
@@ -416,7 +421,7 @@ export default function NewListingPage() {
         .filter((item) => item.type === "video")
         .map((item) => item.url);
 
-      const geo = await geocodeAddress(city.trim(), address.trim());
+      const geo = pickedLocation || await geocodeAddress(city.trim(), address.trim());
 
       const enabledFeatureIds = Object.entries(offerFeatures)
         .filter(([, enabled]) => enabled)
@@ -588,38 +593,7 @@ export default function NewListingPage() {
               />
 
               <div className="grid gap-5 md:grid-cols-2">
-                <div className="relative">
-                  <MapPin
-                    size={19}
-                    className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400"
-                  />
-                  <input
-                    value={city}
-                    onChange={(event) => setCity(event.target.value)}
-                    placeholder="Город"
-                    className="input"
-                    style={{ paddingLeft: "52px" }}
-                  />
-                </div>
-
-                <div className="relative">
-                  <MapPin
-                    size={19}
-                    className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400"
-                  />
-                  <input
-                    value={address}
-                    onChange={(event) => setAddress(event.target.value)}
-                    placeholder="Адрес, деревня, улица или объект"
-                    className="input"
-                    style={{ paddingLeft: "52px" }}
-                  />
-                </div>
-
-                <p className="text-xs leading-relaxed text-gray-500 md:col-span-2">
-                  Укажите улицу и дом вашей работы или базы — подберём заказы в радиусе 10 км. Только город для такого подбора не подходит.
-                </p>
-
+              <PublicationLocationPicker city={city} address={address} onCity={setCity} onAddress={setAddress} onLocation={setPickedLocation} onBusy={setLocationBusy} />
                 <div className="relative">
                   <Phone
                     size={19}
@@ -868,7 +842,7 @@ export default function NewListingPage() {
 
             <button
               type="submit"
-              disabled={isSaving}
+              disabled={isSaving || locationBusy}
               className="mt-6 flex w-full items-center justify-center gap-3 rounded-2xl sm:mt-8 sm:rounded-3xl bg-[#0057ff] px-6 py-5 text-lg font-black text-white shadow-xl shadow-blue-500/20 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isSaving ? (
