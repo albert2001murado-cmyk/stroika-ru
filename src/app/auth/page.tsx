@@ -1,6 +1,7 @@
 "use client";
 
 import { useAuth } from "@/components/AuthProvider";
+import { formatRussianPhoneInput, normalizeRussianPhone as normalizePhoneForStorage, russianPhoneError } from "@/lib/phone";
 import { auth, db } from "@/lib/firebase";
 import {
   expectedInnLength,
@@ -199,6 +200,14 @@ export default function AuthPage() {
       return;
     }
 
+    if (mode === "register") {
+      const phoneError = russianPhoneError(phone);
+      if (phoneError) {
+        setError(phoneError);
+        return;
+      }
+    }
+
     if (mode === "register" && isBusiness) {
       if (!company || lookupState !== "success") {
         setError("Сначала укажите действующий ИНН и дождитесь проверки.");
@@ -222,7 +231,7 @@ export default function AuthPage() {
           accountType,
           companyInn: isBusiness ? normalizeInn(inn) : undefined,
           city,
-          phone,
+          phone: normalizePhoneForStorage(phone),
         });
       } else if (loginMethod === "email") {
         await login(email, password, rememberMe);
@@ -638,9 +647,9 @@ export default function AuthPage() {
                           style={{ paddingLeft: "58px" }}
                           inputMode="tel"
                           autoComplete="tel"
-                          placeholder="Телефон"
+                          placeholder="+7 (999) 123-45-67"
                           value={phone}
-                          onChange={(event) => setPhone(event.target.value)}
+                          onChange={(event) => setPhone(formatRussianPhoneInput(event.target.value))}
                           required
                         />
                       </div>

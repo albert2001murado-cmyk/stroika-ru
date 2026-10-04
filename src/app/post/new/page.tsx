@@ -1,5 +1,6 @@
 "use client";
 import { EMPTY_BANK_DETAILS, bankDetailsFromProfile, normalizeBankDetails, normalizePaymentChoice, paymentLabel, validatePayment, validateBankOwner, type BankDetails } from "@/lib/payments";
+import { formatRussianPhoneInput, normalizeRussianPhone, russianPhoneError } from "@/lib/phone";
 import PaymentFields from "@/components/PaymentFields";
 import { checkCatalogConsistency, type CatalogConsistencyInput } from "@/lib/catalogConsistency";
 import CatalogConsistencyHint from "@/components/CatalogConsistencyHint";
@@ -180,18 +181,25 @@ export default function NewListingPage() {
   const [address, setAddress] = useState("");
   const [phone, setPhone] = useState(profile?.phone || "");
   const [priceFrom, setPriceFrom] = useState("");
+  const [minimumWorkAmount, setMinimumWorkAmount] = useState("");
+  const [minimumWorkUnit, setMinimumWorkUnit] = useState("м²");
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>(["cash_or_transfer"]);
   const [bankDetails, setBankDetails] = useState<BankDetails>({ ...EMPTY_BANK_DETAILS });
   const [bankConfirmed, setBankConfirmed] = useState(false);
   useEffect(() => {
     const defaults = bankDetailsFromProfile(profile);
-    setBankDetails(current => ({ ...current, recipientName: current.recipientName || defaults.recipientName, inn: current.inn || defaults.inn, kpp: current.kpp || defaults.kpp }));
-  }, [profile?.companyOfficialName, profile?.companyName, profile?.companyInn, profile?.companyKpp, profile?.displayName]);
+    setBankDetails(current => ({ ...defaults, ...current, recipientName: current.recipientName || defaults.recipientName, inn: current.inn || defaults.inn, kpp: current.kpp || defaults.kpp }));
+    setBankConfirmed(profile?.bankDetailsConfirmed === true);
+    if (!phone && profile?.phone) setPhone(formatRussianPhoneInput(profile.phone));
+  }, [profile?.bankDetails, profile?.bankDetailsConfirmed, profile?.companyOfficialName, profile?.companyName, profile?.companyInn, profile?.companyKpp, profile?.displayName, profile?.phone]);
 
   const initialOfferGroup = getOfferGroup(defaultCatalogPath.category);
   const [offerAction, setOfferAction] = useState(
     getOfferActions(initialOfferGroup)[0]?.id || ""
   );
+  const [offerActionIds, setOfferActionIds] = useState<string[]>([
+    getOfferActions(initialOfferGroup)[0]?.id || "",
+  ].filter(Boolean));
   const [offerFeatures, setOfferFeatures] = useState<Record<string, boolean>>(
     {}
   );
@@ -233,9 +241,27 @@ export default function NewListingPage() {
 
     if (categoryChanged) {
       const nextGroup = getOfferGroup(next.category);
-      setOfferAction(getOfferActions(nextGroup)[0]?.id || "");
+      const firstAction = getOfferActions(nextGroup)[0]?.id || "";
+      setOfferAction(firstAction);
+      setOfferActionIds([firstAction].filter(Boolean));
       setOfferFeatures({});
     }
+  }
+
+  function toggleOfferAction(actionId: string) {
+    if (offerGroup !== "services") {
+      setOfferAction(actionId);
+      setOfferActionIds([actionId]);
+      return;
+    }
+    setOfferActionIds((current) => {
+      const next = current.includes(actionId)
+        ? current.filter((id) => id !== actionId)
+        : [...current, actionId];
+      const safe = next.length ? next : [actionId];
+      setOfferAction(safe[0]);
+      return safe;
+    });
   }
 
   function toggleOfferFeature(featureId: string) {
@@ -343,7 +369,7 @@ export default function NewListingPage() {
       return;
     }
 
-    if (!offerAction) {
+    if (!offerActionIds.length) {
       setError("Выбери, что именно ты предлагаешь.");
       return;
     }
@@ -353,12 +379,23 @@ export default function NewListingPage() {
       return;
     }
 
-    if (!phone.trim()) {
-      setError("Укажи телефон.");
+    const phoneError = russianPhoneError(phone);
+    if (phoneError) {
+      setError(phoneError);
       return;
     }
 
-    const paymentError = validatePayment(paymentMethods, bankDetails, profile?.accountType, bankConfirmed) || validateBankOwner(paymentMethods, bankDetails, profile);
+    if (offerGroup === "services" && minimumWorkAmount && Number(minimumWorkAmount) <= 0) {
+      setError("Минимальный объём работы должен быть больше нуля.");
+      return;
+    }
+
+    const savedBankDetails = bankDetailsFromProfile(profile);
+    const profileBankError = paymentMethods[0] === "bank_account"
+      ? validatePayment(paymentMethods, savedBankDetails, profile?.accountType, profile?.bankDetailsConfirmed)
+      : null;
+    if (profileBankError) { setError(`Сначала сохраните расчётный счёт в профиле: ${profileBankError}`); return; }
+    const paymentError = paymentMethods[0] === "bank_account" ? validateBankOwner(paymentMethods, savedBankDetails, profile) : validatePayment(paymentMethods, bankDetails, profile?.accountType, bankConfirmed);
     if (paymentError) { setError(paymentError); return; }
     setIsSaving(true);
     setError("");
@@ -393,13 +430,12 @@ export default function NewListingPage() {
         city: city.trim(),
         group: offerGroup,
         actionId: offerAction,
+        actionIds: offerActionIds,
         enabledFeatureIds,
       });
-      const capabilities = legacyCapabilitiesFromOffer(
-        offerGroup,
-        offerAction,
-        offerFeatures
-      );
+      const capabilities = Array.from(new Set(offerActionIds.flatMap((actionId) =>
+        legacyCapabilitiesFromOffer(offerGroup, actionId, offerFeatures)
+      )));
       const listingRef = await addDoc(collection(db, "listings"), {
         title: title.trim(),
         description: description.trim(),
@@ -419,11 +455,11 @@ export default function NewListingPage() {
         lng: geo?.lng ?? null,
         geocodedAddress: geo?.address ?? "",
 
-        phone: phone.trim(),
+        phone: normalizeRussianPhone(phone),
         priceFrom: priceFrom.trim() ? Number(priceFrom) : null,
         paymentMethods,
         paymentSchemaVersion: 2,
-        bankDetails: paymentMethods[0] === "bank_account" ? normalizeBankDetails(bankDetails) : null,
+        bankDetails: paymentMethods[0] === "bank_account" ? normalizeBankDetails(savedBankDetails) : null,
         bankDetailsConfirmed: paymentMethods[0] === "bank_account" && bankConfirmed,
         bankDetailsConfirmedAt: paymentMethods[0] === "bank_account" ? serverTimestamp() : null,
 
@@ -440,8 +476,11 @@ export default function NewListingPage() {
         capabilities,
         searchGroup: offerGroup,
         offerAction,
+        offerActions: offerActionIds,
         offerActionLabel: selectedOfferAction?.label || "",
         offerFeatures,
+        minimumWorkAmount: offerGroup === "services" && minimumWorkAmount ? Number(minimumWorkAmount) : null,
+        minimumWorkUnit: offerGroup === "services" && minimumWorkAmount ? minimumWorkUnit : "",
         searchTags,
         searchText: searchTags.join(" "),
         searchVersion: 1,
@@ -588,8 +627,8 @@ export default function NewListingPage() {
                   />
                   <input
                     value={phone}
-                    onChange={(event) => setPhone(event.target.value)}
-                    placeholder="Телефон"
+                    onChange={(event) => setPhone(formatRussianPhoneInput(event.target.value))}
+                    placeholder="+7 (999) 123-45-67"
                     className="input"
                     style={{ paddingLeft: "52px" }}
                   />
@@ -623,13 +662,13 @@ export default function NewListingPage() {
 
               <div className="mt-5 grid gap-3 md:grid-cols-3">
                 {offerActions.map((action) => {
-                  const active = action.id === offerAction;
+                  const active = offerActionIds.includes(action.id);
 
                   return (
                     <button
                       key={action.id}
                       type="button"
-                      onClick={() => setOfferAction(action.id)}
+                      onClick={() => toggleOfferAction(action.id)}
                       className={[
                         "group relative min-h-[128px] rounded-[24px] border p-4 text-left transition duration-300",
                         active
@@ -673,6 +712,19 @@ export default function NewListingPage() {
                   );
                 })}
               </div>
+
+              {offerGroup === "services" ? (
+                <div className="mt-6 rounded-[22px] border border-blue-100 bg-white p-4 sm:p-5">
+                  <h3 className="font-black text-slate-950">Минимальный объём заказа</h3>
+                  <p className="mt-1 text-sm font-medium text-slate-500">Укажите, с какого объёма вы готовы взять работу. Поле можно оставить пустым.</p>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_180px]">
+                    <input value={minimumWorkAmount} onChange={(event) => setMinimumWorkAmount(event.target.value.replace(/[^\d.,]/g, "").replace(",", "."))} inputMode="decimal" placeholder="Например, 100" className="input" />
+                    <select value={minimumWorkUnit} onChange={(event) => setMinimumWorkUnit(event.target.value)} className="input">
+                      {["м²", "м³", "пог. м", "шт.", "часов", "смен"].map((unit) => <option key={unit}>{unit}</option>)}
+                    </select>
+                  </div>
+                </div>
+              ) : null}
 
               <div className="mt-6">
                 <h3 className="text-base font-black text-gray-950">
@@ -810,7 +862,7 @@ export default function NewListingPage() {
                 />
 
                 <div className="md:col-span-2"><PaymentFields methods={paymentMethods} onMethod={togglePaymentMethod}
-                  bank={bankDetails} onBank={setBankDetails} confirmed={bankConfirmed} onConfirm={setBankConfirmed} accountType={profile?.accountType} /></div>
+                  bank={bankDetails} onBank={setBankDetails} confirmed={bankConfirmed} onConfirm={setBankConfirmed} accountType={profile?.accountType} useProfileBank /></div>
               </div>
             </section>
 

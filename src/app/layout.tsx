@@ -3,6 +3,7 @@ import "./globals.css";
 import { AuthProvider } from "@/components/AuthProvider";
 import Header from "@/components/Header";
 import Link from "next/link";
+import PhoneMigrationPrompt from "@/components/PhoneMigrationPrompt";
 
 
 export const viewport: Viewport = {
@@ -28,6 +29,7 @@ export default function RootLayout({
       <body>
         <AuthProvider>
           <Header />
+          <PhoneMigrationPrompt />
           {children}
           <footer className="border-t border-slate-200 bg-white px-4 py-6 text-xs text-slate-500 sm:py-8 sm:text-sm">
             <div className="mx-auto grid max-w-7xl grid-cols-2 gap-2 font-bold sm:flex sm:flex-wrap sm:items-center sm:justify-center sm:gap-x-5 sm:gap-y-3">

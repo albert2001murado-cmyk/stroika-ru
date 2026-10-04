@@ -2,21 +2,22 @@
 import { BANK_FIELDS, PAYMENT_OPTIONS, normalizePaymentChoice, type BankDetails, type PaymentChoice } from "@/lib/payments";
 import { Banknote, Landmark } from "lucide-react";
 
-export default function PaymentFields({ methods, onMethod, bank, onBank, confirmed, onConfirm, accountType }: {
+export default function PaymentFields({ methods, onMethod, bank, onBank, confirmed, onConfirm, accountType, bankOnly = false, useProfileBank = false }: {
   methods: unknown; onMethod: (method: PaymentChoice) => void; bank: BankDetails;
-  onBank: (bank: BankDetails) => void; confirmed: boolean; onConfirm: (value: boolean) => void; accountType?: string;
+  onBank: (bank: BankDetails) => void; confirmed: boolean; onConfirm: (value: boolean) => void; accountType?: string; bankOnly?: boolean; useProfileBank?: boolean;
 }) {
   const choice = normalizePaymentChoice(methods);
   return <div className="mt-5 space-y-4">
-    <div role="radiogroup" aria-label="Способ оплаты" className="grid gap-3 sm:grid-cols-2">
+    {!bankOnly ? <div role="radiogroup" aria-label="Способ оплаты" className="grid gap-3 sm:grid-cols-2">
       {PAYMENT_OPTIONS.map(option => <button key={option.value} type="button" role="radio" aria-checked={choice === option.value}
         onClick={() => onMethod(option.value)} className={`flex min-h-16 items-center gap-3 rounded-2xl border p-4 text-left text-sm font-bold transition ${choice === option.value ? "border-blue-600 bg-blue-50 text-blue-700" : "border-slate-200 bg-white text-slate-700 hover:border-blue-300"}`}>
         {option.value === "bank_account" ? <Landmark size={22} className="shrink-0" /> : <Banknote size={22} className="shrink-0" />}{option.label}
       </button>)}
-    </div>
-    {choice === "bank_account" ? <fieldset className="rounded-2xl border border-blue-100 bg-slate-50 p-4 sm:p-5">
+    </div> : null}
+    {choice === "bank_account" && useProfileBank ? <div className="flex items-start gap-3 rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm font-bold leading-6 text-blue-800"><Landmark className="mt-0.5 shrink-0" size={20} />В объявление будут добавлены актуальные реквизиты, сохранённые в вашем профиле. Изменить их можно в настройках профиля.</div> : null}
+    {choice === "bank_account" && !useProfileBank ? <fieldset className="rounded-2xl border border-blue-100 bg-slate-50 p-4 sm:p-5">
       <legend className="px-2 font-bold text-slate-900">Реквизиты для оплаты</legend>
-      <p className="mb-4 text-sm text-slate-600">Укажите действующий счёт получателя. Реквизиты будут показаны в объявлении.</p>
+      <p className="mb-4 text-sm text-slate-600">Укажите действующий счёт получателя. Реквизиты будут видны в профиле и доступны для отправки в чате.</p>
       <div className="grid gap-4 sm:grid-cols-2">{BANK_FIELDS.filter(field => field.key !== "kpp" || accountType === "ooo").map(field => <label key={field.key} className={field.key === "recipientName" || field.key === "bankName" ? "sm:col-span-2" : ""}>
         <span className="mb-1.5 block text-sm font-semibold text-slate-700">{field.label}{field.key === "inn" && accountType !== "ip" && accountType !== "ooo" ? " (необязательно)" : ""}</span>
         <input value={bank[field.key]} inputMode={field.numeric ? "numeric" : "text"} maxLength={field.maxLength} autoComplete="off"

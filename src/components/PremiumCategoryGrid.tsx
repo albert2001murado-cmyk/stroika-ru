@@ -340,10 +340,10 @@ function buildActions(
 
   return [
     {
-      title: "Найти исполнителя",
-      description: `Мастера и компании: ${subject.toLowerCase()}`,
+      title: "Заказать конкретную работу",
+      description: `Одна работа или отдельный этап: ${subject.toLowerCase()}`,
       image: CATEGORY_IMAGES.repair,
-      selection: { category: categoryName, subcategory },
+      selection: { category: categoryName, subcategory, offerAction: "service" },
     },
     {
       title: "Заказать работу под ключ",

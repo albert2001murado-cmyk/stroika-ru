@@ -21,6 +21,7 @@ export type SearchableListingFields = {
   category?: string;
   searchGroup?: string;
   offerAction?: string;
+  offerActions?: string[];
   offerActionLabel?: string;
   offerFeatures?: Record<string, boolean>;
   searchTags?: string[];
@@ -83,21 +84,15 @@ const ACTIONS: Record<OfferGroup, OfferActionOption[]> = {
   services: [
     {
       id: "service",
-      label: "Выполнение работы",
-      description: "Отдельная строительная или ремонтная услуга",
-      keywords: ["услуга", "мастер", "исполнитель", "работа"],
+      label: "Выполнение конкретной работы",
+      description: "Одна выбранная работа или отдельный этап",
+      keywords: ["услуга", "мастер", "исполнитель", "конкретная работа", "отдельная работа", "часть работ"],
     },
     {
       id: "service_turnkey",
       label: "Работа под ключ",
       description: "Полный цикл работы одним исполнителем",
       keywords: ["под ключ", "полный комплекс", "весь комплекс"],
-    },
-    {
-      id: "service_consultation",
-      label: "Выезд и консультация",
-      description: "Осмотр объекта, консультация и расчёт",
-      keywords: ["выезд", "консультация", "осмотр", "расчет", "стоимость"],
     },
   ],
   equipment: [
@@ -164,6 +159,12 @@ const FEATURES: Record<OfferGroup, OfferFeatureOption[]> = {
     },
   ],
   services: [
+    {
+      id: "consultationAvailable",
+      label: "Выезд и консультация",
+      description: "Осмотр объекта, консультация и предварительный расчёт",
+      keywords: ["выезд", "консультация", "осмотр", "расчет", "стоимость"],
+    },
     {
       id: "urgentAvailable",
       label: "Срочный выезд",
@@ -401,9 +402,12 @@ export function matchesOfferSelection(
         capabilities: listing.capabilities,
       });
   const effectiveAction = listing.offerAction || fallback?.actionId || "";
+  const effectiveActions = Array.isArray(listing.offerActions) && listing.offerActions.length
+    ? listing.offerActions
+    : [effectiveAction].filter(Boolean);
   const effectiveFeatures = listing.offerFeatures || fallback?.features || {};
 
-  if (actionId && effectiveAction !== actionId) return false;
+  if (actionId && !effectiveActions.includes(actionId)) return false;
   return requiredFeatureIds.every((id) => Boolean(effectiveFeatures[id]));
 }
 
@@ -415,11 +419,11 @@ export function buildListingSearchTags(input: {
   city: string;
   group: OfferGroup;
   actionId: string;
+  actionIds?: string[];
   enabledFeatureIds: string[];
 }) {
-  const action = ACTIONS[input.group].find(
-    (item) => item.id === input.actionId
-  );
+  const actionIds = input.actionIds?.length ? input.actionIds : [input.actionId];
+  const actions = ACTIONS[input.group].filter((item) => actionIds.includes(item.id));
 
   const enabledFeatures = FEATURES[input.group].filter((item) =>
     input.enabledFeatureIds.includes(item.id)
@@ -439,8 +443,7 @@ export function buildListingSearchTags(input: {
     input.subcategory,
     input.city,
     GROUP_INFO[input.group].title,
-    action?.label || "",
-    ...(action?.keywords || []),
+    ...actions.flatMap((action) => [action.label, ...action.keywords]),
     ...enabledFeatures.flatMap((item) => [item.label, ...item.keywords]),
     ...categorySynonyms,
   ];

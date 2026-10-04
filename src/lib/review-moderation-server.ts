@@ -105,6 +105,28 @@ async function recalculateListingRating(listingId: string) {
   );
 }
 
+async function recalculateUserRating(targetUserId: string) {
+  if (!targetUserId || targetUserId.includes("/")) return;
+  const snapshot = await getAdminDb()
+    .collection("reviews")
+    .where("targetUserId", "==", targetUserId)
+    .limit(500)
+    .get();
+  const ratings = snapshot.docs
+    .map((document) => object(document.data()))
+    .filter((review) => safeText(review.moderationStatus, 32) === "approved")
+    .map((review) => Number(review.rating))
+    .filter((rating) => Number.isFinite(rating) && rating >= 1 && rating <= 5);
+  const average = ratings.length
+    ? Math.round((ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length) * 10) / 10
+    : 0;
+  await getAdminDb().collection("users").doc(targetUserId).set({
+    ratingAverage: average,
+    reviewsCount: ratings.length,
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+}
+
 export async function processReview(reviewIdValue: string) {
   const reviewId = safeText(reviewIdValue, 160);
   if (!reviewId || reviewId.includes("/")) throw new Error("Некорректный отзыв.");
@@ -172,6 +194,7 @@ export async function processReview(reviewIdValue: string) {
 
   if (result.decision === "approved") {
     await recalculateListingRating(safeText(data.listingId, 160));
+    await recalculateUserRating(safeText(data.targetUserId || data.listingAuthorId, 160));
   }
 
   if (authorId) {

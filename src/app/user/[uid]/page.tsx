@@ -6,6 +6,8 @@ import UserBlockButton from "@/components/UserBlockButton";
 import CustomerRequestCard from "@/components/CustomerRequestCard";
 import { ListingCard } from "@/components/ListingCard";
 import VerifiedBadge from "@/components/VerifiedBadge";
+import BankDetailsCard from "@/components/BankDetailsCard";
+import ProfileReviews from "@/components/ProfileReviews";
 import { db } from "@/lib/firebase";
 import { isPublicationApproved } from "@/lib/moderation";
 import { firestoreDateToMillis } from "@/types";
@@ -810,6 +812,18 @@ export default function PublicUserPage() {
             </p>
           </section>
         ) : null}
+
+        {profile.bankDetailsConfirmed ? (
+          <div className="public-profile-reveal mt-6" style={{ animationDelay: "270ms" }}>
+            <BankDetailsCard value={profile.bankDetails} />
+          </div>
+        ) : null}
+
+        <ProfileReviews
+          userId={uid}
+          listingIds={listings.map((item) => item.id)}
+          requestIds={requests.map((item) => item.id)}
+        />
 
         <section
           className="public-profile-reveal mt-6 rounded-[34px] bg-white p-5 shadow-sm ring-1 ring-slate-200/70 sm:p-8"

@@ -4,15 +4,20 @@ import SharePublicationButton from "@/components/SharePublicationButton";
 import { useAuth } from "@/components/AuthProvider";
 import ReportDialog from "@/components/ReportDialog";
 import { db } from "@/lib/firebase";
-import { isPublicationApproved } from "@/lib/moderation";
-import type { CustomerRequest } from "@/types";
+import { isPublicationApproved, isReviewApproved } from "@/lib/moderation";
+import { requestReviewModeration } from "@/lib/reviewModeration";
+import type { CustomerRequest, Review } from "@/types";
 import { firestoreDateToMillis } from "@/types";
 import {
   doc,
+  addDoc,
+  collection,
   getDoc,
   onSnapshot,
   serverTimestamp,
   setDoc,
+  query,
+  where,
 } from "firebase/firestore";
 import {
   ArrowLeft,
@@ -29,12 +34,13 @@ import {
   MessageCircle,
   Phone,
   Sparkles,
+  Star,
   UserRound,
   X,
 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
 function formatBudget(request: CustomerRequest) {
   const from = request.budgetFrom ?? request.budget ?? null;
@@ -84,6 +90,10 @@ export default function CustomerRequestPage() {
   const [customerPhone, setCustomerPhone] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const [chatError, setChatError] = useState("");
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewText, setReviewText] = useState("");
+  const [reviewSending, setReviewSending] = useState(false);
 
   useEffect(() => {
     if (!requestId) {
@@ -109,6 +119,46 @@ export default function CustomerRequestPage() {
       () => setLoading(false)
     );
   }, [profile, requestId, user?.uid]);
+
+  useEffect(() => {
+    if (!requestId) return;
+    return onSnapshot(query(collection(db, "reviews"), where("requestId", "==", requestId)), (snapshot) => {
+      const next = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as Review).filter(isReviewApproved);
+      next.sort((a, b) => firestoreDateToMillis(b.createdAt) - firestoreDateToMillis(a.createdAt));
+      setReviews(next);
+    });
+  }, [requestId]);
+
+  async function submitReview(event: FormEvent) {
+    event.preventDefault();
+    if (!user) { router.push("/auth"); return; }
+    if (!request || reviewSending || reviewText.trim().length < 3) return;
+    setReviewSending(true);
+    try {
+      const reviewRef = await addDoc(collection(db, "reviews"), {
+        requestId: request.id,
+        requestTitle: request.title || "",
+        targetUserId: request.customerId || "",
+        targetUserName: request.customerName || "Заказчик",
+        publicationId: request.id,
+        publicationKind: "request",
+        publicationTitle: request.title || "",
+        authorId: user.uid,
+        authorName: profile?.displayName || user.displayName || user.email || "Пользователь",
+        authorAvatarUrl: profile?.avatarUrl || user.photoURL || "",
+        rating: reviewRating,
+        text: reviewText.trim(),
+        moderationStatus: "pending",
+        moderationStage: "queued",
+        moderationReason: "",
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      void requestReviewModeration(reviewRef.id);
+      setReviewText("");
+      setReviewRating(5);
+    } finally { setReviewSending(false); }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -491,6 +541,12 @@ export default function CustomerRequestPage() {
               <p className="mt-5 whitespace-pre-wrap text-base leading-7 text-slate-600 sm:mt-6 sm:leading-8">
                 {request.description}
               </p>
+            </section>
+
+            <section className="rounded-[24px] bg-white p-4 shadow-[0_22px_70px_rgba(15,23,42,0.07)] ring-1 ring-slate-200/70 sm:rounded-[34px] sm:p-8">
+              <div className="flex items-end justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[0.15em] text-[#0057ff]">Единая история</p><h2 className="mt-1 text-2xl font-black text-slate-950">Отзывы о заказчике</h2></div><span className="rounded-2xl bg-blue-50 px-3 py-2 text-sm font-black text-[#0057ff]">{reviews.length}</span></div>
+              {!isOwner ? <form onSubmit={submitReview} className="mt-5 grid gap-3"><select value={reviewRating} onChange={(event) => setReviewRating(Number(event.target.value))} className="input bg-white font-bold">{[5,4,3,2,1].map((value) => <option key={value} value={value}>{value} — {value === 5 ? "отлично" : value === 4 ? "хорошо" : value === 3 ? "нормально" : value === 2 ? "плохо" : "очень плохо"}</option>)}</select><textarea value={reviewText} onChange={(event) => setReviewText(event.target.value)} className="input min-h-28 resize-y" placeholder="Расскажите, как прошла работа с заказчиком" /><button disabled={reviewSending || reviewText.trim().length < 3} className="rounded-2xl bg-[#0057ff] px-5 py-3 font-black text-white disabled:opacity-50">{reviewSending ? "Отправляем..." : "Отправить на модерацию"}</button></form> : null}
+              <div className="mt-5 grid gap-3">{reviews.length ? reviews.map((review) => <article key={review.id} className="rounded-[22px] bg-slate-50 p-4"><div className="flex items-center justify-between gap-2"><p className="font-black text-slate-950">{review.authorName || "Пользователь"}</p><div className="flex">{[1,2,3,4,5].map((star) => <Star key={star} size={15} className={star <= Number(review.rating || 0) ? "fill-amber-400 text-amber-400" : "text-slate-300"} />)}</div></div><p className="mt-3 text-sm font-medium leading-6 text-slate-600">{review.text}</p><time className="mt-2 block text-xs font-bold text-slate-400">{formatDate(review.createdAt as any)}</time></article>) : <p className="rounded-[22px] bg-slate-50 p-5 text-sm font-bold text-slate-500">Отзывов пока нет.</p>}</div>
             </section>
           </div>
 

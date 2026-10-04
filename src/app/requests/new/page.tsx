@@ -11,6 +11,7 @@ import {
 import type { CatalogPathValue } from "@/data/catalogForm";
 import { db } from "@/lib/firebase";
 import { requestPublicationModeration } from "@/lib/publicationModerationClient";
+import { normalizeRussianPhone, russianPhoneError } from "@/lib/phone";
 import { geocodePublicationLocation } from "@/lib/publication-location-client";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import {
@@ -146,6 +147,12 @@ export default function NewRequestPage() {
       return;
     }
 
+    const profilePhoneError = russianPhoneError(profile?.phone);
+    if (profilePhoneError) {
+      setError("Перед публикацией откройте профиль и укажите телефон в формате +7 (999) 123-45-67.");
+      return;
+    }
+
     const from = parseMoney(budgetFrom);
     const to = parseMoney(budgetTo);
 
@@ -181,7 +188,7 @@ export default function NewRequestPage() {
         customerId: user.uid,
         customerName,
         customerAvatar,
-        customerPhone,
+        customerPhone: normalizeRussianPhone(customerPhone),
         title: title.trim(),
         description: description.trim(),
         category: catalogPath.category,

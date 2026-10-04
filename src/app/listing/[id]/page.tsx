@@ -14,7 +14,8 @@ import {
   getOfferGroupInfo,
   type OfferGroup,
 } from "@/lib/listingOffer";
-import { isPublicationApproved } from "@/lib/moderation";
+import { isPublicationApproved, isReviewApproved } from "@/lib/moderation";
+import { requestReviewModeration } from "@/lib/reviewModeration";
 import type { Listing, Review, UserProfile } from "@/types";
 import {
   Banknote,
@@ -147,7 +148,7 @@ export default function ListingPage() {
         return bTime - aTime;
       });
 
-      setReviews(data);
+      setReviews(data.filter(isReviewApproved));
     });
 
     return () => unsub();
@@ -167,9 +168,13 @@ export default function ListingPage() {
     const group = groups.includes(listing.searchGroup as OfferGroup)
       ? (listing.searchGroup as OfferGroup)
       : getOfferGroup(listing.category || "");
-    const action = getOfferAction(group, listing.offerAction);
+    const actionIds = Array.isArray(listing.offerActions) && listing.offerActions.length
+      ? listing.offerActions
+      : listing.offerAction ? [listing.offerAction] : [];
+    const actions = actionIds.map((actionId) => getOfferAction(group, actionId)).filter(Boolean);
+    const action = actions[0] || getOfferAction(group, listing.offerAction);
     const features = getEnabledOfferFeatures(group, listing.offerFeatures);
-    const actionLabel = listing.offerActionLabel || action?.label || "";
+    const actionLabel = actions.length ? actions.map((item) => item?.label).filter(Boolean).join(" · ") : listing.offerActionLabel || action?.label || "";
 
     if (!actionLabel && features.length === 0) return null;
 
@@ -359,14 +364,27 @@ export default function ListingPage() {
 
     if (!reviewText.trim()) return;
 
-    await addDoc(collection(db, "reviews"), {
+    const reviewRef = await addDoc(collection(db, "reviews"), {
       listingId: id,
+      listingTitle: listing?.title || "",
+      listingAuthorId: listing?.authorId || "",
+      targetUserId: listing?.authorId || "",
+      targetUserName: listing?.authorName || authorProfile?.displayName || "",
+      publicationId: id,
+      publicationKind: "listing",
+      publicationTitle: listing?.title || "",
       authorId: user.uid,
       authorName: profile?.displayName || user.displayName || user.email,
+      authorAvatarUrl: profile?.avatarUrl || user.photoURL || "",
       rating,
       text: reviewText.trim(),
+      moderationStatus: "pending",
+      moderationStage: "queued",
+      moderationReason: "",
       createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
     });
+    void requestReviewModeration(reviewRef.id);
 
     setReviewText("");
     setRating(5);
@@ -587,6 +605,11 @@ export default function ListingPage() {
                       ? `${listing.priceFrom.toLocaleString("ru-RU")} ₽`
                       : "Договорная"}
                   </p>
+                  {listing.minimumWorkAmount ? (
+                    <p className="mt-2 text-sm font-black text-[#0057ff]">
+                      Минимальный объём: {listing.minimumWorkAmount.toLocaleString("ru-RU")} {listing.minimumWorkUnit || "ед."}
+                    </p>
+                  ) : null}
                 </div>
               </div>
             </div>

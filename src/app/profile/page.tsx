@@ -4,6 +4,9 @@ import CustomerRequestCard from "@/components/CustomerRequestCard";
 import { ListingCard } from "@/components/ListingCard";
 import { useAuth } from "@/components/AuthProvider";
 import { db } from "@/lib/firebase";
+import PaymentFields from "@/components/PaymentFields";
+import { EMPTY_BANK_DETAILS, bankDetailsFromProfile, normalizeBankDetails, validatePayment, type BankDetails } from "@/lib/payments";
+import { formatRussianPhoneInput, needsRussianPhoneUpdate, normalizeRussianPhone, russianPhoneError } from "@/lib/phone";
 import type { AccountType, CustomerRequest, Listing } from "@/types";
 import { updateProfile } from "firebase/auth";
 import {
@@ -38,8 +41,9 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import ProfileTools from "@/components/ProfileTools";
+import ProfileReviews from "@/components/ProfileReviews";
 import { moderationLabel } from "@/lib/moderation";
-import { ChangeEvent, FormEvent, useEffect, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
 
 type UploadedFile = {
   type: "image" | "video";
@@ -57,6 +61,9 @@ export default function ProfilePage() {
   const [companyName, setCompanyName] = useState("");
   const [city, setCity] = useState("");
   const [phone, setPhone] = useState("");
+  const [bankDetails, setBankDetails] = useState<BankDetails>({ ...EMPTY_BANK_DETAILS });
+  const [bankConfirmed, setBankConfirmed] = useState(false);
+  const legacyPhonePrompted = useRef(false);
 
   const [avatarUrl, setAvatarUrl] = useState("");
   const [avatarPath, setAvatarPath] = useState("");
@@ -76,7 +83,14 @@ export default function ProfilePage() {
     setAccountType(profile?.accountType || "individual");
     setCompanyName(profile?.companyName || "");
     setCity(profile?.city || "");
-    setPhone(profile?.phone || "");
+    const oldPhone = profile?.phone || "";
+    setPhone(formatRussianPhoneInput(oldPhone));
+    setBankDetails(bankDetailsFromProfile(profile));
+    setBankConfirmed(profile?.bankDetailsConfirmed === true);
+    if (needsRussianPhoneUpdate(oldPhone) && !legacyPhonePrompted.current) {
+      legacyPhonePrompted.current = true;
+      window.alert("Поменяйте номер на формат +7 — это актуальный код страны. Мы уже подготовили правильный формат, сохраните профиль.");
+    }
     setAvatarUrl(profile?.avatarUrl || user?.photoURL || "");
     setAvatarPath(profile?.avatarPath || "");
   }, [profile, user]);
@@ -181,6 +195,19 @@ export default function ProfilePage() {
 
     if (!user) return;
 
+    const phoneError = russianPhoneError(phone);
+    if (phoneError) {
+      setMessage(phoneError);
+      return;
+    }
+    if (accountType === "ip" || accountType === "ooo" || bankConfirmed) {
+      const bankError = validatePayment(["bank_account"], bankDetails, accountType, bankConfirmed);
+      if (bankError) {
+        setMessage(`Заполните расчётный счёт: ${bankError}`);
+        return;
+      }
+    }
+
     setSaving(true);
     setMessage("");
 
@@ -222,7 +249,10 @@ export default function ProfilePage() {
           email: user.email,
           displayName: safeDisplayName,
           city: city.trim(),
-          phone: phone.trim(),
+          phone: normalizeRussianPhone(phone),
+          bankDetails: normalizeBankDetails(bankDetails),
+          bankDetailsConfirmed: bankConfirmed,
+          bankDetailsConfirmedAt: serverTimestamp(),
           avatarUrl: finalAvatarUrl,
           avatarPath: finalAvatarPath,
           updatedAt: serverTimestamp(),
@@ -497,10 +527,25 @@ export default function ProfilePage() {
                 <input
                   className="input"
                   style={{ paddingLeft: "58px" }}
-                  placeholder="Телефон"
+                  placeholder="+7 (999) 123-45-67"
                   value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
+                  onChange={(e) => setPhone(formatRussianPhoneInput(e.target.value))}
                 />
+              </div>
+
+              <div className="rounded-[24px] border border-blue-100 bg-blue-50/40 p-4 sm:p-5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-lg font-black text-slate-950">Расчётный счёт</p>
+                  <span className={`rounded-full px-3 py-1 text-xs font-black ${businessAccount ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-500"}`}>
+                    {businessAccount ? "Обязательно" : "По желанию"}
+                  </span>
+                </div>
+                <p className="mt-1 text-sm font-semibold leading-6 text-slate-500">
+                  {businessAccount
+                    ? "Для ИП и ООО реквизиты обязательны. Они используются в анкетах и их можно отправить клиенту в чате."
+                    : "Для физлица заполнение необязательно. Добавьте реквизиты, если хотите отправлять их клиентам в чате."}
+                </p>
+                <PaymentFields methods={["bank_account"]} onMethod={() => undefined} bank={bankDetails} onBank={setBankDetails} confirmed={bankConfirmed} onConfirm={setBankConfirmed} accountType={accountType} bankOnly />
               </div>
             </div>
 
@@ -528,6 +573,7 @@ export default function ProfilePage() {
             </button>
           </form>
 
+          <div className="min-w-0 space-y-5 sm:space-y-6">
           <section className="my-profile-enter my-profile-card rounded-[24px] border border-white bg-white p-4 shadow-sm sm:rounded-[30px] sm:p-6" style={{ animationDelay: "220ms" }}>
             <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
               <div>
@@ -674,6 +720,16 @@ export default function ProfilePage() {
               </div>
             )}
           </section>
+
+          {user ? (
+            <ProfileReviews
+              compact
+              userId={user.uid}
+              listingIds={listings.map((item) => item.id)}
+              requestIds={requests.map((item) => item.id)}
+            />
+          ) : null}
+          </div>
         </div>
       </div>
     </main>

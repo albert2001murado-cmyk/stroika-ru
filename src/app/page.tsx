@@ -23,7 +23,6 @@ import {
   getOfferFeatures,
   getOfferGroup,
   getOfferGroupInfo,
-  matchesListingSearch,
   matchesOfferSelection,
   type SearchableListingFields,
 } from "@/lib/listingOffer";
@@ -450,7 +449,6 @@ export default function HomePage() {
     const query = normalizeCatalogValue(search);
     if (!query) return [];
 
-    const queryWords = query.split(" ").filter(Boolean);
     const seen = new Set<string>();
     const candidates = CATALOG_FORM_SECTIONS.flatMap((section) =>
       getCatalogFormCategories(section.id).flatMap((catalogCategory) =>
@@ -474,7 +472,7 @@ export default function HomePage() {
       const searchable = normalizeCatalogValue(
         [item.title, ...item.path].join(" ")
       );
-      return queryWords.every((word) => searchable.includes(word));
+      return matchesSearchKeywords(searchable, query);
     });
 
     return candidates
@@ -524,12 +522,7 @@ export default function HomePage() {
   const filteredListings = useMemo(() => {
     return listings.filter((listing) => {
       if (!isPublicationApproved(listing)) return false;
-      const matchesSearch = matchesListingSearch(
-        listing as Record<string, any>,
-        search,
-        category,
-        subcategory
-      );
+      const matchesSearch = matchesSearchKeywords(publicationSearchText(listing), search);
       const matchesCategory = category
         ? normalizeCatalogValue(listing.category) === normalizeCatalogValue(category)
         : true;

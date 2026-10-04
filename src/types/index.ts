@@ -19,6 +19,8 @@ export type UserProfile = {
   accountType: AccountType;
   companyName?: string;
   phone?: string;
+  bankDetails?: Record<string, string>;
+  bankDetailsConfirmed?: boolean;
   city?: string;
   avatarUrl?: string;
   avatarPath?: string;
@@ -42,7 +44,16 @@ export type Listing = {
   priceFrom?: number | null;
   phone: string;
 
+  searchGroup?: string;
+  offerAction?: string;
+  offerActions?: string[];
+  offerActionLabel?: string;
+  offerFeatures?: Record<string, boolean>;
+  minimumWorkAmount?: number | null;
+  minimumWorkUnit?: string;
+
   paymentMethods?: PaymentMethod[];
+  bankDetails?: Record<string, string> | null;
 
   media?: ListingMedia[];
   imageUrls?: string[];
@@ -61,12 +72,23 @@ export type Listing = {
 
 export type Review = {
   id: string;
-  listingId: string;
+  listingId?: string;
+  listingTitle?: string;
+  requestId?: string;
+  requestTitle?: string;
+  publicationId?: string;
+  publicationKind?: "listing" | "request";
+  publicationTitle?: string;
+  targetUserId?: string;
+  targetUserName?: string;
+  authorAvatarUrl?: string;
   authorId: string;
   authorName: string;
   rating: number;
   text: string;
   createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+  moderationStatus?: string;
 };
 
 export type Chat = {

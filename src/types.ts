@@ -66,21 +66,39 @@ export type UserProfile = {
   companyRegistryCheckedAt?: FirestoreDate;
   city?: string;
   phone?: string;
+  bankDetails?: {
+    recipientName: string;
+    inn: string;
+    kpp: string;
+    bankName: string;
+    bik: string;
+    accountNumber: string;
+    correspondentAccount: string;
+  };
+  bankDetailsConfirmed?: boolean;
   verified?: boolean;
   isVerified?: boolean;
   verificationStatus?: VerificationStatus;
   verifiedAt?: FirestoreDate | null;
   verifiedBy?: string;
-  moderationStatus?: string;
   createdAt?: FirestoreDate;
   updatedAt?: FirestoreDate;
+  moderationStatus?: string;
   [key: string]: unknown;
 };
 
 
 export type Review = {
   id: string;
-  listingId: string;
+  listingId?: string;
+  listingTitle?: string;
+  requestId?: string;
+  requestTitle?: string;
+  publicationId?: string;
+  publicationKind?: "listing" | "request";
+  publicationTitle?: string;
+  targetUserId?: string;
+  targetUserName?: string;
   authorId?: string;
   authorName?: string;
   authorAvatarUrl?: string;
@@ -88,6 +106,7 @@ export type Review = {
   text: string;
   createdAt?: FirestoreDate;
   updatedAt?: FirestoreDate;
+  moderationStatus?: string;
   [key: string]: unknown;
 };
 
@@ -139,8 +158,11 @@ export type Listing = {
   capabilities?: string[];
   searchGroup?: string;
   offerAction?: string;
+  offerActions?: string[];
   offerActionLabel?: string;
   offerFeatures?: Record<string, boolean>;
+  minimumWorkAmount?: number | null;
+  minimumWorkUnit?: string;
   searchTags?: string[];
   searchText?: string;
   searchVersion?: number;

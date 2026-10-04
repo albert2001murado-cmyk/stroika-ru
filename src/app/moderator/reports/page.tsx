@@ -63,7 +63,7 @@ export default function ModeratorReportsPage() {
     if (!user) return;
     let reason = "";
     if (status === "rejected") {
-      reason = window.prompt("Укажите причину отклонения:", item.moderationReason || "Публикация не соответствует правилам размещения.")?.trim() || "";
+      reason = window.prompt("Укажите конкретную причину и что исправить. Например: «На фото есть телефон. Загрузите фото без номера».", "")?.trim() || "";
       if (!reason) return;
     }
     try {

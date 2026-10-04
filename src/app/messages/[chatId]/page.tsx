@@ -5,6 +5,7 @@ import ReportDialog from "@/components/ReportDialog";
 import UserBlockButton from "@/components/UserBlockButton";
 import { db } from "@/lib/firebase";
 import { getApiUrl } from "@/lib/getApiUrl";
+import { bankDetailsFromProfile, formatBankDetailsMessage, isBankDetailsMessage, validatePayment } from "@/lib/payments";
 import type { Timestamp } from "firebase/firestore";
 import {
   arrayUnion,
@@ -27,6 +28,7 @@ import {
   Edit3,
   FileText,
   ImagePlus,
+  Landmark,
   Loader2,
   Mic,
   MoreVertical,
@@ -60,6 +62,21 @@ type ChatParticipant = {
   avatarUrl?: string;
   photoURL?: string;
 };
+
+function BankMessageCard({ text, mine }: { text: string; mine: boolean }) {
+  const lines = text.split("\n").slice(1).filter(Boolean);
+  return (
+    <div className={`min-w-[245px] rounded-[20px] p-3 ${mine ? "bg-white/14 ring-1 ring-white/20" : "bg-blue-50 ring-1 ring-blue-100"}`}>
+      <div className="flex items-center gap-2">
+        <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${mine ? "bg-white/15" : "bg-white text-[#0057ff]"}`}><Landmark size={18} /></span>
+        <div><p className="text-[10px] font-black uppercase tracking-[.1em] opacity-75">Оплата</p><p className="text-sm font-black">Реквизиты получателя</p></div>
+      </div>
+      <div className={`mt-3 space-y-1.5 rounded-2xl p-3 text-xs font-bold leading-5 ${mine ? "bg-black/10" : "bg-white"}`}>
+        {lines.map((line) => <p key={line} className="break-all">{line}</p>)}
+      </div>
+    </div>
+  );
+}
 
 type Chat = {
   id: string;
@@ -727,7 +744,9 @@ export default function ChatPage() {
     const senderName =
       profile?.displayName || user.displayName || user.email || "Пользователь";
     const senderAvatarUrl = profile?.avatarUrl || user.photoURL || "";
-    const preview = clean
+    const preview = isBankDetailsMessage(clean)
+      ? "Реквизиты для оплаты"
+      : clean
       ? clean
       : type === "audio"
       ? "Голосовое сообщение"
@@ -851,6 +870,25 @@ export default function ChatPage() {
           ? sendError.message
           : "Не получилось отправить сообщение."
       );
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function shareBankDetails() {
+    if (!user || !chat || sending) return;
+    const bank = bankDetailsFromProfile(profile as any);
+    const validation = validatePayment(["bank_account"], bank, profile?.accountType, profile?.bankDetailsConfirmed);
+    if (validation) {
+      setError(`${validation} Откройте профиль и сохраните актуальные реквизиты.`);
+      return;
+    }
+    setSending(true);
+    setError("");
+    try {
+      await createMessage({ text: formatBankDetailsMessage(bank) });
+    } catch (sendError) {
+      setError(sendError instanceof Error ? sendError.message : "Не получилось отправить реквизиты.");
     } finally {
       setSending(false);
     }
@@ -1257,6 +1295,7 @@ export default function ChatPage() {
               const visibleMessageText = groupInviteToken
                 ? withoutGroupInviteUrl(message.text)
                 : message.text?.trim() || "";
+              const bankDetailsMessage = isBankDetailsMessage(visibleMessageText);
 
               return (
                 <div key={message.id} className="relative">
@@ -1349,7 +1388,7 @@ export default function ChatPage() {
                           <GroupInviteCard token={groupInviteToken} mine={isMine} />
                         ) : null}
 
-                        {visibleMessageText ? (
+                        {bankDetailsMessage ? <BankMessageCard text={visibleMessageText} mine={isMine} /> : visibleMessageText ? (
                           <p className="whitespace-pre-wrap break-words text-sm font-medium leading-6 sm:text-[15px]">
                             {visibleMessageText}
                           </p>
@@ -1590,6 +1629,18 @@ export default function ChatPage() {
                     onChange={handleMediaChange}
                   />
                 </label>
+              ) : null}
+
+              {!editingId ? (
+                <button
+                  type="button"
+                  onClick={shareBankDetails}
+                  disabled={sending}
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-[#0057ff] ring-1 ring-blue-100 transition duration-300 hover:-translate-y-0.5 hover:scale-105 hover:bg-blue-100 disabled:opacity-50"
+                  title="Поделиться расчётным счётом"
+                >
+                  <Landmark size={20} />
+                </button>
               ) : null}
 
               <textarea

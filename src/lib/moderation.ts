@@ -10,6 +10,13 @@ export function isPublicationApproved(item: { moderationStatus?: unknown } | nul
   return status === "" || status === "approved";
 }
 
+export function isReviewApproved(item: { moderationStatus?: unknown } | null | undefined) {
+  if (!item) return false;
+  const status = String(item.moderationStatus || "");
+  // Отзывы, созданные до появления модерации, остаются видимыми.
+  return status === "" || status === "approved";
+}
+
 export function moderationLabel(status?: unknown) {
   if (status === "pending") return "На модерации";
   if (status === "manual_review") return "Дополнительная проверка";

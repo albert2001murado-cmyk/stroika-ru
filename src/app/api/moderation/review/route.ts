@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase-admin";
 import { applyManualModerationDecision } from "@/lib/publication-moderation-server";
+import { validateManualModerationReason } from "@/lib/publication-moderation-feedback";
 import type { PublicationKind } from "@/lib/publication-policy";
 
 export const runtime = "nodejs";
@@ -44,6 +45,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Некорректное решение." }, { status: 400 });
     }
 
+    if (status === "rejected") {
+      const reasonError = validateManualModerationReason(body?.reason);
+      if (reasonError) return NextResponse.json({ error: reasonError }, { status: 400 });
+    }
     const result = await applyManualModerationDecision({
       kind,
       id,

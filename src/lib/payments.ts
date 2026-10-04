@@ -20,8 +20,9 @@ export function normalizeBankDetails(value: unknown): BankDetails {
   return Object.fromEntries(Object.keys(EMPTY_BANK_DETAILS).map(key => [key, String(source[key] || "").trim().slice(0, 250)])) as BankDetails;
 }
 export function bankDetailsFromProfile(profile: Record<string, any> | null | undefined): BankDetails {
-  return { ...EMPTY_BANK_DETAILS, recipientName: profile?.companyOfficialName || profile?.companyName || profile?.displayName || profile?.name || "",
-    inn: profile?.companyInn || "", kpp: profile?.companyKpp || "" };
+  const saved = normalizeBankDetails(profile?.bankDetails);
+  return { ...saved, recipientName: saved.recipientName || profile?.companyOfficialName || profile?.companyName || profile?.displayName || profile?.name || "",
+    inn: saved.inn || profile?.companyInn || "", kpp: saved.kpp || profile?.companyKpp || "" };
 }
 export function validatePayment(methods: unknown, bankValue: unknown, accountType: unknown, confirmed: unknown): string | null {
   if (!Array.isArray(methods) || methods.length !== 1 || !PAYMENT_OPTIONS.some(option => option.value === methods[0])) return "Выберите один способ оплаты.";
@@ -54,4 +55,24 @@ export function validateBankOwner(methods: unknown, bankValue: unknown, profile:
   if (!profile.companyInn) return "В профиле организации не указан ИНН. Сначала заполните данные организации.";
   if (normalizeBankDetails(bankValue).inn !== String(profile.companyInn).trim()) return "ИНН получателя должен совпадать с ИНН организации в вашем профиле.";
   return null;
+}
+
+export const BANK_DETAILS_MESSAGE_PREFIX = "Реквизиты для оплаты Стройка.ру";
+
+export function formatBankDetailsMessage(value: unknown) {
+  const bank = normalizeBankDetails(value);
+  return [
+    BANK_DETAILS_MESSAGE_PREFIX,
+    `Получатель: ${bank.recipientName}`,
+    `ИНН: ${bank.inn || "не указан"}`,
+    ...(bank.kpp ? [`КПП: ${bank.kpp}`] : []),
+    `Банк: ${bank.bankName}`,
+    `БИК: ${bank.bik}`,
+    `Расчётный счёт: ${bank.accountNumber}`,
+    `Корреспондентский счёт: ${bank.correspondentAccount}`,
+  ].join("\n");
+}
+
+export function isBankDetailsMessage(value: unknown) {
+  return String(value || "").startsWith(BANK_DETAILS_MESSAGE_PREFIX);
 }
