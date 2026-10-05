@@ -1,4 +1,6 @@
 "use client";
+import { uploadAuthHeaders } from "@/lib/uploadAuth";
+
 
 import { useAuth } from "@/components/AuthProvider";
 import ReportDialog from "@/components/ReportDialog";
@@ -706,7 +708,7 @@ export default function ChatPage() {
     const formData = new FormData();
     formData.append("file", file);
 
-    const response = await fetch(getApiUrl("/api/chat-upload"), {
+    const response = await fetch(getApiUrl("/api/chat-upload"), { headers: await uploadAuthHeaders(),
       method: "POST",
       body: formData,
     });

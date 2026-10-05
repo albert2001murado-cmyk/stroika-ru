@@ -1,3 +1,4 @@
+import { uploadGuard, limitedFormData, UploadSizeError, acquireUploadSlot, UploadTimeoutError } from "@/lib/api-guard";
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
@@ -20,37 +21,24 @@ const s3 = new S3Client({
   },
 });
 
-function getFileExtension(file: File) {
-  const fromName = file.name.split(".").pop();
-
-  if (fromName && fromName.length <= 8) {
-    return fromName.toLowerCase();
-  }
-
-  const fromType = file.type.split("/").pop();
-
-  return fromType || "bin";
-}
-
+const mediaExtensions: Record<string, string> = {
+  "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif",
+  "image/heic": "heic", "image/heif": "heif", "image/avif": "avif",
+  "video/mp4": "mp4", "video/quicktime": "mov", "video/webm": "webm", "video/x-m4v": "m4v",
+};
+function getFileExtension(file: File) { return mediaExtensions[file.type]; }
 function getMediaType(file: File): "image" | "video" | null {
-  if (file.type.startsWith("image/")) return "image";
-  if (file.type.startsWith("video/")) return "video";
-  return null;
+  if (!mediaExtensions[file.type]) return null;
+  return file.type.startsWith("image/") ? "image" : "video";
 }
 
-export async function GET() {
-  return NextResponse.json({
-    ok: true,
-    route: "/api/upload",
-    bucket: bucket ? "set" : "missing",
-    endpoint,
-    region,
-    accessKeyId: accessKeyId ? "set" : "missing",
-    secretAccessKey: secretAccessKey ? "set" : "missing",
-  });
-}
+export async function GET() { return NextResponse.json({ ok: true }); }
 
 export async function POST(request: NextRequest) {
+  const denied = await uploadGuard(request);
+  if (denied) return denied;
+  const release = acquireUploadSlot();
+  if (!release) return NextResponse.json({ error: "Загрузка занята. Повторите через несколько секунд." }, { status: 429, headers: { "Retry-After": "5" } });
   try {
     if (!bucket || !accessKeyId || !secretAccessKey) {
       return NextResponse.json(
@@ -62,7 +50,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const formData = await request.formData();
+    const formData = await limitedFormData(request);
     const file = formData.get("file");
 
     if (!(file instanceof File)) {
@@ -121,11 +109,13 @@ export async function POST(request: NextRequest) {
       size: file.size,
     });
   } catch (error) {
+    if (error instanceof UploadTimeoutError) return NextResponse.json({ error: "Загрузка заняла слишком много времени. Повторите." }, { status: 408 });
+    if (error instanceof UploadSizeError) return NextResponse.json({ error: "Файл слишком большой. Максимум 80 МБ." }, { status: 413 });
     console.error("Yandex upload error:", error);
 
     return NextResponse.json(
       { error: "Не получилось загрузить файл в Yandex Object Storage." },
       { status: 500 }
     );
-  }
+  } finally { release(); }
 }

@@ -1,3 +1,4 @@
+import { limitRequests } from "@/lib/api-guard";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { NextRequest, NextResponse } from "next/server";
@@ -19,6 +20,8 @@ export async function POST(request: NextRequest) {
     if (!idToken) return NextResponse.json({ error: "Нужна авторизация." }, { status: 401 });
 
     const decoded = await getAdminAuth().verifyIdToken(idToken);
+    const throttled = limitRequests("push/send:" + decoded.uid, 30);
+    if (throttled) return throttled;
     const body = await request.json();
     const recipientId = String(body?.recipientId || "");
     const title = String(body?.title || "Стройка.ру").slice(0, 80);

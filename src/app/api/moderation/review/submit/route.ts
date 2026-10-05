@@ -1,3 +1,4 @@
+import { limitRequests } from "@/lib/api-guard";
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase-admin";
 import { processReview } from "@/lib/review-moderation-server";
@@ -24,6 +25,8 @@ export async function POST(request: NextRequest) {
     const token = bearer(request);
     if (!token) return NextResponse.json({ error: "Нужна авторизация." }, { status: 401 });
     const decoded = await getAdminAuth().verifyIdToken(token);
+    const throttled = limitRequests("moderation/reviews/submit:" + decoded.uid, 10);
+    if (throttled) return throttled;
     const body = await request.json();
     const reviewId = String(body?.reviewId || "").trim().slice(0, 160);
     if (!reviewId || reviewId.includes("/")) {

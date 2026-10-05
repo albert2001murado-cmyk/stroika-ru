@@ -1,4 +1,6 @@
 "use client";
+import { uploadAuthHeaders } from "@/lib/uploadAuth";
+
 
 import PublicationLocationPicker, { type PublicationLocation } from "@/components/PublicationLocationPicker";
 import { checkCatalogConsistency, type CatalogConsistencyInput } from "@/lib/catalogConsistency";
@@ -64,7 +66,7 @@ async function uploadImage(file: File) {
   formData.append("file", file);
   formData.append("folder", "customer-requests");
 
-  const response = await fetch("/api/upload", {
+  const response = await fetch("/api/upload", { headers: await uploadAuthHeaders(),
     method: "POST",
     body: formData,
   });

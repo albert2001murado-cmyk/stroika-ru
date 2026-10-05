@@ -1,4 +1,6 @@
 "use client";
+import { uploadAuthHeaders } from "@/lib/uploadAuth";
+
 
 import PublicationLocationPicker, { type PublicationLocation } from "@/components/PublicationLocationPicker";
 import { EMPTY_BANK_DETAILS, bankDetailsFromProfile, normalizeBankDetails, normalizePaymentChoice, paymentLabel, validatePayment, validateBankOwner, type BankDetails } from "@/lib/payments";
@@ -75,7 +77,7 @@ async function uploadOneFile(item: LocalMediaFile): Promise<ListingMedia> {
   const formData = new FormData();
   formData.append("file", item.file);
 
-  const response = await fetch(getApiUrl("/api/upload"), {
+  const response = await fetch(getApiUrl("/api/upload"), { headers: await uploadAuthHeaders(),
     method: "POST",
     body: formData,
   });
@@ -212,7 +214,7 @@ export default function NewListingPage() {
   const [error, setError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
-  const offerGroup = useMemo(() => getOfferGroup(category), [category]);
+  const offerGroup = useMemo(() => getOfferGroup(category, catalogSection), [category, catalogSection]);
   const offerGroupInfo = useMemo(
     () => getOfferGroupInfo(offerGroup),
     [offerGroup]
@@ -244,7 +246,7 @@ export default function NewListingPage() {
     setSubcategory(next.subcategory);
 
     if (categoryChanged) {
-      const nextGroup = getOfferGroup(next.category);
+      const nextGroup = getOfferGroup(next.category, next.catalogSection);
       const firstAction = getOfferActions(nextGroup)[0]?.id || "";
       setOfferAction(firstAction);
       setOfferActionIds([firstAction].filter(Boolean));
@@ -253,11 +255,6 @@ export default function NewListingPage() {
   }
 
   function toggleOfferAction(actionId: string) {
-    if (offerGroup !== "services") {
-      setOfferAction(actionId);
-      setOfferActionIds([actionId]);
-      return;
-    }
     setOfferActionIds((current) => {
       const next = current.includes(actionId)
         ? current.filter((id) => id !== actionId)
@@ -482,7 +479,7 @@ export default function NewListingPage() {
         searchGroup: offerGroup,
         offerAction,
         offerActions: offerActionIds,
-        offerActionLabel: selectedOfferAction?.label || "",
+        offerActionLabel: offerActions.filter(action => offerActionIds.includes(action.id)).map(action => action.label).join(" · "),
         offerFeatures,
         minimumWorkAmount: offerGroup === "services" && minimumWorkAmount ? Number(minimumWorkAmount) : null,
         minimumWorkUnit: offerGroup === "services" && minimumWorkAmount ? minimumWorkUnit : "",

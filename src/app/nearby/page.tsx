@@ -1,4 +1,5 @@
 "use client";
+import { getOfferActions, getOfferGroup, matchesOfferSelection } from "@/lib/listingOffer";
 import { matchesSearchKeywords } from "@/lib/searchKeywords";
 import { mapProfileLink } from "@/lib/mapProfileLink";
 
@@ -347,6 +348,7 @@ export default function NearbyPage() {
   const [items, setItems] = useState<ListingLike[]>([]);
   const [activeId, setActiveId] = useState("");
   const [city, setCity] = useState("");
+  const [mainActions, setMainActions] = useState<string[]>([]);
   const [category, setCategory] = useState("Все категории");
   const [searchText, setSearchText] = useState("");
   const [onlyUrgent, setOnlyUrgent] = useState(false);
@@ -589,9 +591,9 @@ export default function NearbyPage() {
       const urgentOk = !onlyUrgent || Boolean(item.isUrgent);
       const verifiedOk = !onlyVerified || Boolean(item.verified);
 
-      return cityOk && categoryOk && searchOk && urgentOk && verifiedOk;
+      return matchesOfferSelection(item, mainActions.join(",")) && cityOk && categoryOk && searchOk && urgentOk && verifiedOk;
     });
-  }, [items, city, category, searchText, onlyUrgent, onlyVerified]);
+  }, [items, city, category, searchText, onlyUrgent, onlyVerified, mainActions]);
 
   const activeItem =
     filteredItems.find((item) => item.id === activeId) || filteredItems[0] || null;
@@ -799,6 +801,7 @@ export default function NearbyPage() {
   }
 
   function resetFilters() {
+    setMainActions([]);
     setCity("");
     setCategory("Все категории");
     setSearchText("");
@@ -911,7 +914,7 @@ export default function NearbyPage() {
                   </span>
                   <select
                     value={category}
-                    onChange={(event) => setCategory(event.target.value)}
+                    onChange={(event) => { setCategory(event.target.value); setMainActions([]); }}
                     className="w-full rounded-2xl border border-blue-100 bg-slate-50 px-4 py-4 text-sm font-bold outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
                   >
                     {categories.map((item) => (
@@ -958,6 +961,7 @@ export default function NearbyPage() {
                   </div>
                 </label>
 
+<fieldset className="space-y-2"><legend className="text-sm font-bold">Основные варианты — можно несколько</legend><div className="flex flex-wrap gap-2">{(category === "Все категории" ? (["materials", "services", "equipment", "complex"] as const).flatMap(group => getOfferActions(group)) : getOfferActions(getOfferGroup(category))).map(action => <button type="button" key={action.id} aria-pressed={mainActions.includes(action.id)} onClick={() => setMainActions(current => current.includes(action.id) ? current.filter(id => id !== action.id) : [...current, action.id])} className={`rounded-xl border px-3 py-2 text-sm transition ${mainActions.includes(action.id) ? "bg-blue-600 text-white" : "bg-white text-slate-700"}`}>{action.label}</button>)}</div></fieldset>
                 <button
                   type="button"
                   onClick={resetFilters}

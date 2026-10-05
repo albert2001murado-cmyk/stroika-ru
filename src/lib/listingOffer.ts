@@ -295,7 +295,11 @@ function unique(values: string[]) {
   return Array.from(new Set(values.filter(Boolean)));
 }
 
-export function getOfferGroup(category: string): OfferGroup {
+export function getOfferGroup(category: string, section?: string): OfferGroup {
+  if (section === "materials") return "materials";
+  if (section === "equipment" || section === "machinery") return "equipment";
+  if (section === "solutions" || section === "complex") return "complex";
+  if (section === "services") return "services";
   const value = normalize(category);
 
   if (value.includes("материал")) return "materials";
@@ -407,7 +411,8 @@ export function matchesOfferSelection(
     : [effectiveAction].filter(Boolean);
   const effectiveFeatures = listing.offerFeatures || fallback?.features || {};
 
-  if (actionId && !effectiveActions.includes(actionId)) return false;
+  const selectedActions = actionId.split(",").filter(Boolean);
+  if (selectedActions.length && !selectedActions.some(id => effectiveActions.includes(id))) return false;
   return requiredFeatureIds.every((id) => Boolean(effectiveFeatures[id]));
 }
 

@@ -1,3 +1,4 @@
+import { limitRequests } from "@/lib/api-guard";
 import { NextRequest, NextResponse } from "next/server";
 import { cityFromAddress } from "@/lib/geocodeCity";
 
@@ -13,6 +14,8 @@ function getApiKey() {
 }
 
 export async function GET(request: NextRequest) {
+  const throttled = limitRequests("geocode:total", 300);
+  if (throttled) return throttled;
   try {
     const apiKey = getApiKey();
     const { searchParams } = new URL(request.url);
@@ -22,16 +25,15 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(
         {
           ok: false,
-          error: "Ключ не найден в .env.local",
-          need: "YANDEX_GEOCODER_API_KEY=полный_ключ_геокодера",
+          error: "Поиск адреса временно недоступен. Попробуйте позже.",
         },
         { status: 500 }
       );
     }
 
-    if (!address || address.length < 3) {
+    if (!address || address.length < 3 || address.length > 400) {
       return NextResponse.json(
-        { ok: false, error: "Адрес слишком короткий" },
+        { ok: false, error: "Введите адрес от 3 до 400 символов" },
         { status: 400 }
       );
     }
@@ -61,7 +63,7 @@ export async function GET(request: NextRequest) {
           ok: false,
           error: "Яндекс вернул не JSON",
           status: response.status,
-          details: text.slice(0, 500),
+
         },
         { status: 500 }
       );
@@ -73,11 +75,7 @@ export async function GET(request: NextRequest) {
           ok: false,
           error: "Ошибка Яндекс Геокодера",
           status: response.status,
-          details:
-            data?.message ||
-            data?.error ||
-            data?.error_description ||
-            JSON.stringify(data).slice(0, 500),
+
         },
         { status: response.status }
       );

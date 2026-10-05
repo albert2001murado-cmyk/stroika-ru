@@ -1,4 +1,6 @@
 "use client";
+import { uploadAuthHeaders } from "@/lib/uploadAuth";
+
 
 import CustomerRequestCard from "@/components/CustomerRequestCard";
 import { ListingCard } from "@/components/ListingCard";
@@ -176,7 +178,7 @@ export default function ProfilePage() {
     formData.append("file", file);
     formData.append("folder", "avatars");
 
-    const response = await fetch("/api/upload", {
+    const response = await fetch("/api/upload", { headers: await uploadAuthHeaders(),
       method: "POST",
       body: formData,
     });

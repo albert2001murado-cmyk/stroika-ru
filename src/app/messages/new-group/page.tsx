@@ -1,4 +1,6 @@
 "use client";
+import { uploadAuthHeaders } from "@/lib/uploadAuth";
+
 
 import { useAuth } from "@/components/AuthProvider";
 import { getApiUrl } from "@/lib/getApiUrl";
@@ -62,7 +64,7 @@ export default function NewGroupPage() {
       if (avatar) {
         const formData = new FormData();
         formData.append("file", avatar);
-        const uploadResponse = await fetch(getApiUrl("/api/chat-upload"), { method: "POST", body: formData });
+        const uploadResponse = await fetch(getApiUrl("/api/chat-upload"), { headers: await uploadAuthHeaders(), method: "POST", body: formData });
         const upload = await readApiResult(uploadResponse);
         if (!uploadResponse.ok || upload.type !== "image" || !upload.url) {
           throw new Error(String(upload.error || "Не получилось загрузить аватар группы."));

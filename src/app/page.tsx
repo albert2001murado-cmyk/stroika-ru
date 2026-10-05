@@ -423,7 +423,7 @@ export default function HomePage() {
   );
   const selectedOfferGroup = useMemo(
     () => {
-      if (category) return getOfferGroup(category);
+      if (category) return getOfferGroup(category, catalogSection);
       if (catalogSection === "materials") return "materials" as const;
       if (catalogSection === "equipment") return "equipment" as const;
       if (catalogSection === "solutions") return "complex" as const;
@@ -1043,13 +1043,13 @@ export default function HomePage() {
                       </button>
 
                       {offerActionOptions.map((action) => {
-                        const active = selectedOfferAction === action.id;
+                        const active = selectedOfferAction.split(",").includes(action.id);
 
                         return (
                           <button
                             key={action.id}
                             type="button"
-                            onClick={() => setSelectedOfferAction(active ? "" : action.id)}
+                            onClick={() => { setSelectedOfferAction(current => (active ? current.split(",").filter(id => id !== action.id) : [...current.split(",").filter(Boolean), action.id]).join(",")); }}
                             className={`min-h-[76px] rounded-2xl border px-4 py-3 text-left transition duration-300 hover:-translate-y-0.5 active:scale-[0.98] ${
                               active
                                 ? "border-[#0057ff] bg-[#0057ff] text-white shadow-lg shadow-blue-600/15"

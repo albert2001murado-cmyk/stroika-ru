@@ -1,4 +1,6 @@
 "use client";
+import { uploadAuthHeaders } from "@/lib/uploadAuth";
+
 
 import PublicationLocationPicker, { type PublicationLocation } from "@/components/PublicationLocationPicker";
 import { EMPTY_BANK_DETAILS, bankDetailsFromProfile, normalizeBankDetails, normalizePaymentChoice, paymentLabel, validatePayment, validateBankOwner, type BankDetails } from "@/lib/payments";
@@ -170,7 +172,7 @@ async function uploadOneFile(item: LocalMediaFile): Promise<ListingMedia> {
   const formData = new FormData();
   formData.append("file", item.file);
 
-  const response = await fetch(getApiUrl("/api/upload"), {
+  const response = await fetch(getApiUrl("/api/upload"), { headers: await uploadAuthHeaders(),
     method: "POST",
     body: formData,
   });
@@ -242,7 +244,7 @@ export default function EditListingPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
-  const offerGroup = useMemo(() => getOfferGroup(category), [category]);
+  const offerGroup = useMemo(() => getOfferGroup(category, catalogPath.catalogSection), [category, catalogPath.catalogSection]);
   const offerGroupInfo = useMemo(
     () => getOfferGroupInfo(offerGroup),
     [offerGroup]
@@ -295,7 +297,7 @@ export default function EditListingPage() {
             subcategory: loadedSubcategory,
           }), category: String(data.category || ""), subcategory: String(data.subcategory || "") }
         );
-        const loadedGroup = getOfferGroup(loadedCategory);
+        const loadedGroup = getOfferGroup(loadedCategory, data.catalogSection);
         const legacyOffer = inferOfferFromLegacy({
           category: loadedCategory,
           capabilities: Array.isArray(data.capabilities)
@@ -359,7 +361,7 @@ export default function EditListingPage() {
     setCatalogPath(next);
 
     if (categoryChanged) {
-      const nextGroup = getOfferGroup(next.category);
+      const nextGroup = getOfferGroup(next.category, next.catalogSection);
       const firstAction = getOfferActions(nextGroup)[0]?.id || "";
       setOfferAction(firstAction);
       setOfferActionIds([firstAction].filter(Boolean));
@@ -368,11 +370,6 @@ export default function EditListingPage() {
   }
 
   function toggleOfferAction(actionId: string) {
-    if (offerGroup !== "services") {
-      setOfferAction(actionId);
-      setOfferActionIds([actionId]);
-      return;
-    }
     setOfferActionIds((current) => {
       const next = current.includes(actionId) ? current.filter((id) => id !== actionId) : [...current, actionId];
       const safe = next.length ? next : [actionId];
@@ -598,7 +595,7 @@ export default function EditListingPage() {
         searchGroup: offerGroup,
         offerAction,
         offerActions: offerActionIds,
-        offerActionLabel: selectedOfferAction.label,
+        offerActionLabel: offerActions.filter(action => offerActionIds.includes(action.id)).map(action => action.label).join(" · "),
         offerFeatures,
         minimumWorkAmount: offerGroup === "services" && minimumWorkAmount ? Number(minimumWorkAmount) : null,
         minimumWorkUnit: offerGroup === "services" && minimumWorkAmount ? minimumWorkUnit : "",

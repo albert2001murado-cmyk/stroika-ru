@@ -1,4 +1,6 @@
 "use client";
+import { uploadAuthHeaders } from "@/lib/uploadAuth";
+
 
 import { useAuth } from "@/components/AuthProvider";
 import { db } from "@/lib/firebase";
@@ -372,7 +374,7 @@ export default function GroupInfoPage() {
   async function uploadAvatar(file: File) {
     const formData = new FormData();
     formData.append("file", file);
-    const response = await fetch("/api/chat-upload", {
+    const response = await fetch("/api/chat-upload", { headers: await uploadAuthHeaders(),
       method: "POST",
       body: formData,
     });

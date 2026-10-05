@@ -39,6 +39,8 @@ export default function PublicationLocationPicker(props: Props) {
   const [busy, setBusy] = useState(false);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState("");
+  const [query, setQuery] = useState("");
+  const [candidate, setCandidate] = useState<(PublicationLocation & { city: string }) | null>(null);
   const node = useRef<HTMLDivElement>(null);
   const map = useRef<any>(null);
   const marker = useRef<any>(null);
@@ -58,13 +60,11 @@ export default function PublicationLocationPicker(props: Props) {
 
   async function select(lat: number, lng: number) {
     const token = ++revision.current;
-    place(lat, lng); setBusy(true); setError(""); latest.current.onLocation(null);
+    place(lat, lng); setBusy(true); setError(""); setCandidate(null);
     try {
       const result = await geocode(`${lng},${lat}`);
       if (token !== revision.current) return;
-      latest.current.onCity(result.city || cityFromAddress(result.address));
-      latest.current.onAddress(result.address);
-      latest.current.onLocation({ lat, lng, address: result.address });
+      setCandidate({ lat, lng, address: result.address, city: result.city || cityFromAddress(result.address) });
     } catch (e) { if (token === revision.current) { marker.current && map.current?.geoObjects.remove(marker.current); marker.current = null; setError((e as Error).message); } }
     finally { if (token === revision.current) setBusy(false); }
   }
@@ -72,7 +72,7 @@ export default function PublicationLocationPicker(props: Props) {
   useEffect(() => {
     if (!open) { setBusy(false); return; }
     let cancelled = false;
-    setBusy(true); setError(""); setReady(false);
+    setBusy(true); setError(""); setReady(false); setCandidate(null); setQuery([latest.current.city, latest.current.address].filter(Boolean).join(", "));
     (async () => {
       try {
         const ymaps = await loadMaps();
@@ -92,19 +92,19 @@ export default function PublicationLocationPicker(props: Props) {
   }, [open]);
 
   async function findAddress() {
-    const token = ++revision.current; setBusy(true); setError("");
+    const token = ++revision.current; setBusy(true); setError(""); setCandidate(null);
     try {
-      const found = await geocode([props.city, props.address].filter(Boolean).join(", "));
+      const found = await geocode(query.trim());
       if (token !== revision.current) return;
       place(found.lat, found.lng); map.current?.setCenter([found.lat, found.lng], 16);
-      latest.current.onCity(found.city || cityFromAddress(found.address)); latest.current.onAddress(found.address); latest.current.onLocation(found);
+      setCandidate({ ...found, city: found.city || cityFromAddress(found.address) });
     } catch (e) { if (token === revision.current) setError((e as Error).message); }
     finally { if (token === revision.current) setBusy(false); }
   }
 
   function locate() {
     if (!navigator.geolocation) { setError("Геопозиция недоступна. Выберите место на карте."); return; }
-    const token = ++revision.current; setBusy(true); setError("");
+    const token = ++revision.current; setBusy(true); setError(""); setCandidate(null);
     navigator.geolocation.getCurrentPosition(position => {
       if (token !== revision.current) return;
       const { latitude, longitude } = position.coords;
@@ -112,7 +112,7 @@ export default function PublicationLocationPicker(props: Props) {
     }, () => { if (token === revision.current) { setBusy(false); setError("Нет доступа к геопозиции. Нажмите на нужное место на карте."); } }, { timeout: 10000 });
   }
 
-  function edit(callback: (value: string) => void, value: string) { revision.current++; setBusy(false); callback(value); props.onLocation(null); marker.current && map.current?.geoObjects.remove(marker.current); marker.current = null; }
+  function edit(callback: (value: string) => void, value: string) { revision.current++; setBusy(false); setCandidate(null); callback(value); props.onLocation(null); marker.current && map.current?.geoObjects.remove(marker.current); marker.current = null; }
   return <section className="min-w-0 space-y-3 md:col-span-2">
     <div className="grid gap-4 md:grid-cols-2">
       <label className="min-w-0"><span className="mb-2 block text-sm font-bold">Город или населённый пункт</span><input className="input w-full" value={props.city} maxLength={120} placeholder="Нижний Новгород" onChange={e => edit(props.onCity, e.target.value)} /></label>
@@ -121,11 +121,14 @@ export default function PublicationLocationPicker(props: Props) {
     <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className="flex min-h-12 items-center gap-2 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-bold text-blue-700 transition hover:bg-blue-100"><MapIcon size={19} />{open ? "Скрыть карту" : "Выбрать место на карте"}</button>
     {open ? <div className="overflow-hidden rounded-2xl border border-blue-100 bg-white">
       <div className="flex flex-wrap items-center gap-2 p-3">
-        <button type="button" disabled={!ready || busy} onClick={() => void findAddress()} className="rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-50">Найти введённый адрес</button>
+        <input aria-label="Найти адрес на карте" maxLength={400} className="input min-w-0 flex-1" placeholder="Город, улица и дом" value={query} onChange={e => { revision.current++; setBusy(false); setCandidate(null); setQuery(e.target.value); }} onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); if (ready && !busy && query.trim().length >= 3) void findAddress(); } }} />
+        <button type="button" disabled={!ready || busy || query.trim().length < 3} onClick={() => void findAddress()} className="rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-50">Найти</button>
         <button type="button" disabled={!ready || busy} onClick={locate} className="flex items-center gap-2 rounded-xl bg-slate-100 px-4 py-3 text-sm font-bold disabled:opacity-50"><LocateFixed size={17} />Я здесь</button>
       </div>
       <div ref={node} className="h-80 w-full" aria-label="Карта выбора адреса" />
-      <p aria-live="polite" className="flex items-start gap-2 p-3 text-sm text-slate-600"><MapPin size={18} className="shrink-0" />{busy ? "Определяем местоположение…" : "Нажмите на карту или переместите метку — адрес заполнится автоматически."}</p>
+      <p aria-live="polite" className="flex items-start gap-2 p-3 text-sm text-slate-600"><MapPin size={18} className="shrink-0" />{busy ? "Определяем местоположение…" : "Нажмите на карту или переместите метку — подтвердите найденный адрес."}</p>
+      {candidate && !busy ? <div className="location-confirm m-3 rounded-2xl bg-blue-50 p-4 shadow-sm" style={{ animation: "locationReveal .22s ease-out" }}><p className="text-xs font-bold text-blue-600">Это нужное место?</p><p className="my-2 font-semibold">{candidate.address}</p><button type="button" className="rounded-xl bg-blue-600 px-4 py-3 font-bold text-white" onClick={() => { props.onCity(candidate.city); props.onAddress(candidate.address); props.onLocation(candidate); setOpen(false); }}>Использовать этот адрес</button></div> : null}
+      <style>{`@keyframes locationReveal { from {opacity:0;transform:translateY(6px)} to {opacity:1;transform:translateY(0)} } @media(prefers-reduced-motion:reduce){.location-confirm{animation:none!important}}`}</style>
       {error ? <p role="alert" className="px-3 pb-3 text-sm text-red-600">{error} {!ready ? "Закройте и откройте карту для повторной загрузки." : ""}</p> : null}
     </div> : null}
     <p className="text-xs leading-relaxed text-slate-500">Укажите место работы или объекта. Точный адрес помогает находить заказы и исполнителей рядом.</p>

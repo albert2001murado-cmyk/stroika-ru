@@ -1,3 +1,4 @@
+import { uploadGuard, limitedFormData, UploadSizeError, acquireUploadSlot, UploadTimeoutError } from "@/lib/api-guard";
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { execFile } from "child_process";
 import { randomUUID } from "crypto";
@@ -32,10 +33,11 @@ const s3 = new S3Client({
 type MediaType = "image" | "video" | "audio" | "document";
 
 function getMediaType(file: File): MediaType | null {
-  if (file.type.startsWith("image/")) return "image";
+  if (/^image\/(jpeg|png|webp|gif|heic|heif|avif)$/.test(file.type)) return "image";
   if (file.type.startsWith("video/")) return "video";
   if (file.type.startsWith("audio/")) return "audio";
 
+  if (/svg|html|javascript|xml/i.test(file.type)) return null;
   const name = file.name.toLowerCase();
   if (/\.(jpg|jpeg|png|webp|gif|heic|heif)$/.test(name)) return "image";
   if (/\.(mp4|mov|webm|m4v)$/.test(name)) return "video";
@@ -46,7 +48,7 @@ function getMediaType(file: File): MediaType | null {
 
 function getExtension(file: File) {
   const ext = file.name.split(".").pop()?.toLowerCase();
-  if (ext && ext.length <= 8) return ext;
+  if (ext && /^[a-z0-9]{1,8}$/.test(ext)) return ext;
   return file.type.split("/").pop() || "bin";
 }
 
@@ -91,17 +93,13 @@ async function makeVoiceLouder(input: Buffer, originalExtension: string) {
   }
 }
 
-export async function GET() {
-  return NextResponse.json({
-    ok: true,
-    route: "/api/chat-upload",
-    audioBoost: true,
-    ffmpegPath,
-    allowed: ["image", "video", "audio", "document"],
-  });
-}
+export async function GET() { return NextResponse.json({ ok: true }); }
 
 export async function POST(request: NextRequest) {
+  const denied = await uploadGuard(request);
+  if (denied) return denied;
+  const release = acquireUploadSlot();
+  if (!release) return NextResponse.json({ error: "Загрузка занята. Повторите через несколько секунд." }, { status: 429, headers: { "Retry-After": "5" } });
   try {
     if (!bucket || !accessKeyId || !secretAccessKey) {
       return NextResponse.json(
@@ -110,7 +108,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const formData = await request.formData();
+    const formData = await limitedFormData(request);
     const file = formData.get("file");
 
     if (!(file instanceof File)) {
@@ -162,7 +160,8 @@ export async function POST(request: NextRequest) {
         Bucket: bucket,
         Key: key,
         Body: body,
-        ContentType: contentType,
+        ContentType: mediaType === "document" ? "application/octet-stream" : contentType,
+        ContentDisposition: mediaType === "document" ? "attachment" : undefined,
       })
     );
 
@@ -179,6 +178,8 @@ export async function POST(request: NextRequest) {
       boosted: mediaType === "audio",
     });
   } catch (error: any) {
+    if (error instanceof UploadTimeoutError) return NextResponse.json({ error: "Загрузка заняла слишком много времени. Повторите." }, { status: 408 });
+    if (error instanceof UploadSizeError) return NextResponse.json({ error: "Файл слишком большой. Максимум 80 МБ." }, { status: 413 });
     console.error("Chat upload error:", error);
 
     const message = String(error?.message || "");
@@ -193,5 +194,5 @@ export async function POST(request: NextRequest) {
       { error: "Не получилось обработать и загрузить файл в чат." },
       { status: 500 }
     );
-  }
+  } finally { release(); }
 }

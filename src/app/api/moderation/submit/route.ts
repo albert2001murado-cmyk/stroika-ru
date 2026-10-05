@@ -1,3 +1,4 @@
+import { limitRequests } from "@/lib/api-guard";
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase-admin";
 import {
@@ -36,6 +37,8 @@ export async function POST(request: NextRequest) {
     }
 
     const decoded = await getAdminAuth().verifyIdToken(token);
+    const throttled = limitRequests("moderation/submit:" + decoded.uid, 15);
+    if (throttled) return throttled;
     const body = await request.json();
     const kind = publicationKind(body?.kind);
     const publicationId = String(body?.publicationId || "").trim().slice(0, 160);

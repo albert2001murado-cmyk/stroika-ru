@@ -1,4 +1,6 @@
 "use client";
+import { uploadAuthHeaders } from "@/lib/uploadAuth";
+
 
 import { useAuth } from "@/components/AuthProvider";
 import { db } from "@/lib/firebase";
@@ -173,7 +175,7 @@ export default function PortfolioPage() {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("folder", "portfolio");
-    const response = await fetch("/api/upload", { method: "POST", body: formData });
+    const response = await fetch("/api/upload", { headers: await uploadAuthHeaders(), method: "POST", body: formData });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Не получилось загрузить изображение.");
     return data as UploadedFile;

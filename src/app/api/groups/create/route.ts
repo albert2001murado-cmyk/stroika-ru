@@ -1,3 +1,4 @@
+import { limitRequests } from "@/lib/api-guard";
 import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
@@ -17,6 +18,8 @@ export async function POST(request: NextRequest) {
     if (!token) return NextResponse.json({ error: "Нужно войти в аккаунт." }, { status: 401 });
 
     const decoded = await getAdminAuth().verifyIdToken(token);
+    const throttled = limitRequests("groups/create:" + decoded.uid, 6);
+    if (throttled) return throttled;
     const body = await request.json();
     const title = String(body?.title || "").trim().slice(0, 80);
     const avatarUrl = String(body?.avatarUrl || "").trim().slice(0, 1200);

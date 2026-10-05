@@ -1,3 +1,4 @@
+import { limitRequests } from "@/lib/api-guard";
 import { NextRequest, NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase-admin";
@@ -15,6 +16,8 @@ export async function POST(request: NextRequest) {
     const authToken = bearerToken(request);
     if (!authToken) return NextResponse.json({ error: "Нужно войти в аккаунт." }, { status: 401 });
     const decoded = await getAdminAuth().verifyIdToken(authToken);
+    const throttled = limitRequests("groups/join:" + decoded.uid, 15);
+    if (throttled) return throttled;
     const body = await request.json();
     const inviteToken = String(body?.token || "").trim();
     if (!/^[a-f0-9]{32}$/i.test(inviteToken)) {

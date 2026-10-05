@@ -1,3 +1,4 @@
+import { limitRequests } from "@/lib/api-guard";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase-admin";
 import { lookupCompanyByInn } from "@/lib/company-registry-server";
 import type { AccountType } from "@/types";
@@ -39,6 +40,8 @@ export async function POST(request: Request) {
     const adminAuth = getAdminAuth();
     const adminDb = getAdminDb();
     const decoded = await adminAuth.verifyIdToken(token, true);
+    const throttled = limitRequests("register-business:" + decoded.uid, 6);
+    if (throttled) return throttled;
     const authUser = await adminAuth.getUser(decoded.uid);
     const company = await lookupCompanyByInn(body.inn || "", body.accountType);
     const displayName = company.shortName || company.officialName;
