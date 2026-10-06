@@ -154,6 +154,7 @@ export type CustomerRequest = {
   searchText?: string;
   city?: string;
   budget?: number | null;
+  contactPreference?: "both" | "messages" | "calls";
   status: "active" | "closed";
   createdAt?: Timestamp;
   updatedAt?: Timestamp;

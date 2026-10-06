@@ -50,7 +50,7 @@ const GROUP_INFO: Record<
   },
   equipment: {
     title: "Спецтехника",
-    description: "Аренда техники, работа с оператором и доставка",
+    description: "Аренда техники с дополнительными опциями",
     emoji: "🚜",
   },
   complex: {
@@ -101,18 +101,6 @@ const ACTIONS: Record<OfferGroup, OfferActionOption[]> = {
       label: "Аренда техники",
       description: "Сдача спецтехники в аренду",
       keywords: ["аренда", "арендовать", "спецтехника"],
-    },
-    {
-      id: "equipment_work",
-      label: "Работа техникой",
-      description: "Выполнение задачи на объекте",
-      keywords: ["работа техникой", "услуги техники", "выезд на объект"],
-    },
-    {
-      id: "equipment_transport",
-      label: "Перевозка и доставка",
-      description: "Доставка техники или перевозка грузов",
-      keywords: ["доставка", "перевозка", "трал", "транспортировка"],
     },
   ],
   complex: [
@@ -369,8 +357,6 @@ export function inferOfferFromLegacy(input: {
   let actionId = ACTIONS[group][0].id;
 
   if (group === "services" && capabilities.has("turnkey")) actionId = "service_turnkey";
-  if (group === "equipment" && capabilities.has("operator")) actionId = "equipment_work";
-  if (group === "equipment" && capabilities.has("delivery")) actionId = "equipment_transport";
   if (group === "complex" && capabilities.has("estimate")) actionId = "complex_project";
   if (group === "complex" && capabilities.has("turnkey")) actionId = "complex_turnkey";
 
@@ -409,7 +395,19 @@ export function matchesOfferSelection(
   const effectiveActions = Array.isArray(listing.offerActions) && listing.offerActions.length
     ? listing.offerActions
     : [effectiveAction].filter(Boolean);
-  const effectiveFeatures = listing.offerFeatures || fallback?.features || {};
+  const effectiveFeatures = {
+    ...(fallback?.features || {}),
+    ...(listing.offerFeatures || {}),
+  };
+
+  // Старые объявления хранили оператора и доставку как основные варианты.
+  // Новая схема ищет их через дополнительные возможности.
+  if (effectiveActions.includes("equipment_work")) {
+    effectiveFeatures.operatorIncluded = true;
+  }
+  if (effectiveActions.includes("equipment_transport")) {
+    effectiveFeatures.deliveryAvailable = true;
+  }
 
   const selectedActions = actionId.split(",").filter(Boolean);
   if (selectedActions.length && !selectedActions.some(id => effectiveActions.includes(id))) return false;

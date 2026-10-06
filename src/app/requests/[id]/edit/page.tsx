@@ -3,10 +3,15 @@ import { uploadAuthHeaders } from "@/lib/uploadAuth";
 
 
 import PublicationLocationPicker, { type PublicationLocation } from "@/components/PublicationLocationPicker";
+import ContactPreferencePicker from "@/components/ContactPreferencePicker";
 import { checkCatalogConsistency, type CatalogConsistencyInput } from "@/lib/catalogConsistency";
 import CatalogConsistencyHint from "@/components/CatalogConsistencyHint";
 import { requestPublicationModeration } from "@/lib/publicationModerationClient";
 import { geocodePublicationLocation } from "@/lib/publication-location-client";
+import {
+  normalizeContactPreference,
+  type ContactPreference,
+} from "@/lib/contactPreference";
 
 import { useAuth } from "@/components/AuthProvider";
 import { db } from "@/lib/firebase";
@@ -109,6 +114,7 @@ export default function EditCustomerRequestPage() {
   const [budgetTo, setBudgetTo] = useState("");
   const [deadline, setDeadline] = useState("");
   const [urgent, setUrgent] = useState(false);
+  const [contactPreference, setContactPreference] = useState<ContactPreference>("both");
   const [status, setStatus] = useState<CustomerRequestStatus>("active");
   const [images, setImages] = useState<EditableImage[]>([]);
   const [pageLoading, setPageLoading] = useState(true);
@@ -148,6 +154,7 @@ export default function EditCustomerRequestPage() {
         setBudgetTo(data.budgetTo != null ? String(data.budgetTo) : "");
         setDeadline(data.deadline || "");
         setUrgent(data.urgency === "urgent");
+        setContactPreference(normalizeContactPreference(data.contactPreference));
         setStatus(data.status || "active");
         setImages(
           (data.imageUrls || []).map((url, index) => ({
@@ -269,6 +276,7 @@ export default function EditCustomerRequestPage() {
         budgetTo: to,
         deadline: deadline.trim(),
         urgency: urgent ? "urgent" : "normal",
+        contactPreference,
         status,
         imageUrls,
         updatedAt: serverTimestamp(),
@@ -383,6 +391,11 @@ export default function EditCustomerRequestPage() {
               </span>
               <input type="checkbox" checked={urgent} onChange={(event) => setUrgent(event.target.checked)} className="h-6 w-6 accent-[#0057ff]" />
             </label>
+
+            <ContactPreferencePicker
+              value={contactPreference}
+              onChange={setContactPreference}
+            />
           </div>
 
           <section>

@@ -317,12 +317,25 @@ export default function EditListingPage() {
               legacyOffer.features[feature.id]
           );
         });
+        const legacyActionIds = [
+          data.offerAction,
+          ...(Array.isArray(data.offerActions) ? data.offerActions : []),
+        ].map(String);
+        if (legacyActionIds.includes("equipment_work")) {
+          loadedFeatures.operatorIncluded = true;
+        }
+        if (legacyActionIds.includes("equipment_transport")) {
+          loadedFeatures.deliveryAvailable = true;
+        }
+        const loadedActionIds = Array.isArray(data.offerActions)
+          ? data.offerActions.filter(
+              (id: unknown) =>
+                typeof id === "string" &&
+                availableActions.some((item) => item.id === id)
+            )
+          : [];
         setOfferAction(loadedAction);
-        setOfferActionIds(
-          Array.isArray(data.offerActions) && data.offerActions.length
-            ? data.offerActions.filter((id: unknown) => typeof id === "string" && availableActions.some((item) => item.id === id))
-            : [loadedAction]
-        );
+        setOfferActionIds(loadedActionIds.length ? loadedActionIds : [loadedAction]);
         setOfferFeatures(loadedFeatures);
         setCity(data.city || "");
         setAddress(String(data.address || ""));
@@ -739,7 +752,9 @@ export default function EditListingPage() {
                     Что вы предлагаете?
                   </h2>
                   <p className="mt-2 max-w-2xl text-sm font-medium leading-6 text-gray-500">
-                    Эти параметры одинаково отображаются и фильтруются на сайте и в приложении.
+                    {offerActions.length > 1
+                      ? "Эти параметры одинаково отображаются и фильтруются на сайте и в приложении. Можно выбрать несколько вариантов."
+                      : "Основной вариант уже выбран. Доставку и работу с оператором отметьте ниже в дополнительных возможностях."}
                   </p>
                 </div>
 

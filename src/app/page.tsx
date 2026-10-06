@@ -1291,11 +1291,16 @@ export default function HomePage() {
             offerFeatures: nextOfferFeatures,
             sourceMaterial: nextSourceMaterial,
           }) => {
+            const showAllPerformerOffers = Boolean(nextSourceMaterial);
+
             applyCatalogValues(nextCategory || "", nextSubcategory || "");
             setSearch(nextSearch || "");
-            setSelectedOfferAction(nextOfferAction || "");
-            setRequiredOfferFeatures(nextOfferFeatures || []);
+            setSelectedOfferAction(showAllPerformerOffers ? "" : nextOfferAction || "");
+            setRequiredOfferFeatures(showAllPerformerOffers ? [] : nextOfferFeatures || []);
             setSourceMaterial(nextSourceMaterial || "");
+            if (showAllPerformerOffers) {
+              setFeedMode("contractors");
+            }
           }}
         />
       </section>

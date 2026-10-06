@@ -3,6 +3,7 @@ import { uploadAuthHeaders } from "@/lib/uploadAuth";
 
 
 import PublicationLocationPicker, { type PublicationLocation } from "@/components/PublicationLocationPicker";
+import ContactPreferencePicker from "@/components/ContactPreferencePicker";
 import { checkCatalogConsistency, type CatalogConsistencyInput } from "@/lib/catalogConsistency";
 import CatalogConsistencyHint from "@/components/CatalogConsistencyHint";
 
@@ -17,6 +18,7 @@ import { db } from "@/lib/firebase";
 import { requestPublicationModeration } from "@/lib/publicationModerationClient";
 import { normalizeRussianPhone, russianPhoneError } from "@/lib/phone";
 import { geocodePublicationLocation } from "@/lib/publication-location-client";
+import type { ContactPreference } from "@/lib/contactPreference";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import {
   ArrowLeft,
@@ -80,6 +82,7 @@ export default function NewRequestPage() {
   const [budgetTo, setBudgetTo] = useState("");
   const [deadline, setDeadline] = useState("");
   const [urgent, setUrgent] = useState(false);
+  const [contactPreference, setContactPreference] = useState<ContactPreference>("both");
   const [images, setImages] = useState<LocalImage[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -232,6 +235,7 @@ export default function NewRequestPage() {
         budgetTo: to,
         deadline: deadline.trim(),
         urgency: urgent ? "urgent" : "normal",
+        contactPreference,
         status: "active",
         imageUrls,
         offersCount: 0,
@@ -391,6 +395,11 @@ export default function NewRequestPage() {
                 className="h-6 w-6 accent-[#0057ff]"
               />
             </label>
+
+            <ContactPreferencePicker
+              value={contactPreference}
+              onChange={setContactPreference}
+            />
           </div>
 
           <section>

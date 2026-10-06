@@ -6,6 +6,10 @@ import ReportDialog from "@/components/ReportDialog";
 import { db } from "@/lib/firebase";
 import { isPublicationApproved, isReviewApproved } from "@/lib/moderation";
 import { requestReviewModeration } from "@/lib/reviewModeration";
+import {
+  contactAllowsCalls,
+  contactAllowsMessages,
+} from "@/lib/contactPreference";
 import type { CustomerRequest, Review } from "@/types";
 import { firestoreDateToMillis } from "@/types";
 import {
@@ -163,6 +167,13 @@ export default function CustomerRequestPage() {
   useEffect(() => {
     let cancelled = false;
 
+    if (!contactAllowsCalls(request?.contactPreference)) {
+      setCustomerPhone("");
+      return () => {
+        cancelled = true;
+      };
+    }
+
     const phoneFromRequest = request?.customerPhone?.trim() || "";
 
     if (phoneFromRequest) {
@@ -196,9 +207,11 @@ export default function CustomerRequestPage() {
     return () => {
       cancelled = true;
     };
-  }, [request?.customerId, request?.customerPhone]);
+  }, [request?.contactPreference, request?.customerId, request?.customerPhone]);
 
   async function openCustomerChat() {
+    if (!contactAllowsMessages(request?.contactPreference)) return;
+
     if (!user) {
       router.push("/auth");
       return;
@@ -364,6 +377,8 @@ export default function CustomerRequestPage() {
 
   const isOwner = user?.uid === request.customerId;
   const isActive = request.status === "active";
+  const allowMessages = contactAllowsMessages(request.contactPreference);
+  const allowCalls = contactAllowsCalls(request.contactPreference);
   const currentImage = images[activeImageIndex] || "";
 
   return (
@@ -616,26 +631,28 @@ export default function CustomerRequestPage() {
 
               {!isOwner && isActive ? (
                 <div className="mt-5 space-y-3">
-                  <button
-                    type="button"
-                    onClick={() => void openCustomerChat()}
-                    disabled={chatLoading}
-                    className="group flex w-full items-center justify-center gap-2 rounded-2xl bg-[#0057ff] px-5 py-4 text-base font-black text-white shadow-lg shadow-blue-600/20 transition duration-300 hover:-translate-y-0.5 hover:bg-[#004de6] hover:shadow-xl active:scale-[0.98] disabled:cursor-wait disabled:opacity-65"
-                  >
-                    <MessageCircle
-                      className="transition-transform duration-300 group-hover:scale-110"
-                      size={20}
-                    />
-                    {chatLoading ? "Открываем чат..." : "Написать заказчику"}
-                  </button>
+                  {allowMessages ? (
+                    <button
+                      type="button"
+                      onClick={() => void openCustomerChat()}
+                      disabled={chatLoading}
+                      className="group flex w-full items-center justify-center gap-2 rounded-2xl bg-[#0057ff] px-5 py-4 text-base font-black text-white shadow-lg shadow-blue-600/20 transition duration-300 hover:-translate-y-0.5 hover:bg-[#004de6] hover:shadow-xl active:scale-[0.98] disabled:cursor-wait disabled:opacity-65"
+                    >
+                      <MessageCircle
+                        className="transition-transform duration-300 group-hover:scale-110"
+                        size={20}
+                      />
+                      {chatLoading ? "Открываем чат..." : "Написать заказчику"}
+                    </button>
+                  ) : null}
 
-                  {chatError ? (
+                  {allowMessages && chatError ? (
                     <p className="rounded-2xl bg-red-50 px-4 py-3 text-center text-sm font-bold text-red-600">
                       {chatError}
                     </p>
                   ) : null}
 
-                  {customerPhone ? (
+                  {allowCalls && customerPhone ? (
                     <a
                       href={`tel:${customerPhone.replace(/[^\d+]/g, "")}`}
                       className="group flex w-full items-center justify-center gap-2 rounded-2xl bg-[#ffd43b] px-5 py-4 text-base font-black text-slate-950 shadow-lg shadow-yellow-400/25 transition duration-300 hover:-translate-y-0.5 hover:bg-[#ffca0a] hover:shadow-xl active:scale-[0.98]"
@@ -646,12 +663,12 @@ export default function CustomerRequestPage() {
                       />
                       Позвонить
                     </a>
-                  ) : (
+                  ) : allowCalls ? (
                     <div className="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-100 px-5 py-4 text-sm font-black text-slate-400">
                       <Phone size={19} />
                       Телефон не указан
                     </div>
-                  )}
+                  ) : null}
                 </div>
               ) : null}
 

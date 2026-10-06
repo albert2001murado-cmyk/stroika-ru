@@ -253,6 +253,17 @@ function buildActions(
           offerFeatures: ["operatorIncluded"],
         },
       },
+      {
+        title: "Заказать доставку техники",
+        description: "Техника с доставкой до объекта",
+        image: CATEGORY_IMAGES.extra,
+        selection: {
+          category: categoryName,
+          subcategory,
+          search: `${subject} доставка`,
+          offerFeatures: ["deliveryAvailable"],
+        },
+      },
     ];
   }
 
@@ -312,12 +323,6 @@ function buildActions(
         description: "Подрядчики и бригады",
         image: CATEGORY_IMAGES.repair,
         selection: { category: categoryName, subcategory },
-      },
-      {
-        title: "Найти материалы",
-        description: "Материалы для выбранной работы",
-        image: CATEGORY_IMAGES.materials,
-        selection: { category: "🧰 Материалы", search: subject },
       },
       {
         title: "Заказать технику",

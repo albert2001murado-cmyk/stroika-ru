@@ -182,6 +182,7 @@ export type Listing = {
 
 export type CustomerRequestStatus = "active" | "closed";
 export type CustomerRequestUrgency = "urgent" | "normal";
+export type CustomerRequestContactPreference = "both" | "messages" | "calls";
 
 export type CustomerRequest = {
   id: string;
@@ -206,6 +207,7 @@ export type CustomerRequest = {
   budgetTo?: number | null;
   deadline?: string;
   urgency?: CustomerRequestUrgency;
+  contactPreference?: CustomerRequestContactPreference;
   status: CustomerRequestStatus;
   imageUrls?: string[];
   offersCount?: number;
