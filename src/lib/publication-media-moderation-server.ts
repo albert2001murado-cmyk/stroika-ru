@@ -199,9 +199,20 @@ async function evaluateWithLocalClassifier(input: {
     if (payload.decision !== "approved" && flags.length === 0) {
       throw new Error("Local classifier returned an unexplained decision");
     }
+    const decisionFromFlags: ExternalModerationResult["decision"] = flags.some(
+      (flag) => flag.severity === "critical" || flag.severity === "changes"
+    )
+      ? "rejected"
+      : flags.some((flag) => flag.severity === "review")
+        ? "manual_review"
+        : "approved";
+    const decisionRank = { approved: 0, manual_review: 1, rejected: 2 } as const;
+    const decision = decisionRank[decisionFromFlags] > decisionRank[payload.decision]
+      ? decisionFromFlags
+      : payload.decision;
     const checked = Number(payload.mediaChecked);
     return {
-      decision: payload.decision,
+      decision,
       flags,
       provider: "stroika-local",
       mediaChecked: Number.isFinite(checked)
@@ -269,19 +280,27 @@ async function evaluateWithOpenAI(input: {
       throw new Error("Classifier returned invalid results");
     }
 
-    const hardCategories = [
-      "sexual/minors",
-      "illicit/violent",
-      "hate/threatening",
-      "self-harm/instructions",
-    ];
-    const hard = results.some((result) =>
-      hardCategories.some(
-        (key) =>
+    const hardCategoryThresholds: Record<string, number> = {
+      sexual: 0.7,
+      "sexual/minors": 0.5,
+      "illicit/violent": 0.9,
+      "hate/threatening": 0.9,
+      "self-harm/instructions": 0.9,
+    };
+    const detectedHardCategories = Object.keys(hardCategoryThresholds).filter(key =>
+      results.some(result =>
           categoryValue(result.categories, key) ||
-          scoreValue(result.category_scores, key) >= 0.9
+          scoreValue(result.category_scores, key) >= hardCategoryThresholds[key]
       )
     );
+    const hard = detectedHardCategories.length > 0;
+    const categoryLabels: Record<string, string> = {
+      sexual: "порнографии, обнажённого тела или сексуальных действий",
+      "sexual/minors": "сексуального содержания с несовершеннолетними",
+      "illicit/violent": "призыва к незаконным насильственным действиям",
+      "hate/threatening": "угроз и разжигания ненависти",
+      "self-harm/instructions": "инструкций по причинению вреда себе",
+    };
     const flagged = results.some((result) => result.flagged === true);
     const flags: ModerationFlag[] = [];
     if (hard) {
@@ -289,7 +308,7 @@ async function evaluateWithOpenAI(input: {
         code: "ai-high-risk-content",
         field: "content",
         severity: "critical",
-        message: "Система обнаружила материал высокой категории риска.",
+        message: `Автопроверка обнаружила признаки ${detectedHardCategories.map(key => categoryLabels[key]).join(", ")}. Удалите соответствующий текст или вложения перед повторной отправкой.`,
         legalBasis:
           "149-ФЗ «Об информации, информационных технологиях и о защите информации»; Правила публикации Стройка.ру",
       });

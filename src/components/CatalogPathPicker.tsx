@@ -19,6 +19,7 @@ import {
   getDefaultCatalogPath,
 } from "@/data/catalogForm";
 import type { CatalogPathValue, CatalogSectionId } from "@/data/catalogForm";
+import { matchesSearchKeywords } from "@/lib/searchKeywords";
 
 type CatalogPathPickerProps = {
   value: CatalogPathValue;
@@ -59,7 +60,7 @@ export default function CatalogPathPicker({
     const search = normalize(query);
     const items = activeCategory?.subcategories || [];
     if (!search) return items;
-    return items.filter((item) => normalize(item).includes(search));
+    return items.filter((item) => matchesSearchKeywords(item, search));
   }, [activeCategory, query]);
   const visibleSubcategories =
     query || showAll || filteredSubcategories.length <= 18

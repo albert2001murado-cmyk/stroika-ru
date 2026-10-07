@@ -2,6 +2,7 @@
 
 import { getMaterialServiceLink } from "@/data/materialServices";
 import { groupsForSection } from "@/data/catalogGroups";
+import { matchesSearchKeywords } from "@/lib/searchKeywords";
 import { ArrowLeft, ArrowRight, Search, ShieldCheck } from "lucide-react";
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
@@ -428,7 +429,7 @@ export default function PremiumCategoryGrid({
           };
         })
       )
-      .filter(({ path }) => normalize(path.join(" ")).includes(query))
+      .filter(({ path }) => matchesSearchKeywords(path.join(" "), query))
       .sort((left, right) => {
         const leftValue = normalize(left.subcategory);
         const rightValue = normalize(right.subcategory);
@@ -452,7 +453,7 @@ export default function PremiumCategoryGrid({
       : getOrderedSubcategories(activeCategory);
     const value = normalize(search);
     if (!value) return all;
-    return all.filter((item) => normalize(item).includes(value));
+    return all.filter((item) => matchesSearchKeywords(item, value));
   }, [activeCategory, activeGroup, search]);
 
   const subcategoryPageCount = Math.max(

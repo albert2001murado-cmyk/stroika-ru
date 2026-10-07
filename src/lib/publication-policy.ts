@@ -45,7 +45,7 @@ export type LocalModerationResult = {
   media: Array<{ type: "image" | "video"; url: string }>;
 };
 
-export const MODERATION_POLICY_VERSION = "ru-service-2026-10-02.1";
+export const MODERATION_POLICY_VERSION = "ru-service-2026-10-06.1";
 
 const SERVICE_RULES = "Правила публикации Стройка.ру";
 const LAW_INFORMATION = "149-ФЗ «Об информации, информационных технологиях и о защите информации»";
@@ -125,8 +125,6 @@ const REVIEW_RULES: Array<{
   },
 ];
 
-const PROFANITY =
-  /(?<![\p{L}\p{N}])(?:бля(?:дь|дство)?|хуй[\p{L}\p{N}_]*|пизд[\p{L}\p{N}_]*|еб(?:ать|ан[\p{L}\p{N}_]*|уч[\p{L}\p{N}_]*)|мудак[\p{L}\p{N}_]*|шлюх[\p{L}\p{N}_]*)(?![\p{L}\p{N}])/iu;
 const URL_PATTERN = /(?:https?:\/\/|www\.|t\.me\/|vk\.com\/|wa\.me\/)[^\s]+/giu;
 const EMAIL_PATTERN = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/giu;
 const PHONE_PATTERN = /(?:\+?7|8)[\s()\-]*\d{3}[\s()\-]*\d{3}[\s\-]*\d{2}[\s\-]*\d{2}/gu;
@@ -149,6 +147,82 @@ export function normalizeModerationText(value: unknown) {
     .replace(/[^\p{L}\p{N}]+/gu, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+const CYRILLIC_LOOKALIKE: Record<string, string> = {
+  a: "а", b: "б", c: "с", e: "е", h: "х", k: "к", m: "м", o: "о",
+  p: "р", t: "т", x: "х", y: "у", "0": "о", "3": "з", "6": "б",
+  "9": "я",
+};
+const LATIN_TRANSLITERATION: Record<string, string> = {
+  а: "a", б: "b", в: "v", г: "g", д: "d", е: "e", ж: "zh", з: "z",
+  и: "i", й: "y", к: "k", л: "l", м: "m", н: "n", о: "o", п: "p",
+  р: "r", с: "s", т: "t", у: "u", ф: "f", х: "h", ц: "c", ч: "ch",
+  ш: "sh", щ: "sh", ы: "y", э: "e", ю: "yu", я: "ya", ь: "", ъ: "",
+  "0": "o", "1": "i", "3": "z", "4": "a", "6": "b", "9": "ya",
+};
+
+function mapped(value: string, table: Record<string, string>) {
+  return Array.from(value, (character) => table[character] ?? character).join("");
+}
+
+function profanityCandidates(value: unknown) {
+  const prepared = text(value, 20_000)
+    .normalize("NFKD")
+    .replace(/\p{M}/gu, "")
+    .toLocaleLowerCase("ru-RU")
+    .replaceAll("ё", "е")
+    .replace(/[\u200B-\u200D\uFEFF]/g, "")
+    .replace(/[@]/g, "9");
+  const tokens = prepared.match(/[a-zа-я0-9]+/giu) || [];
+  const candidates = new Set(tokens);
+
+  // Join deliberately split spelling: “б.л.я.д.ь”, “х у й”, “e 6 a t b”.
+  for (let start = 0; start < tokens.length; start++) {
+    if (tokens[start].length > 3) continue;
+    let joined = "";
+    for (let end = start; end < Math.min(tokens.length, start + 8); end++) {
+      if (tokens[end].length > 3) break;
+      joined += tokens[end];
+      if (end > start && joined.length >= 3) candidates.add(joined);
+    }
+  }
+
+  return Array.from(candidates).flatMap((candidate) => {
+    const compact = candidate.replace(/(.)\1{2,}/gu, "$1$1");
+    return [
+      mapped(compact, CYRILLIC_LOOKALIKE),
+      mapped(compact, LATIN_TRANSLITERATION),
+    ];
+  });
+}
+
+const CYRILLIC_PROFANITY = [
+  /^бля(?:$|д|т)/u,
+  /^(?:на|ни|по|за|о|об|до|пере|при|у|вы|про)?ху(?:й|я|е|и|йн|ев)/u,
+  /^(?:на|по|за|о|об|до|пере|при|у|вы|про|рас)?пизд/u,
+  /^(?:за|на|по|про|вы|до|пере|при|у|раз|под)?еб(?:ат|ан|уч|л|ну|ет|ал|аш|ис|еш|ло|ыр|ец|н)/u,
+  /^(?:за|на|по|про|вы|до|пере|при|у|раз|под)?ебу(?:$|сь|т|ч)/u,
+  /^долбоеб/u,
+  /^(?:мудак|мудил|гандон|залуп|шлюх|говн|дерьм)/u,
+  /^(?:сука|суки|суку|сукой|сучар)/u,
+  /^(?:пид[ао]р|пидр|педик(?:$|а|и|ом|у|ов|ами|ах))/u,
+];
+const LATIN_PROFANITY = [
+  /^(?:blya(?:$|d|t)|bliat|bljad)/u,
+  /^(?:na|ni|po|za|o|ob|do|pere|pri|u|vy|pro)?(?:huy|hui|huya|hue|xuy|xui)/u,
+  /^(?:na|po|za|o|ob|do|pere|pri|u|vy|pro|ras)?pizd/u,
+  /^(?:za|na|po|pro|vy|do|pere|pri|u|raz|pod)?(?:ebat|eban|ebuch|yebat|yoban|zaeb|naeb|dolboeb)/u,
+  /^(?:mudak|gandon|shlyuh|suka|pidor|pidar)/u,
+  /^(?:fuck|fuk|shit|cunt|bitch|dick)(?:$|s|ed|ing|er)/u,
+];
+
+/** Detects direct, transliterated, leetspeak and separator-obfuscated profanity. */
+export function containsProhibitedLanguage(value: unknown) {
+  return profanityCandidates(value).some((candidate) =>
+    CYRILLIC_PROFANITY.some((pattern) => pattern.test(candidate)) ||
+    LATIN_PROFANITY.some((pattern) => pattern.test(candidate))
+  );
 }
 
 export function normalizeCityKey(value: unknown) {
@@ -402,7 +476,7 @@ export function evaluatePublicationLocally(
       legalBasis: SERVICE_RULES,
     });
   }
-  if (PROFANITY.test(combined)) {
+  if (containsProhibitedLanguage(combined)) {
     add({
       code: "profanity",
       field: "content",

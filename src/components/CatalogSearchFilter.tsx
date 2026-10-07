@@ -7,6 +7,7 @@ import {
   type CatalogSectionId,
 } from "@/data/catalogForm";
 import { Building2, Check, ChevronRight, PackageOpen, Search, Truck, Wrench, X } from "lucide-react";
+import { matchesSearchKeywords } from "@/lib/searchKeywords";
 
 const SECTION_ICONS = {
   materials: PackageOpen,
@@ -52,14 +53,15 @@ export default function CatalogSearchFilter({
   const normalizedQuery = normalize(query);
   const visibleCategories = normalizedQuery
     ? categories.filter((item) =>
-        normalize([item.title, item.description, ...item.subcategories].join(" ")).includes(
+        matchesSearchKeywords(
+          [item.title, item.description, ...item.subcategories].join(" "),
           normalizedQuery
         )
       )
     : categories;
   const visibleSubcategories = selected
     ? selected.subcategories.filter((item) =>
-        normalizedQuery ? normalize(item).includes(normalizedQuery) : true
+        normalizedQuery ? matchesSearchKeywords(item, normalizedQuery) : true
       )
     : [];
 
