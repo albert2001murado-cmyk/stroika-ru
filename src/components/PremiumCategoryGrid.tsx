@@ -326,12 +326,6 @@ function buildActions(
         selection: { category: categoryName, subcategory },
       },
       {
-        title: "Заказать технику",
-        description: "Экскаваторы, краны и другая спецтехника",
-        image: CATEGORY_IMAGES.equipment,
-        selection: { category: "🚜 Спецтехника", search: subject },
-      },
-      {
         title: "Рассчитать стоимость",
         description: "Найти исполнителя для оценки и сметы",
         image: CATEGORY_IMAGES.design,

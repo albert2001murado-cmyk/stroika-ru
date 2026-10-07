@@ -10,6 +10,7 @@ import {
   UserRound,
 } from "lucide-react";
 import Link from "next/link";
+import { memo } from "react";
 
 type CustomerRequestCardProps = {
   request: CustomerRequest;
@@ -28,7 +29,7 @@ function formatBudget(request: CustomerRequest) {
   return "Бюджет договорной";
 }
 
-export default function CustomerRequestCard({ request }: CustomerRequestCardProps) {
+function CustomerRequestCard({ request }: CustomerRequestCardProps) {
   const imageUrl = request.imageUrls?.[0] || "";
   const isNew = isCreatedWithinHours(request.createdAt, 72);
 
@@ -133,3 +134,5 @@ export default function CustomerRequestCard({ request }: CustomerRequestCardProp
     </article>
   );
 }
+
+export default memo(CustomerRequestCard);

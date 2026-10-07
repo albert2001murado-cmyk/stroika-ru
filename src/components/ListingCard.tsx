@@ -19,6 +19,7 @@ import {
   UserRound,
 } from "lucide-react";
 import Link from "next/link";
+import { memo } from "react";
 
 type ListingCardProps = {
   listing: Listing;
@@ -183,5 +184,7 @@ function ListingCard({ listing }: ListingCardProps) {
   );
 }
 
-export { ListingCard };
-export default ListingCard;
+const MemoizedListingCard = memo(ListingCard);
+
+export { MemoizedListingCard as ListingCard };
+export default MemoizedListingCard;

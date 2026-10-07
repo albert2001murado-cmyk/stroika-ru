@@ -33,6 +33,7 @@ const MATERIAL_ACTION_TITLE_OVERRIDES = new Map<string, string>([
   [normalize("Перемычки ЖБИ"), "Найти монтажников перемычек"],
   [normalize("Дорожные плиты"), "Найти дорожную бригаду"],
   [normalize("Сваи железобетонные"), "Найти специалистов по сваям"],
+  [normalize("Винтовые сваи"), "Найти монтажников винтовых свай"],
   [normalize("Лотки ЖБИ"), "Найти монтажников лотков"],
   [normalize("Арматура"), "Найти арматурщиков"],
   [normalize("Сетка кладочная"), "Найти мастеров по армированию кладки"],
@@ -57,6 +58,9 @@ const MATERIAL_ACTION_TITLE_OVERRIDES = new Map<string, string>([
   [normalize("Заборы и ограждения"), "Найти монтажника ограждений"],
   [normalize("Секционный забор"), "Найти монтажника секционного забора"],
   [normalize("Сетка металлическая"), "Найти монтажника ограждений"],
+  [normalize("Ванны"), "Найти установщика ванны"],
+  [normalize("Душевые кабины"), "Найти установщика душевой кабины"],
+  [normalize("Шумоизоляция"), "Найти специалиста по шумоизоляции"],
 ]);
 
 function createMaterialActionTitle(material: string, baseTitle?: string) {
@@ -187,7 +191,7 @@ register(["Подвесные потолки", "Потолочные панел�
   actionTitle: "Найти монтажника потолков",
 });
 
-register(["Звукоизоляционные панели", "Акустические мембраны", "Демпферная лента"], {
+register(["Шумоизоляция", "Звукоизоляционные панели", "Акустические мембраны", "Демпферная лента"], {
   category: "Отделочные работы",
   subcategory: "Звукоизоляция",
   section: "services",
@@ -358,6 +362,22 @@ register([
   actionTitle: "Найти сантехника",
 });
 
+register(["Ванны"], {
+  category: "Сантехника",
+  subcategory: "Установка ванны",
+  section: "services",
+  imageCategoryId: "plumbing",
+  actionTitle: "Найти установщика ванны",
+});
+
+register(["Душевые кабины"], {
+  category: "Сантехника",
+  subcategory: "Установка душевой кабины",
+  section: "services",
+  imageCategoryId: "plumbing",
+  actionTitle: "Найти установщика душевой кабины",
+});
+
 register([
   "Канализационные трубы",
   "Канализационные трубы ПВХ",
@@ -506,6 +526,14 @@ register(["Щебень", "Щебень гранитный", "Щебень бе�
   section: "services",
   imageCategoryId: "landscape",
   actionTitle: "Найти бригаду для отсыпки",
+});
+
+register(["Винтовые сваи"], {
+  category: "Участок и благоустройство",
+  subcategory: "Монтаж винтовых свай",
+  section: "services",
+  imageCategoryId: "landscape",
+  actionTitle: "Найти монтажников винтовых свай",
 });
 
 register(["Тротуарная плитка", "Брусчатка", "Газонные решётки"], {

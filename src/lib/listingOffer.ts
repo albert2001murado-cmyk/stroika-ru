@@ -1,5 +1,5 @@
 "use client";
-import { matchesSearchKeywords, publicationSearchText } from "./searchKeywords";
+import { matchesPublicationSearch } from "./searchKeywords";
 
 export type OfferGroup = "materials" | "services" | "equipment" | "complex";
 
@@ -469,5 +469,5 @@ function featureWords(features?: Record<string, boolean>) {
 }
 
 export function matchesListingSearch(listing: Record<string, any>, search: string, _selectedCategory = "", _selectedSubcategory = "") {
-  return matchesSearchKeywords(publicationSearchText(listing), search);
+  return matchesPublicationSearch(listing, search);
 }

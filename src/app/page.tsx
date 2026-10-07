@@ -1,8 +1,7 @@
 "use client";
 import {
-  matchesSearchKeywords,
-  publicationSearchText,
-  searchRelevanceScore,
+  catalogSearchRelevanceScore,
+  publicationSearchRelevanceScore,
 } from "@/lib/searchKeywords";
 import { normalizePaymentChoice } from "@/lib/payments";
 import { publicationCatalogSelection } from "@/lib/catalogSelection";
@@ -49,7 +48,7 @@ import {
   UserRound,
   Zap,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 
 type SearchableListing = Listing & SearchableListingFields;
 type FeedMode = "contractors" | "customers";
@@ -64,6 +63,11 @@ type MainSearchSuggestion = {
   categoryId: string;
   category: string;
   subcategory: string;
+};
+
+type IndexedMainSearchSuggestion = MainSearchSuggestion & {
+  normalizedTitle: string;
+  searchable: string;
 };
 
 const POPULAR_CITIES = [
@@ -96,6 +100,35 @@ function normalizeCatalogValue(value: unknown) {
     .replace(/\s+/g, " ")
     .trim();
 }
+
+const MAIN_SEARCH_CANDIDATES: IndexedMainSearchSuggestion[] = (() => {
+  const seen = new Set<string>();
+
+  return CATALOG_FORM_SECTIONS.flatMap((section) =>
+    getCatalogFormCategories(section.id).flatMap((catalogCategory) =>
+      catalogCategory.subcategories.map((catalogSubcategory) => ({
+        id: `${section.id}:${catalogCategory.id}:${catalogSubcategory}`,
+        title: catalogSubcategory,
+        path: [section.title, catalogCategory.title, catalogSubcategory],
+        section: section.id,
+        categoryId: catalogCategory.id,
+        category: catalogCategory.category,
+        subcategory: catalogSubcategory,
+        normalizedTitle: normalizeCatalogValue(catalogSubcategory),
+        searchable: normalizeCatalogValue(
+          [section.title, catalogCategory.title, catalogSubcategory].join(" ")
+        ),
+      }))
+    )
+  ).filter((item) => {
+    const key = normalizeCatalogValue(
+      `${item.section}:${item.categoryId}:${item.subcategory}`
+    );
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+})();
 
 function toFiniteNumber(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -165,23 +198,9 @@ function isListingVerified(listing: Listing) {
 
 function requestMatches(
   request: CustomerRequest,
-  search: string,
   category: string,
   subcategory: string
 ) {
-  const normalizedSearch = normalize(search);
-  const haystack = [
-    request.title,
-    request.description,
-    request.category,
-    request.subcategory,
-    request.city,
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLocaleLowerCase("ru-RU").replace(/\bosb\b/g, "осб");
-
-  const matchesText = matchesSearchKeywords(publicationSearchText(request), search);
   const matchesCategory = category
     ? normalizeCatalogValue(request.category) === normalizeCatalogValue(category)
     : true;
@@ -190,7 +209,7 @@ function requestMatches(
       normalizeCatalogValue(subcategory)
     : true;
 
-  return isPublicationApproved(request) && request.status === "active" && matchesText && matchesCategory && matchesSubcategory;
+  return isPublicationApproved(request) && request.status === "active" && matchesCategory && matchesSubcategory;
 }
 
 function formatPrice(value: number) {
@@ -377,6 +396,7 @@ export default function HomePage() {
   const [requiredOfferFeatures, setRequiredOfferFeatures] = useState<string[]>([]);
   const [sourceMaterial, setSourceMaterial] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const deferredSearch = useDeferredValue(search);
 
   useEffect(() => {
     const listingQuery = query(
@@ -450,39 +470,16 @@ export default function HomePage() {
   );
 
   const mainSearchSuggestions = useMemo<MainSearchSuggestion[]>(() => {
-    const query = normalizeCatalogValue(search);
+    const query = normalizeCatalogValue(deferredSearch);
     if (!query) return [];
 
-    const seen = new Set<string>();
-    const candidates = CATALOG_FORM_SECTIONS.flatMap((section) =>
-      getCatalogFormCategories(section.id).flatMap((catalogCategory) =>
-        catalogCategory.subcategories.map((catalogSubcategory) => ({
-          id: `${section.id}:${catalogCategory.id}:${catalogSubcategory}`,
-          title: catalogSubcategory,
-          path: [section.title, catalogCategory.title, catalogSubcategory],
-          section: section.id,
-          categoryId: catalogCategory.id,
-          category: catalogCategory.category,
-          subcategory: catalogSubcategory,
-        }))
-      )
-    ).filter((item) => {
-      const key = normalizeCatalogValue(
-        `${item.section}:${item.categoryId}:${item.subcategory}`
-      );
-      if (seen.has(key)) return false;
-      seen.add(key);
-
-      const searchable = normalizeCatalogValue(
-        [item.title, ...item.path].join(" ")
-      );
-      return matchesSearchKeywords(searchable, query);
-    });
-
-    return candidates
+    return MAIN_SEARCH_CANDIDATES
+      .map((item) => ({
+        item,
+        relevance: catalogSearchRelevanceScore(item.title, item.searchable, query),
+      }))
+      .filter(({ relevance }) => relevance >= 0)
       .sort((left, right) => {
-        const leftTitle = normalizeCatalogValue(left.title);
-        const rightTitle = normalizeCatalogValue(right.title);
         const score = (title: string) => {
           if (title === query) return 0;
           if (title.startsWith(query)) return 1;
@@ -490,15 +487,17 @@ export default function HomePage() {
         };
 
         return (
-          score(leftTitle) - score(rightTitle) ||
-          left.title.localeCompare(right.title, "ru", {
+          score(left.item.normalizedTitle) - score(right.item.normalizedTitle) ||
+          right.relevance - left.relevance ||
+          left.item.title.localeCompare(right.item.title, "ru", {
             numeric: true,
             sensitivity: "base",
           })
         );
       })
-      .slice(0, 6);
-  }, [search]);
+      .slice(0, 6)
+      .map(({ item }) => item);
+  }, [deferredSearch]);
 
   const availableCities = useMemo(() => {
     const source = feedMode === "contractors" ? listings : requests;
@@ -524,9 +523,15 @@ export default function HomePage() {
   }, [priceCeiling, priceTo]);
 
   const filteredListings = useMemo(() => {
+    const hasSearch = Boolean(deferredSearch.trim());
+    const relevanceScores = new Map<SearchableListing, number>();
     const result = listings.filter((listing) => {
       if (!isPublicationApproved(listing)) return false;
-      const matchesSearch = matchesSearchKeywords(publicationSearchText(listing), search);
+      if (hasSearch) {
+        const relevance = publicationSearchRelevanceScore(listing, deferredSearch);
+        if (relevance < 0) return false;
+        relevanceScores.set(listing, relevance);
+      }
       const matchesCategory = category
         ? normalizeCatalogValue(listing.category) === normalizeCatalogValue(category)
         : true;
@@ -560,7 +565,6 @@ export default function HomePage() {
       const matchesPhotos = withPhotosOnly ? hasImages(listing) : true;
 
       return (
-        matchesSearch &&
         matchesCategory &&
         matchesCatalogCategory &&
         matchesCatalogSection &&
@@ -575,15 +579,14 @@ export default function HomePage() {
       );
     });
 
-    if (!search.trim()) return result;
+    if (!hasSearch) return result;
     return result.sort(
       (left, right) =>
-        searchRelevanceScore(publicationSearchText(right), search) -
-        searchRelevanceScore(publicationSearchText(left), search)
+        (relevanceScores.get(right) || 0) - (relevanceScores.get(left) || 0)
     );
   }, [
     listings,
-    search,
+    deferredSearch,
     category,
     catalogCategoryId,
     catalogSection,
@@ -602,13 +605,20 @@ export default function HomePage() {
 
   const filteredRequests = useMemo(
     () => {
+      const hasSearch = Boolean(deferredSearch.trim());
+      const relevanceScores = new Map<CustomerRequest, number>();
       const result = requests.filter((request) => {
         const baseMatches = requestMatches(
           request,
-          search,
           category,
           subcategory
         );
+        if (!baseMatches) return false;
+        if (hasSearch) {
+          const relevance = publicationSearchRelevanceScore(request, deferredSearch);
+          if (relevance < 0) return false;
+          relevanceScores.set(request, relevance);
+        }
         const catalogSelection = publicationCatalogSelection(request);
       const matchesCatalogCategory = !catalogCategoryId || catalogSelection.categoryId === catalogCategoryId;
       const matchesCatalogSection = !catalogSection || catalogSelection.section === catalogSection;
@@ -626,7 +636,6 @@ export default function HomePage() {
         const matchesPhotos = withPhotosOnly ? hasImages(request) : true;
 
         return (
-          baseMatches &&
           matchesCatalogCategory &&
           matchesCatalogSection &&
           matchesCity &&
@@ -636,16 +645,15 @@ export default function HomePage() {
         );
       });
 
-      if (!search.trim()) return result;
+      if (!hasSearch) return result;
       return result.sort(
         (left, right) =>
-          searchRelevanceScore(publicationSearchText(right), search) -
-          searchRelevanceScore(publicationSearchText(left), search)
+          (relevanceScores.get(right) || 0) - (relevanceScores.get(left) || 0)
       );
     },
     [
       requests,
-      search,
+      deferredSearch,
       category,
       catalogCategoryId,
       catalogSection,

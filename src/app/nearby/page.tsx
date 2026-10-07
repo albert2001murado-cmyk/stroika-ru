@@ -1,6 +1,6 @@
 "use client";
 import { getOfferActions, getOfferGroup, matchesOfferSelection } from "@/lib/listingOffer";
-import { matchesSearchKeywords } from "@/lib/searchKeywords";
+import { publicationSearchRelevanceScore } from "@/lib/searchKeywords";
 import { mapProfileLink } from "@/lib/mapProfileLink";
 
 import { db } from "@/lib/firebase";
@@ -33,7 +33,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { collection, getDocs, limit, query } from "firebase/firestore";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 
 declare global {
   interface Window {
@@ -351,6 +351,7 @@ export default function NearbyPage() {
   const [mainActions, setMainActions] = useState<string[]>([]);
   const [category, setCategory] = useState("Все категории");
   const [searchText, setSearchText] = useState("");
+  const deferredSearchText = useDeferredValue(searchText);
   const [onlyUrgent, setOnlyUrgent] = useState(false);
   const [onlyVerified, setOnlyVerified] = useState(false);
   const [userCoords, setUserCoords] = useState<Coordinates | null>(null);
@@ -563,37 +564,20 @@ export default function NearbyPage() {
   const filteredItems = useMemo(() => {
     const cityValue = normalize(city);
     const categoryValue = normalize(category === "Все категории" ? "" : category);
-    const searchValue = normalize(searchText);
 
     return items.filter((item) => {
       const location = normalize(getLocation(item));
       const itemCategory = normalize(`${item.category || ""} ${item.subcategory || ""}`);
-      const fullText = normalize(
-        [
-          item.title,
-          item.name,
-          item.description,
-          item.category,
-          item.subcategory,
-          item.city,
-          item.district,
-          item.address,
-          item.authorName,
-          item.userName,
-          item.companyName,
-          item.displayName,
-        ].join(" ")
-      );
 
       const cityOk = !cityValue || location.includes(cityValue);
       const categoryOk = !categoryValue || itemCategory.includes(categoryValue);
-      const searchOk = matchesSearchKeywords(fullText, searchText);
+      const searchOk = publicationSearchRelevanceScore(item, deferredSearchText) >= 0;
       const urgentOk = !onlyUrgent || Boolean(item.isUrgent);
       const verifiedOk = !onlyVerified || Boolean(item.verified);
 
       return matchesOfferSelection(item, mainActions.join(",")) && cityOk && categoryOk && searchOk && urgentOk && verifiedOk;
     });
-  }, [items, city, category, searchText, onlyUrgent, onlyVerified, mainActions]);
+  }, [items, city, category, deferredSearchText, onlyUrgent, onlyVerified, mainActions]);
 
   const activeItem =
     filteredItems.find((item) => item.id === activeId) || filteredItems[0] || null;
