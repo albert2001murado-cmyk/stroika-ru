@@ -53,7 +53,7 @@ export const MATERIAL_GROUPS: CatalogGroup[] = [
     title: "Инженерные материалы",
     description: "Вода, отопление, канализация, вентиляция и электрика",
     imageKey: "materials-engineering",
-    items: materialRange("Полипропиленовые трубы", "Светильники"),
+    items: materialRange("Трубы для водоснабжения", "Светильники"),
   },
   {
     id: "site",

@@ -1,5 +1,9 @@
 "use client";
-import { matchesSearchKeywords, publicationSearchText } from "@/lib/searchKeywords";
+import {
+  matchesSearchKeywords,
+  publicationSearchText,
+  searchRelevanceScore,
+} from "@/lib/searchKeywords";
 import { normalizePaymentChoice } from "@/lib/payments";
 import { publicationCatalogSelection } from "@/lib/catalogSelection";
 
@@ -520,7 +524,7 @@ export default function HomePage() {
   }, [priceCeiling, priceTo]);
 
   const filteredListings = useMemo(() => {
-    return listings.filter((listing) => {
+    const result = listings.filter((listing) => {
       if (!isPublicationApproved(listing)) return false;
       const matchesSearch = matchesSearchKeywords(publicationSearchText(listing), search);
       const matchesCategory = category
@@ -570,6 +574,13 @@ export default function HomePage() {
         matchesPhotos
       );
     });
+
+    if (!search.trim()) return result;
+    return result.sort(
+      (left, right) =>
+        searchRelevanceScore(publicationSearchText(right), search) -
+        searchRelevanceScore(publicationSearchText(left), search)
+    );
   }, [
     listings,
     search,
@@ -590,8 +601,8 @@ export default function HomePage() {
   ]);
 
   const filteredRequests = useMemo(
-    () =>
-      requests.filter((request) => {
+    () => {
+      const result = requests.filter((request) => {
         const baseMatches = requestMatches(
           request,
           search,
@@ -623,7 +634,15 @@ export default function HomePage() {
           matchesUrgency &&
           matchesPhotos
         );
-      }),
+      });
+
+      if (!search.trim()) return result;
+      return result.sort(
+        (left, right) =>
+          searchRelevanceScore(publicationSearchText(right), search) -
+          searchRelevanceScore(publicationSearchText(left), search)
+      );
+    },
     [
       requests,
       search,

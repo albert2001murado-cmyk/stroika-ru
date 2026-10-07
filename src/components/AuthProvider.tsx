@@ -9,6 +9,7 @@ import {
   createUserWithEmailAndPassword,
   deleteUser,
   onAuthStateChanged,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   setPersistence,
   signOut,
@@ -40,6 +41,7 @@ type AuthContextValue = {
   loading: boolean;
   register: (data: RegisterData) => Promise<void>;
   login: (email: string, password: string, remember?: boolean) => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
   logout: () => Promise<void>;
 };
 
@@ -51,9 +53,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   async function register(data: RegisterData) {
+    const normalizedEmail = data.email.trim().toLocaleLowerCase("en-US");
     const credential = await createUserWithEmailAndPassword(
       auth,
-      data.email,
+      normalizedEmail,
       data.password
     );
 
@@ -94,7 +97,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const userProfile: UserProfile = {
         uid: credential.user.uid,
-        email: data.email,
+        email: normalizedEmail,
         displayName: individualName,
         representativeName: individualName,
         accountType: "individual",
@@ -133,7 +136,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       auth,
       remember ? browserLocalPersistence : browserSessionPersistence
     );
-    await signInWithEmailAndPassword(auth, email, password);
+    await signInWithEmailAndPassword(
+      auth,
+      email.trim().toLocaleLowerCase("en-US"),
+      password
+    );
+  }
+
+  async function resetPassword(email: string) {
+    auth.languageCode = "ru";
+    await sendPasswordResetEmail(
+      auth,
+      email.trim().toLocaleLowerCase("en-US")
+    );
   }
 
   async function logout() {
@@ -180,7 +195,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ user, profile, loading, register, login, logout }),
+    () => ({ user, profile, loading, register, login, resetPassword, logout }),
     [user, profile, loading]
   );
 

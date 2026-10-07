@@ -31,6 +31,7 @@ import {
   Check,
   CheckCircle2,
   HardHat,
+  KeyRound,
   Loader2,
   Lock,
   Mail,
@@ -82,7 +83,7 @@ function readableAuthError(error: unknown) {
 
 export default function AuthPage() {
   const router = useRouter();
-  const { register, login } = useAuth();
+  const { register, login, resetPassword } = useAuth();
 
   const [mode, setMode] = useState<"register" | "login">("register");
   const [loginMethod, setLoginMethod] = useState<"email" | "phone">("email");
@@ -103,6 +104,8 @@ export default function AuthPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
+  const [resetSending, setResetSending] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
   const [legalAccepted, setLegalAccepted] = useState(false);
 
   useEffect(() => {
@@ -323,6 +326,43 @@ export default function AuthPage() {
     }
   }
 
+  async function handlePasswordReset() {
+    const cleanEmail = email.trim();
+    setError("");
+    setResetSent(false);
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(cleanEmail)) {
+      setError("Введите корректную электронную почту, к которой привязан аккаунт.");
+      return;
+    }
+
+    setResetSending(true);
+    try {
+      await resetPassword(cleanEmail);
+      setResetSent(true);
+    } catch (resetError) {
+      const code =
+        typeof resetError === "object" && resetError && "code" in resetError
+          ? String((resetError as { code?: unknown }).code || "")
+          : "";
+
+      // Не раскрываем, зарегистрирована ли почта: это защищает аккаунты от перебора.
+      if (code.includes("user-not-found")) {
+        setResetSent(true);
+      } else if (code.includes("too-many-requests")) {
+        setError("Слишком много запросов. Подождите немного и попробуйте снова.");
+      } else if (code.includes("network-request-failed")) {
+        setError("Нет соединения с сервером. Проверьте интернет и попробуйте снова.");
+      } else if (code.includes("invalid-email")) {
+        setError("Введите корректную электронную почту.");
+      } else {
+        setError("Не удалось отправить письмо. Попробуйте ещё раз немного позже.");
+      }
+    } finally {
+      setResetSending(false);
+    }
+  }
+
   const registrationBlocked =
     mode === "register" && (!legalAccepted || (isBusiness && lookupState !== "success"));
   const phoneLoginBlocked =
@@ -416,6 +456,7 @@ export default function AuthPage() {
                     onClick={() => {
                       setMode(item);
                       setError("");
+                      setResetSent(false);
                       setConfirmation(null);
                       setSmsCode("");
                       recaptchaRef.current?.clear();
@@ -444,6 +485,7 @@ export default function AuthPage() {
                       onClick={() => {
                         setLoginMethod(id);
                         setError("");
+                        setResetSent(false);
                         setConfirmation(null);
                         setSmsCode("");
                         recaptchaRef.current?.clear();
@@ -675,7 +717,10 @@ export default function AuthPage() {
                         autoComplete="email"
                         placeholder="Электронная почта"
                         value={email}
-                        onChange={(event) => setEmail(event.target.value)}
+                        onChange={(event) => {
+                          setEmail(event.target.value);
+                          setResetSent(false);
+                        }}
                         required
                       />
                     </div>
@@ -779,6 +824,42 @@ export default function AuthPage() {
                   </div>
                 )}
               </div>
+
+              {mode === "login" && loginMethod === "email" ? (
+                <div className="mt-4 overflow-hidden rounded-[22px] border border-blue-100 bg-gradient-to-r from-blue-50/80 to-white p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-[#0057ff] shadow-sm ring-1 ring-blue-100">
+                        <KeyRound size={21} strokeWidth={2.6} />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-sm font-black text-slate-900">Забыли пароль?</p>
+                        <p className="mt-0.5 text-xs font-bold leading-5 text-slate-500">
+                          Отправим защищённую ссылку на указанную почту.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handlePasswordReset}
+                      disabled={resetSending}
+                      className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-2xl bg-white px-4 text-sm font-black text-[#0057ff] shadow-sm ring-1 ring-blue-100 transition duration-300 hover:-translate-y-0.5 hover:bg-[#0057ff] hover:text-white active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {resetSending ? <Loader2 className="animate-spin" size={17} /> : null}
+                      {resetSending ? "Отправляем..." : "Восстановить"}
+                    </button>
+                  </div>
+
+                  {resetSent ? (
+                    <div className="company-result-enter mt-3 flex items-start gap-2 rounded-2xl bg-emerald-50 px-3.5 py-3 text-xs font-bold leading-5 text-emerald-700 ring-1 ring-emerald-100">
+                      <CheckCircle2 className="mt-0.5 shrink-0" size={17} />
+                      <span>
+                        Если аккаунт с этой почтой существует, письмо уже отправлено. Проверьте также папку «Спам».
+                      </span>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
 
               {mode === "login" ? (
                 <button

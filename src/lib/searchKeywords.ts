@@ -9,6 +9,7 @@ export function normalizeSearchKeywords(value: unknown) {
   return String(value || "")
     .normalize("NFKC")
     .toLocaleLowerCase("ru-RU")
+    .replace(/(^|[^\p{L}\p{N}])3[\s-]*[дd](?=$|[^\p{L}\p{N}])/gu, "$13d")
     .replace(/\bosb\b/g, "осб")
     .replaceAll("ё", "е")
     .replace(/[\u200B-\u200D\uFEFF]/g, "")
@@ -39,33 +40,39 @@ type SearchConcept = {
 const concepts: SearchConcept[] = [
   { key: "asphalt", roots: ["асфальт"] },
   { key: "paving", roots: ["брусчат", "тротуарн"] },
-  { key: "window", roots: ["окн", "окон"] },
+  { key: "window", roots: ["окн", "окон", "стеклопакет", "остеклен"] },
   { key: "door", roots: ["двер"] },
-  { key: "plot", roots: ["участ", "двор", "территор"] },
+  { key: "plot", roots: ["участ", "двор", "территор", "благоустр", "ландшафт", "озелен", "газон"] },
   { key: "sand", roots: ["песок", "песк"] },
   { key: "gravel", roots: ["щебен", "щебн", "грави"] },
-  { key: "concrete", roots: ["бетон", "стяжк"] },
-  { key: "brick", roots: ["кирпич", "кладк"] },
-  { key: "tile", roots: ["плитк", "кафел", "керамогран"] },
-  { key: "drywall", roots: ["гипсокартон", "гкл"] },
-  { key: "insulation", roots: ["утепл", "изоляц"] },
+  { key: "concrete", roots: ["бетон", "цемент", "раствор", "железобетон", "стяжк"] },
+  { key: "brick", roots: ["кирпич", "кладк", "кладоч", "газобетон", "пеноблок", "строительнблок"] },
+  // Названия материала объединены в один смысл; намерение «купить» или
+  // «уложить» обрабатывается отдельно и не смешивает товар с работой.
+  { key: "tile", roots: ["плит", "плиточ", "кафел", "керамич", "керамогран", "мозаик"] },
+  { key: "drywall", roots: ["гипсокартон", "гкл", "гипсов"] },
+  { key: "insulation", roots: ["утепл", "изоляц", "минват", "пенопласт", "пенополистирол", "теплоизоляц"] },
   { key: "foundation", roots: ["фундамент", "свайн"] },
   { key: "fence", roots: ["забор", "огражден", "ворот"] },
-  { key: "roof", roots: ["крыш", "кровл"] },
-  { key: "facade", roots: ["фасад"] },
-  { key: "floor", roots: ["напольн", "покрыт", "ламинат", "линолеум", "паркет"] },
-  { key: "plumbing", roots: ["сантех", "водоснаб", "канализац", "труб"] },
-  { key: "electric", roots: ["электр", "проводк", "кабел"] },
+  { key: "roof", roots: ["крыш", "кровл", "черепиц", "профнастил", "шифер", "рубероид", "водосток"] },
+  { key: "facade", roots: ["фасад", "сайдинг", "облицов"] },
+  { key: "floor", roots: ["напольн", "покрыт", "ламинат", "линолеум", "паркет", "наливнпол"] },
+  { key: "ceiling", roots: ["потол"] },
+  { key: "plaster", roots: ["штукатур", "шпаклев", "шпатлев", "выравнивстен"] },
+  { key: "wallpaper", roots: ["обои", "обойн", "поклей", "оклей"] },
+  { key: "plumbing", roots: ["сантех", "водоснаб", "канализац", "труб", "смесител", "унитаз", "раковин"] },
+  { key: "electric", roots: ["электр", "проводк", "кабел", "розет", "выключател", "электрощит"] },
   { key: "heating", roots: ["отоплен", "радиатор", "котел"] },
   { key: "ventilation", roots: ["вентиляц", "кондицион"] },
-  { key: "furniture", roots: ["мебел", "шкаф", "кухн", "гарнитур"] },
+  { key: "furniture", roots: ["мебел", "шкаф", "кухн", "гарнитур", "столешниц"] },
+  { key: "wood", roots: ["пиломатериал", "доск", "брус", "фанер", "дерев", "столяр", "плотниц"] },
   { key: "tool", roots: ["инструмент", "оборудован"] },
   { key: "excavator", roots: ["экскаватор", "землеройн"] },
   { key: "loader", roots: ["погрузчик", "погрузоч"] },
   { key: "crane", roots: ["автокран", "башенн", "манипулятор", "подъемник"] },
   { key: "warehouse", roots: ["склад"] },
   { key: "hangar", roots: ["ангар"] },
-  { key: "welding", roots: ["сварк", "свароч"] },
+  { key: "welding", roots: ["сварк", "свароч", "металлоконструкц"] },
   { key: "drilling", roots: ["бурен", "сверлен"] },
   { key: "excavation", roots: ["землян", "котлован", "транше"] },
   { key: "lay", roots: ["уклад", "уклады", "улож", "полож", "класть", "постел", "настел"], optionalWithSubject: true },
@@ -75,8 +82,9 @@ const concepts: SearchConcept[] = [
   { key: "rent", roots: ["аренд", "прокат", "напрокат"] },
   { key: "delivery", roots: ["достав", "привез", "привоз", "перевоз"] },
   { key: "build", roots: ["строител", "строит", "постро", "возвед"] },
-  { key: "paint", roots: ["покрас", "окрас", "красит", "маляр"] },
+  { key: "paint", roots: ["покрас", "окрас", "красит", "маляр", "краск", "эмал", "грунтов"] },
   { key: "demolish", roots: ["демонтаж", "демонт", "снест", "снос"] },
+  { key: "waste", roots: ["мусор", "утилиз", "вывоз"] },
   { key: "design", roots: ["дизайн", "проект"] },
   { key: "turnkey", roots: ["ключ", "комплексн"] },
 ];
@@ -93,6 +101,101 @@ function auxiliaryAction(word: string) {
   // These verbs describe an action, while the searchable object normally sits
   // in another word: “залить фундамент”, “заменить проводку”, etc.
   return /^(?:укат|зал|отсып|засып|выкоп|пролож|пробур|просверл|постел|настел|подключ|замен|помен|собра|разобра|убра|сня|постав|сдел|выполн|заказ|куп|найд|ищ).*/u.test(word);
+}
+
+type SearchIntent = "material" | "service" | "any";
+
+const MATERIAL_PRODUCT_ROOTS = [
+  "керамич",
+  "плит",
+  "кафел",
+  "керамогран",
+  "мозаик",
+  "песок",
+  "песк",
+  "щеб",
+  "грави",
+  "кирпич",
+  "газобетон",
+  "пеноблок",
+  "гипсокартон",
+  "гкл",
+  "осб",
+  "пен",
+  "минват",
+  "пенопласт",
+  "утеплител",
+  "краск",
+  "эмал",
+  "грунтов",
+  "ламинат",
+  "линолеум",
+  "паркет",
+  "пиломатериал",
+  "доск",
+  "брус",
+  "фанер",
+  "цемент",
+  "бетон",
+] as const;
+
+function querySearchIntent(query: unknown): SearchIntent {
+  const value = normalizeSearchKeywords(query);
+  if (!value) return "any";
+
+  if (
+    /(?:^| )(?:купить|куплю|покупка|продажа|продам|материал(?:ы|ов|ами)?|товар(?:ы|ов)?|поставка)(?: |$)/u.test(
+      value
+    )
+  ) {
+    return "material";
+  }
+
+  if (
+    /(?:^| )(?:работа|работы|работу|услуга|услуги|мастер|мастера|исполнитель|бригада|подрядчик|укладка|укладывать|уложить|положить|постелить|настелить|монтаж|монтировать|смонтировать|установка|установить|ремонт|отремонтировать|строительство|построить|возведение|покраска|окраска|покрасить|штукатурка|шпаклевка|кладка|сборка|собрать|залить|отсыпать|засыпать|укатать|бетонирование|асфальтирование)(?: |$)/u.test(
+      value
+    )
+  ) {
+    return "service";
+  }
+
+  if (
+    value
+      .split(" ")
+      .some((word) => MATERIAL_PRODUCT_ROOTS.some((root) => word.startsWith(root)))
+  ) {
+    return "material";
+  }
+
+  return "any";
+}
+
+function valueMatchesIntent(value: string, intent: SearchIntent) {
+  if (intent === "any") return true;
+
+  const markedAsMaterial = value.includes("разделматериалы");
+  const markedAsService =
+    value.includes("разделуслуги") || value.includes("разделрешения");
+
+  if (markedAsMaterial || markedAsService) {
+    return intent === "material" ? markedAsMaterial : markedAsService;
+  }
+
+  const looksLikeMaterial =
+    /(?:^| )(?:материал(?:ы|ов|ами)?|товар(?:ы|ов)?|продажа|продам|поставка)(?: |$)/u.test(
+      value
+    ) ||
+    value
+      .split(" ")
+      .some((word) => MATERIAL_PRODUCT_ROOTS.some((root) => word.startsWith(root)));
+  const looksLikeService =
+    /(?:^| )(?:услуга|услуги|работа|работы|мастер|бригада|подрядчик|укладка|настил|монтаж|установка|ремонт|строительство|возведение|покраска|окраска|штукатурка|шпаклевка|кладка|сборка|отсыпка|засыпка|укатка|бетонирование|асфальтирование)(?: |$)/u.test(
+      value
+    );
+
+  return intent === "material"
+    ? looksLikeMaterial && !looksLikeService
+    : looksLikeService;
 }
 
 function removeFirstMatchingSuffix(value: string, suffixes: readonly string[]) {
@@ -191,35 +294,110 @@ function oneEditApart(left: string, right: string) {
   return edits + (i < left.length || j < right.length ? 1 : 0) <= 1;
 }
 
-export function matchesSearchKeywords(value: unknown, query: unknown) {
-  const words = normalizeSearchKeywords(query)
-    .split(" ")
-    .filter((word) => word && !stopWords.has(word));
-  if (!words.length) return true;
+type SearchToken = {
+  word: string;
+  root: string;
+  concept?: string;
+};
 
-  const tokens = normalizeSearchKeywords(value)
+function searchTokens(value: unknown): SearchToken[] {
+  return normalizeSearchKeywords(value)
     .split(/\s+/)
     .filter(Boolean)
     .map((word) => ({ word, root: searchTokenRoot(word), concept: concept(word)?.key }));
-  if (!tokens.length) return false;
+}
+
+function queryRequirements(query: unknown): SearchToken[] {
+  const words = normalizeSearchKeywords(query)
+    .split(" ")
+    .filter((word) => word && !stopWords.has(word));
+  if (!words.length) return [];
 
   const subjectWords = words.filter((word) => !auxiliaryAction(word));
   const required = subjectWords.length ? subjectWords : words;
-  const wordMatches = (word: string) => {
-    const meaning = concept(word)?.key;
-    const root = searchTokenRoot(word);
-    return tokens.some((token) => {
-      if (token.word === word || (meaning && meaning === token.concept)) return true;
-      if (word.length >= 3 && (token.word.startsWith(word) || word.startsWith(token.word))) return true;
-      if (root.length >= 3 && (token.root === root || token.root.startsWith(root) || root.startsWith(token.root))) return true;
-      return oneEditApart(root, token.root);
-    });
-  };
+  const unique = new Map<string, SearchToken>();
 
-  return required.every(wordMatches);
+  for (const word of required) {
+    const token = {
+      word,
+      root: searchTokenRoot(word),
+      concept: concept(word)?.key,
+    };
+    // Слова одного строительного смысла не должны искусственно сужать поиск:
+    // «керамическая плита» — один предмет, а не два независимых требования.
+    const key = token.concept ? `concept:${token.concept}` : `root:${token.root}`;
+    if (!unique.has(key)) unique.set(key, token);
+  }
+
+  return [...unique.values()];
+}
+
+function tokenMatchScore(requirement: SearchToken, token: SearchToken) {
+  if (token.word === requirement.word) return 140;
+  if (requirement.concept && requirement.concept === token.concept) return 110;
+  if (
+    requirement.word.length >= 3 &&
+    (token.word.startsWith(requirement.word) || requirement.word.startsWith(token.word))
+  ) {
+    return 90;
+  }
+  if (
+    requirement.root.length >= 3 &&
+    (token.root === requirement.root ||
+      token.root.startsWith(requirement.root) ||
+      requirement.root.startsWith(token.root))
+  ) {
+    return 75;
+  }
+  return oneEditApart(requirement.root, token.root) ? 35 : 0;
+}
+
+/**
+ * Higher values mean a closer result. `-1` means that at least one meaningful
+ * part of the query is absent. This keeps multi-word search precise while
+ * allowing material/service synonyms to meet the same requirement.
+ */
+export function searchRelevanceScore(value: unknown, query: unknown) {
+  const normalizedQuery = normalizeSearchKeywords(query);
+  const requirements = queryRequirements(query);
+  if (!requirements.length) return 0;
+
+  const normalizedValue = normalizeSearchKeywords(value);
+  if (!valueMatchesIntent(normalizedValue, querySearchIntent(query))) return -1;
+  const tokens = searchTokens(value);
+  if (!tokens.length) return -1;
+
+  let score = normalizedValue.includes(normalizedQuery) ? 900 : 0;
+  for (const requirement of requirements) {
+    const best = tokens.reduce(
+      (current, token) => Math.max(current, tokenMatchScore(requirement, token)),
+      0
+    );
+    if (!best) return -1;
+    score += best;
+  }
+
+  return score;
+}
+
+export function matchesSearchKeywords(value: unknown, query: unknown) {
+  return searchRelevanceScore(value, query) >= 0;
 }
 
 export function publicationSearchText(item: Record<string, any>) {
+  const section = normalizeSearchKeywords(
+    item.catalogSection || item.section || item.catalogType
+  );
+  const sectionMarker = section.includes("material")
+    ? "разделматериалы"
+    : section.includes("service")
+      ? "разделуслуги"
+      : section.includes("solution") || section.includes("complex")
+        ? "разделрешения"
+        : section.includes("equipment") || section.includes("machinery")
+          ? "разделтехника"
+          : "";
+
   return [
     item.title,
     item.description,
@@ -232,6 +410,7 @@ export function publicationSearchText(item: Record<string, any>) {
     item.companyName,
     item.offerActionLabel,
     item.searchText,
+    sectionMarker,
     ...(Array.isArray(item.capabilities) ? item.capabilities : []),
     ...(Array.isArray(item.searchTags) ? item.searchTags : []),
     ...(Array.isArray(item.catalogPath) ? item.catalogPath : []),
