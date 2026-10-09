@@ -1,1226 +1,639 @@
 "use client";
-import { getOfferActions, getOfferGroup, matchesOfferSelection } from "@/lib/listingOffer";
-import { publicationSearchRelevanceScore } from "@/lib/searchKeywords";
-import { mapProfileLink } from "@/lib/mapProfileLink";
 
+import { CATALOG_FORM_SECTIONS, getCatalogFormCategories, type CatalogSectionId } from "@/data/catalogForm";
+import { getOfferActions, getOfferFeatures, getOfferGroup } from "@/lib/listingOffer";
+import { mapProfileLink } from "@/lib/mapProfileLink";
 import { db } from "@/lib/firebase";
 import { isPublicationApproved } from "@/lib/moderation";
 import {
-  AlertCircle,
-  ArrowLeft,
-  BadgeCheck,
-  Building2,
-  CheckCircle2,
-  Clock3,
-  Crosshair,
-  Filter,
-  Layers3,
-  Loader2,
-  LocateFixed,
-  MapPin,
-  MessageCircle,
-  Navigation,
-  Phone,
-  RefreshCcw,
-  Search,
-  ShieldCheck,
-  Sparkles,
-  Star,
-  Truck,
-  UserRound,
-  UsersRound,
-  X,
+  distanceLabel, escapeMapHtml, filterNearbyPublications, indexNearbyPublication, nearbyKey,
+  normalizeCoordinates, priceLabel, priceNumber, publicationAddress, publicationAuthor,
+  publicationCoordinates, publicationLink, publicationOwner,
+  type Coordinates, type IndexedNearbyPublication, type NearbyAudience, type NearbyPublication, type NearbySort,
+} from "@/lib/nearby";
+import {
+  AlertCircle, ArrowLeft, ArrowRight, BadgeCheck, Building2, Check, ChevronRight,
+  ClipboardList, Compass, HardHat, ImageIcon, Layers3, List, Loader2, LocateFixed,
+  Map as MapIcon, MapPin, Navigation, PackageOpen, RotateCcw, Search,
+  SlidersHorizontal, Truck, UserRound, Wrench, X, Zap,
 } from "lucide-react";
 import Link from "next/link";
-import { collection, getDocs, limit, query } from "firebase/firestore";
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { collection, doc, getDoc, limit, onSnapshot, query } from "firebase/firestore";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import styles from "./nearby.module.css";
 
 declare global {
-  interface Window {
-    ymaps?: any;
-    __stroikaYandexMapsPromise?: Promise<any>;
-  }
+  interface Window { ymaps?: any; __stroikaYandexMapsPromise?: Promise<any>; }
 }
 
-type Coordinates = {
-  lat: number;
-  lng: number;
-};
-
-type ListingLike = {
-  id: string;
-  title?: string;
-  name?: string;
-  description?: string;
-  category?: string;
-  subcategory?: string;
-  city?: string;
-  district?: string;
-  address?: string;
-  price?: string | number;
-  priceFrom?: string | number;
-  budget?: string | number;
-  phone?: string;
-  authorName?: string;
-  userName?: string;
-  companyName?: string;
-  displayName?: string;
-  imageUrl?: string;
-  photoUrl?: string;
-  avatarUrl?: string;
-  photos?: string[];
-  images?: string[];
-  imageUrls?: string[];
-  media?: Array<{ url?: string; type?: string }>;
-  userId?: string;
-  authorId?: string;
-  ownerId?: string;
-  creatorId?: string;
-  uid?: string;
-  latitude?: number | string;
-  longitude?: number | string;
-  lat?: number | string;
-  lng?: number | string;
-  coordinates?: {
-    latitude?: number | string;
-    longitude?: number | string;
-    lat?: number | string;
-    lng?: number | string;
-  };
-  location?: {
-    latitude?: number | string;
-    longitude?: number | string;
-    lat?: number | string;
-    lng?: number | string;
-    address?: string;
-  };
-  createdAt?: any;
-  isUrgent?: boolean;
-  verified?: boolean;
-  accountType?: string;
-  moderationStatus?: unknown;
-};
-
-const defaultCenter: Coordinates = {
-  // Нижний Новгород — базовый центр, чтобы карта не улетала в Москву.
-  lat: 56.326887,
-  lng: 44.005986,
-};
-
-const baseCategories = [
-  "Все категории",
-  "Ремонт квартир",
-  "Сантехника",
-  "Электрика",
-  "Строительство",
-  "Спецтехника",
-  "Материалы",
-  "Отделочные работы",
-  "Крыша и фасад",
-  "Окна и двери",
-  "Инженерные системы",
-  "Участок и благоустройство",
+const DEFAULT_CENTER: Coordinates = { lat: 56.326887, lng: 44.005986 };
+const MAX_RESULTS = 250;
+function motionDuration(duration: number) {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : duration;
+}
+function quietMapOperation(operation: () => any) {
+  try { operation()?.then?.(() => {}, () => {}); } catch { /* Отмена движения не прерывает страницу. */ }
+}
+function geocodeWithTimeout(request: PromiseLike<any>) {
+  return new Promise<any>((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new Error("Geocode timeout")), 6000);
+    Promise.resolve(request).then(value => { window.clearTimeout(timer); resolve(value); }, error => { window.clearTimeout(timer); reject(error); });
+  });
+}
+function fitMapBounds(map: any, bounds: number[][], zoomMargin: number | number[] = 70, maxZoom = 14) {
+  quietMapOperation(() => map.setBounds(bounds, { checkZoomRange: true, zoomMargin, duration: motionDuration(350) }).then(() => {
+    // maxZoom — опция карты, не setBounds.
+    try { if (map.getZoom() > maxZoom) quietMapOperation(() => map.setZoom(maxZoom)); } catch {}
+  }, () => {}));
+}
+const SECTION_ICONS = { materials: PackageOpen, services: Wrench, equipment: Truck, solutions: Building2 };
+const SOURCES = ["listings", "customerRequests"] as const;
+const AUDIENCES: Array<{ id: NearbyAudience; label: string; Icon: typeof HardHat }> = [
+  { id: "contractors", label: "Исполнители", Icon: HardHat },
+  { id: "customers", label: "Заказчики", Icon: ClipboardList },
+  { id: "all", label: "Все", Icon: Layers3 },
 ];
 
-function normalize(value: unknown) {
-  return String(value || "")
-    .toLowerCase()
-    .trim()
-    .replaceAll("ё", "е");
-}
-
-function safeNumber(value: unknown) {
-  if (value === undefined || value === null || value === "") return null;
-
-  const numberValue =
-    typeof value === "string" ? Number(value.replace(",", ".").trim()) : Number(value);
-
-  return Number.isFinite(numberValue) ? numberValue : null;
-}
-
-function normalizeCoords(latValue: unknown, lngValue: unknown): Coordinates | null {
-  let lat = safeNumber(latValue);
-  let lng = safeNumber(lngValue);
-
-  if (lat === null || lng === null) return null;
-
-  // Иногда координаты сохраняются в формате Яндекса [lng, lat].
-  // Если видим, что широта невозможная, а долгота похожа на широту — меняем местами.
-  if (Math.abs(lat) > 90 && Math.abs(lng) <= 90) {
-    const oldLat = lat;
-    lat = lng;
-    lng = oldLat;
-  }
-
-  if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
-
-  return { lat, lng };
-}
-
-function getItemCoords(item: ListingLike): Coordinates | null {
-  return (
-    normalizeCoords(item.location?.lat, item.location?.lng) ||
-    normalizeCoords(item.location?.latitude, item.location?.longitude) ||
-    normalizeCoords(item.coordinates?.lat, item.coordinates?.lng) ||
-    normalizeCoords(item.coordinates?.latitude, item.coordinates?.longitude) ||
-    normalizeCoords(item.lat, item.lng) ||
-    normalizeCoords(item.latitude, item.longitude)
-  );
-}
-
-function getAddressForGeocode(item: ListingLike) {
-  const locationAddress = String(item.location?.address || "").trim();
-  const city = String(item.city || "").trim();
-  const district = String(item.district || "").trim();
-  const address = String(item.address || "").trim();
-
-  // Если в location.address уже полный адрес от Яндекса — используем его первым.
-  if (locationAddress.length >= 3) return locationAddress;
-
-  return [city, district, address].filter(Boolean).join(", ").trim();
-}
-
-function getResolvedItemCoords(
-  item: ListingLike,
-  resolvedCoords: Record<string, Coordinates>
-): Coordinates | null {
-  return getItemCoords(item) || resolvedCoords[item.id] || null;
-}
-
-function getListingImage(item: ListingLike) {
-  if (item.imageUrl) return item.imageUrl;
-  if (item.photoUrl) return item.photoUrl;
-  if (item.avatarUrl) return item.avatarUrl;
-  if (Array.isArray(item.photos) && item.photos[0]) return item.photos[0];
-  if (Array.isArray(item.images) && item.images[0]) return item.images[0];
-  if (Array.isArray(item.imageUrls) && item.imageUrls[0]) return item.imageUrls[0];
-
-  const mediaImage = item.media?.find((media) => {
-    if (!media?.url) return false;
-    if (media.type === "image") return true;
-    return /\.(jpg|jpeg|png|webp|gif)$/i.test(media.url);
-  });
-
-  return mediaImage?.url || "";
-}
-
-function getPrice(item: ListingLike) {
-  const value = item.price || item.priceFrom || item.budget;
-
-  if (!value) return "Цена договорная";
-
-  if (typeof value === "number") {
-    return `${value.toLocaleString("ru-RU")} ₽`;
-  }
-
-  return String(value);
-}
-
-function getAuthor(item: ListingLike) {
-  return (
-    item.companyName ||
-    item.authorName ||
-    item.userName ||
-    item.displayName ||
-    (item.accountType === "ooo"
-      ? "Компания"
-      : item.accountType === "ip"
-      ? "ИП / мастер"
-      : "Исполнитель")
-  );
-}
-
-function getProfileId(item: ListingLike) {
-  return item.userId || item.authorId || item.ownerId || item.creatorId || item.uid || "";
-}
-
-function getProfileLink(item: ListingLike) {
-  return mapProfileLink(item);
-}
-
-function getLocation(item: ListingLike) {
-  const locationAddress = String(item.location?.address || "").trim();
-  if (locationAddress) return locationAddress;
-
-  return [item.city, item.district, item.address].filter(Boolean).join(", ");
-}
-
-function getDistanceText(
-  item: ListingLike,
-  userCoords: Coordinates | null,
-  resolvedCoords: Record<string, Coordinates> = {}
-) {
-  const coords = getResolvedItemCoords(item, resolvedCoords);
-
-  if (!coords || !userCoords) {
-    return "рядом по выбранному городу";
-  }
-
-  const earthRadiusKm = 6371;
-  const dLat = ((coords.lat - userCoords.lat) * Math.PI) / 180;
-  const dLng = ((coords.lng - userCoords.lng) * Math.PI) / 180;
-  const userLat = (userCoords.lat * Math.PI) / 180;
-  const itemLat = (coords.lat * Math.PI) / 180;
-
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.sin(dLng / 2) *
-      Math.sin(dLng / 2) *
-      Math.cos(userLat) *
-      Math.cos(itemLat);
-
-  const distance = earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-  if (distance < 1) return `${Math.round(distance * 1000)} м от вас`;
-
-  return `${distance.toFixed(1)} км от вас`;
-}
-
-function loadYandexMaps() {
-  if (typeof window === "undefined") {
-    return Promise.reject(new Error("Карта доступна только в браузере."));
-  }
-
-  if (window.ymaps) {
-    return new Promise<any>((resolve) => {
-      window.ymaps.ready(() => resolve(window.ymaps));
-    });
-  }
-
-  if (window.__stroikaYandexMapsPromise) {
-    return window.__stroikaYandexMapsPromise;
-  }
-
-  const apiKey = process.env.NEXT_PUBLIC_YANDEX_MAPS_API_KEY || "";
-  const scriptUrl = apiKey
-    ? `https://api-maps.yandex.ru/2.1/?apikey=${apiKey}&lang=ru_RU`
-    : "https://api-maps.yandex.ru/2.1/?lang=ru_RU";
-
-  window.__stroikaYandexMapsPromise = new Promise((resolve, reject) => {
-    const existingScript = document.querySelector<HTMLScriptElement>(
-      'script[data-stroika-yandex-map="true"]'
-    );
-
-    if (existingScript) {
-      existingScript.addEventListener("load", () => {
-        window.ymaps?.ready(() => resolve(window.ymaps));
-      });
-      existingScript.addEventListener("error", () => {
-        reject(new Error("Не получилось загрузить Яндекс.Карты."));
-      });
-      return;
+function loadYandexMaps(): Promise<any> {
+  if (window.ymaps) return new Promise(resolve => window.ymaps.ready(() => resolve(window.ymaps)));
+  if (window.__stroikaYandexMapsPromise) return window.__stroikaYandexMapsPromise;
+  const promise = new Promise((resolve, reject) => {
+    let script = document.querySelector<HTMLScriptElement>('script[data-stroika-yandex-map="true"]');
+    let created = false;
+    const timer = window.setTimeout(() => fail(), 18000);
+    const cleanup = () => {
+      window.clearTimeout(timer);
+      script?.removeEventListener("load", ready);
+      script?.removeEventListener("error", fail);
+    };
+    const ready = () => {
+      if (!window.ymaps) { fail(); return; }
+      window.ymaps.ready(() => { cleanup(); resolve(window.ymaps); });
+    };
+    const fail = () => {
+      cleanup();
+      if (created) script?.remove();
+      reject(new Error("Не удалось загрузить карту. Проверьте интернет и повторите попытку."));
+    };
+    if (!script) {
+      created = true;
+      script = document.createElement("script");
+      const key = process.env.NEXT_PUBLIC_YANDEX_MAPS_API_KEY;
+      script.src = `https://api-maps.yandex.ru/2.1/?lang=ru_RU${key ? `&apikey=${encodeURIComponent(key)}` : ""}`;
+      script.async = true;
+      script.dataset.stroikaYandexMap = "true";
     }
-
-    const script = document.createElement("script");
-    script.src = scriptUrl;
-    script.async = true;
-    script.defer = true;
-    script.dataset.stroikaYandexMap = "true";
-
-    script.onload = () => {
-      if (!window.ymaps) {
-        reject(new Error("Яндекс.Карты загрузились, но ymaps не найден."));
-        return;
-      }
-
-      window.ymaps.ready(() => resolve(window.ymaps));
-    };
-
-    script.onerror = () => {
-      reject(new Error("Не получилось загрузить Яндекс.Карты."));
-    };
-
-    document.head.appendChild(script);
+    script.addEventListener("load", ready);
+    script.addEventListener("error", fail);
+    if (created) document.head.appendChild(script);
   });
+  window.__stroikaYandexMapsPromise = promise;
+  void promise.catch(() => {
+    if (window.__stroikaYandexMapsPromise === promise) window.__stroikaYandexMapsPromise = undefined;
+  });
+  return promise;
+}
 
-  return window.__stroikaYandexMapsPromise;
+function isOwnerVerified(profile: Record<string, unknown>) {
+  return Boolean(profile.verified || profile.isVerified || profile.verificationStatus === "approved");
+}
+
+function profileLink(item: NearbyPublication) {
+  return publicationOwner(item) ? mapProfileLink(item) : publicationLink(item);
+}
+
+function ResultImage({ entry, large = false }: { entry: IndexedNearbyPublication; large?: boolean }) {
+  const [failed, setFailed] = useState(false);
+  const Icon = entry.item.kind === "request" ? ClipboardList : SECTION_ICONS[entry.selection.section] || HardHat;
+  useEffect(() => { setFailed(false); }, [entry.image]);
+  return <div className={`${styles.resultImage} ${large ? styles.detailImage : ""}`} data-kind={entry.item.kind}>
+    {entry.image && !failed
+      ? <img src={entry.image} alt="" loading="lazy" decoding="async" onError={() => setFailed(true)} />
+      : <Icon size={large ? 34 : 27} strokeWidth={1.5} aria-hidden="true" />}
+  </div>;
 }
 
 export default function NearbyPage() {
-  const mapNodeRef = useRef<HTMLDivElement | null>(null);
+  const mapNodeRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
   const clustererRef = useRef<any>(null);
   const userPlacemarkRef = useRef<any>(null);
+  const radiusRef = useRef<any>(null);
+  const markersRef = useRef(new Map<string, any>());
+  const indexedRef = useRef(new Map<string, IndexedNearbyPublication>());
   const focusUserRef = useRef(false);
+  const fittedSignatureRef = useRef("");
+  const geocodeAttemptsRef = useRef(new Set<string>());
+  const ownerCacheRef = useRef(new Map<string, boolean>());
   const geoRequestRef = useRef(0);
-  const [locating, setLocating] = useState(false);
-
-  const [items, setItems] = useState<ListingLike[]>([]);
-  const [activeId, setActiveId] = useState("");
-  const [city, setCity] = useState("");
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const filtersButtonRef = useRef<HTMLButtonElement>(null);
+  const listNodeRef = useRef<HTMLDivElement>(null);
+  const [sources, setSources] = useState<Record<string, NearbyPublication[]>>({});
+  const [loaded, setLoaded] = useState<Record<string, boolean>>({});
+  const [sourceErrors, setSourceErrors] = useState<Record<string, boolean>>({});
+  const [sourceLimited, setSourceLimited] = useState<Record<string, boolean>>({});
+  const [ownersVerified, setOwnersVerified] = useState<Record<string, boolean>>({});
+  const [dataRetry, setDataRetry] = useState(0);
+  const [audience, setAudience] = useState<NearbyAudience>("contractors");
+  const [activeKey, setActiveKey] = useState("");
+  const [clusterKeys, setClusterKeys] = useState<string[]>([]);
+  const [catalogSection, setCatalogSection] = useState<CatalogSectionId | "">("");
+  const [categoryId, setCategoryId] = useState("");
+  const [subcategory, setSubcategory] = useState("");
   const [mainActions, setMainActions] = useState<string[]>([]);
-  const [category, setCategory] = useState("Все категории");
-  const [searchText, setSearchText] = useState("");
-  const deferredSearchText = useDeferredValue(searchText);
+  const [features, setFeatures] = useState<string[]>([]);
+  const [city, setCity] = useState("");
+  const [radius, setRadius] = useState<number | null>(null);
+  const [priceMin, setPriceMin] = useState("");
+  const [priceMax, setPriceMax] = useState("");
   const [onlyUrgent, setOnlyUrgent] = useState(false);
   const [onlyVerified, setOnlyVerified] = useState(false);
+  const [withPhoto, setWithPhoto] = useState(false);
+  const [sort, setSort] = useState<NearbySort>("nearest");
+  const [searchText, setSearchText] = useState("");
+  const deferredSearch = useDeferredValue(searchText);
+  const [viewMode, setViewMode] = useState<"map" | "list">("map");
   const [userCoords, setUserCoords] = useState<Coordinates | null>(null);
-  const [resolvedCoords, setResolvedCoords] = useState<Record<string, Coordinates>>({});
-  const [mapCenter, setMapCenter] = useState<Coordinates>(defaultCenter);
-  const [mapStatus, setMapStatus] = useState("Загружаем Яндекс.Карты...");
+  const [locating, setLocating] = useState(false);
   const [geoStatus, setGeoStatus] = useState("");
+  const [resolvedCoords, setResolvedCoords] = useState<Record<string, Coordinates>>({});
+  const [geocoding, setGeocoding] = useState(false);
   const [isMapReady, setIsMapReady] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [mapError, setMapError] = useState("");
+  const [mapRetry, setMapRetry] = useState(0);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const items = useMemo(() => SOURCES.flatMap(source => sources[source] || []), [sources]);
+  const isLoading = !SOURCES.every(source => loaded[source]);
+  const limited = SOURCES.some(source => sourceLimited[source]);
 
-  useEffect(() => () => {
-    geoRequestRef.current += 1;
-    mapRef.current?.destroy();
-    mapRef.current = null;
+  useEffect(() => {
+    setLoaded({});
+    setSourceErrors({});
+    const unsubscribers = SOURCES.map(source => onSnapshot(query(collection(db, source), limit(MAX_RESULTS)), snapshot => {
+      const kind = source === "listings" ? "contractor" : "request";
+      const data = snapshot.docs.map(document => ({ ...document.data(), id: document.id, kind } as NearbyPublication))
+        .filter(item => isPublicationApproved(item) && (kind !== "request" || !item.status || item.status === "active"));
+      setSources(current => ({ ...current, [source]: data }));
+      setSourceLimited(current => ({ ...current, [source]: snapshot.docs.length === MAX_RESULTS }));
+      setLoaded(current => ({ ...current, [source]: true }));
+      setSourceErrors(current => ({ ...current, [source]: false }));
+    }, () => {
+      setLoaded(current => ({ ...current, [source]: true }));
+      setSourceErrors(current => ({ ...current, [source]: true }));
+    }));
+    return () => unsubscribers.forEach(unsubscribe => unsubscribe());
+  }, [dataRetry]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const pending = [...new Set(items.map(publicationOwner).filter(Boolean))].filter(uid => !ownerCacheRef.current.has(uid));
+    if (!pending.length) return;
+    let cursor = 0;
+    const updates: Record<string, boolean> = {};
+    async function worker() {
+      while (!cancelled && cursor < pending.length) {
+        const uid = pending[cursor++];
+        try {
+          const snapshot = await getDoc(doc(db, "users", uid));
+          if (cancelled) return;
+          const verified = snapshot.exists() && isOwnerVerified(snapshot.data());
+          ownerCacheRef.current.set(uid, verified);
+          updates[uid] = verified;
+        } catch { /* Карта остаётся доступной, даже если профиль временно не загрузился. */ }
+      }
+    }
+    void Promise.all(Array.from({ length: Math.min(6, pending.length) }, () => worker())).then(() => {
+      if (!cancelled) setOwnersVerified(current => ({ ...current, ...Object.fromEntries(ownerCacheRef.current), ...updates }));
+    });
+    return () => { cancelled = true; };
+  }, [items]);
+
+  useEffect(() => {
+    let cancelled = false;
+    let instance: any = null;
+    let observer: ResizeObserver | null = null;
+    setIsMapReady(false);
+    setMapError("");
+    async function init() {
+      try {
+        const ymaps = await loadYandexMaps();
+        if (cancelled || !mapNodeRef.current) return;
+        instance = new ymaps.Map(mapNodeRef.current, {
+          center: [DEFAULT_CENTER.lat, DEFAULT_CENTER.lng], zoom: 11, controls: [],
+        }, { suppressMapOpenBlock: true });
+        instance.behaviors.disable("scrollZoom");
+        mapRef.current = instance;
+        fittedSignatureRef.current = "";
+        observer = new ResizeObserver(() => instance?.container.fitToViewport());
+        observer.observe(mapNodeRef.current);
+        setIsMapReady(true);
+      } catch {
+        if (!cancelled) setMapError("Карта временно недоступна. Результаты можно посмотреть в списке.");
+      }
+    }
+    void init();
+    return () => {
+      cancelled = true;
+      observer?.disconnect();
+      instance?.destroy();
+      if (mapRef.current === instance) mapRef.current = null;
+      clustererRef.current = null;
+      userPlacemarkRef.current = null;
+      radiusRef.current = null;
+      markersRef.current.clear();
+    };
+  }, [mapRetry]);
+
+  useEffect(() => () => { geoRequestRef.current += 1; }, []);
+
+  useEffect(() => {
+    if (!isMapReady) { setGeocoding(false); return; }
+    let cancelled = false;
+    const missing = items.filter(item => {
+      const key = nearbyKey(item);
+      return !publicationCoordinates(item) && !resolvedCoords[key] && !geocodeAttemptsRef.current.has(key) && publicationAddress(item).length >= 3;
+    }).slice(0, 80);
+    if (!missing.length) { setGeocoding(false); return; }
+    setGeocoding(true);
+    let cursor = 0;
+    async function resolve() {
+      const ymaps = await loadYandexMaps();
+      async function worker() {
+        while (!cancelled && cursor < missing.length) {
+          const item = missing[cursor++];
+          const key = nearbyKey(item);
+          geocodeAttemptsRef.current.add(key);
+          let coords: Coordinates | null = null;
+          try {
+            const result = await geocodeWithTimeout(ymaps.geocode(publicationAddress(item), { results: 1 }));
+            const coordinates = result.geoObjects.get(0)?.geometry.getCoordinates();
+            if (coordinates) coords = normalizeCoordinates(coordinates[0], coordinates[1]);
+          } catch { /* Если JS-геокодер недоступен, пробуем существующий серверный API. */ }
+          if (!coords && !cancelled) {
+            const controller = new AbortController();
+            const timer = window.setTimeout(() => controller.abort(), 8000);
+            try {
+              const response = await fetch(`/api/geocode?address=${encodeURIComponent(publicationAddress(item))}`, { signal: controller.signal });
+              if (response.ok) {
+                const data = await response.json();
+                coords = normalizeCoordinates(data.lat, data.lng);
+              }
+            } catch { /* Не придумываем координаты, если адрес не определился. */ }
+            finally { window.clearTimeout(timer); }
+          }
+          if (cancelled) { geocodeAttemptsRef.current.delete(key); return; }
+          if (coords) setResolvedCoords(current => ({ ...current, [key]: coords! }));
+        }
+      }
+      await Promise.all(Array.from({ length: Math.min(3, missing.length) }, () => worker()));
+    }
+    void resolve().catch(() => {}).finally(() => { if (!cancelled) setGeocoding(false); });
+    return () => { cancelled = true; };
+    // resolvedCoords меняются во время очереди; не запускаем её заново на каждом ответе.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, isMapReady]);
+
+  const indexedItems = useMemo(() => items.map(item => indexNearbyPublication(item,
+    publicationCoordinates(item) || resolvedCoords[nearbyKey(item)] || null, userCoords, ownersVerified[publicationOwner(item)])),
+  [items, resolvedCoords, userCoords, ownersVerified]);
+  indexedRef.current = new Map(indexedItems.map(entry => [entry.key, entry]));
+  const filteredItems = useMemo(() => filterNearbyPublications(indexedItems, {
+    audience, section: catalogSection, categoryId, subcategory, search: deferredSearch, city,
+    radius, hasOrigin: Boolean(userCoords), mainActions, features, priceMin, priceMax,
+    onlyVerified, onlyUrgent, withPhoto, sort,
+  }), [indexedItems, audience, catalogSection, categoryId, subcategory, deferredSearch, city, radius, userCoords, mainActions, features, priceMin, priceMax, onlyVerified, onlyUrgent, withPhoto, sort]);
+  const mapItems = useMemo(() => filteredItems.filter(entry => entry.coords), [filteredItems]);
+  const activeItem = filteredItems.find(entry => entry.key === activeKey) || null;
+  const clusterItems = filteredItems.filter(entry => clusterKeys.includes(entry.key));
+  const cities = useMemo(() => [...new Set(items.map(item => item.city || "").filter(Boolean))].sort((a, b) => a.localeCompare(b, "ru")), [items]);
+  const catalogCategories = useMemo(() => catalogSection ? getCatalogFormCategories(catalogSection) : [], [catalogSection]);
+  const selectedCategory = catalogCategories.find(option => option.id === categoryId);
+  const selectedSection = CATALOG_FORM_SECTIONS.find(option => option.id === catalogSection);
+  const offerGroups = catalogSection ? [getOfferGroup("", catalogSection)] : ["materials", "services", "equipment", "complex"] as const;
+  const actionOptions = offerGroups.flatMap(group => getOfferActions(group));
+  const featureOptions = [...new Map(offerGroups.flatMap(group => getOfferFeatures(group)).map(feature => [feature.id, feature])).values()];
+  const filterCount = [catalogSection, categoryId, subcategory, city, radius !== null,
+    mainActions.length > 0, features.length > 0, priceMin || priceMax, onlyVerified, onlyUrgent, withPhoto].filter(Boolean).length;
+  const invalidPriceRange = priceNumber(priceMin) !== null && priceNumber(priceMax) !== null && priceNumber(priceMin)! > priceNumber(priceMax)!;
+  const mapSignature = mapItems.map(entry => `${entry.key}:${entry.coords?.lat}:${entry.coords?.lng}`).join("|");
+
+  useEffect(() => {
+    if (activeKey && !filteredItems.some(entry => entry.key === activeKey)) setActiveKey("");
+  }, [activeKey, filteredItems]);
+  useEffect(() => { setClusterKeys([]); }, [audience, catalogSection, categoryId, subcategory, deferredSearch, city, radius, mainActions, features, onlyVerified, onlyUrgent, withPhoto, priceMin, priceMax]);
+
+  const selectMapItem = useCallback((key: string) => {
+    focusUserRef.current = false;
+    setActiveKey(key);
+    setClusterKeys([]);
+    setViewMode("map");
+    const entry = indexedRef.current.get(key);
+    if (entry?.coords && mapRef.current) {
+      const map = mapRef.current;
+      map.margin.setDefaultMargin([40, 40, 250, 40]);
+      quietMapOperation(() => map.setCenter([entry.coords!.lat, entry.coords!.lng], Math.max(map.getZoom(), 13), { duration: motionDuration(350), useMapMargin: true }));
+    }
+    const result = Array.from(listNodeRef.current?.querySelectorAll<HTMLElement>("[data-result-key]") || []).find(node => node.dataset.resultKey === key);
+    if (result && listNodeRef.current) {
+      listNodeRef.current.scrollTo({ top: result.offsetTop - listNodeRef.current.offsetTop - 12, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
+    }
   }, []);
 
-  useEffect(() => { focusUserRef.current = false; }, [city, category, searchText, onlyUrgent, onlyVerified]);
-
-  function selectMapItem(id: string) {
-    focusUserRef.current = false;
-    setActiveId(id);
-    const item = items.find(value => value.id === id);
-    const coords = item && getResolvedItemCoords(item, resolvedCoords);
-    if (coords && mapRef.current) mapRef.current.setCenter([coords.lat, coords.lng], Math.max(mapRef.current.getZoom(), 12), { duration: 300 });
+  function fitResults() {
+    const map = mapRef.current;
+    if (!map) return;
+    const bounds = clustererRef.current?.getBounds();
+    if (bounds) fitMapBounds(map, bounds, [60, 60, 240, 60], 15);
+    else if (userCoords) quietMapOperation(() => map.setCenter([userCoords.lat, userCoords.lng], 13, { duration: motionDuration(350) }));
   }
 
   useEffect(() => {
-    async function loadListings() {
-      setIsLoading(true);
-      setError("");
-
-      try {
-        const snapshot = await getDocs(query(collection(db, "listings"), limit(250)));
-
-        const data = snapshot.docs
-          .map((doc) => ({
-            id: doc.id,
-            ...(doc.data() as Omit<ListingLike, "id">),
-          }))
-          .filter(isPublicationApproved);
-
-        setItems(data);
-        setActiveId(data[0]?.id || "");
-
-        const firstCoords = data.map((item) => getItemCoords(item)).find(Boolean);
-
-        if (firstCoords) {
-          setMapCenter(firstCoords);
-        } else {
-          setMapCenter(defaultCenter);
-        }
-      } catch (loadError) {
-        console.error(loadError);
-        setError("Не получилось загрузить объявления. Проверь Firebase и коллекцию listings.");
-      } finally {
-        setIsLoading(false);
-      }
-    }
-
-    loadListings();
-  }, []);
-
-  useEffect(() => {
-    let destroyed = false;
-
-    async function initMap() {
-      if (!mapNodeRef.current || mapRef.current) return;
-
-      try {
-        const ymaps = await loadYandexMaps();
-
-        if (destroyed || !mapNodeRef.current) return;
-
-        const map = new ymaps.Map(mapNodeRef.current, {
-          center: [mapCenter.lat, mapCenter.lng],
-          zoom: 11,
-          controls: ["zoomControl", "fullscreenControl", "geolocationControl", "typeSelector"],
-        });
-
-        map.behaviors.enable(["drag", "scrollZoom", "multiTouch"]);
-
-        mapRef.current = map;
-        setIsMapReady(true);
-        setMapStatus("");
-      } catch (mapError) {
-        console.error(mapError);
-        setMapStatus(
-          "Не получилось загрузить Яндекс.Карты. Добавь NEXT_PUBLIC_YANDEX_MAPS_API_KEY в .env.local или проверь интернет."
-        );
-      }
-    }
-
-    initMap();
-
-    return () => {
-      destroyed = true;
+    if (!isMapReady || !mapRef.current) return;
+    const ymaps = window.ymaps;
+    const map = mapRef.current;
+    if (!ymaps) return;
+    if (clustererRef.current) map.geoObjects.remove(clustererRef.current);
+    markersRef.current.clear();
+    const layouts = {
+      contractor: ymaps.templateLayoutFactory.createClass(`<div class="${styles.mapPin}" data-kind="contractor" data-active="{{ properties.selected }}">И</div>`),
+      request: ymaps.templateLayoutFactory.createClass(`<div class="${styles.mapPin}" data-kind="request" data-active="{{ properties.selected }}">З</div>`),
     };
-  }, [mapCenter.lat, mapCenter.lng]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function resolveMissingListingCoords() {
-      if (!isMapReady || items.length === 0) return;
-
-      const missingItems = items.filter((item) => {
-        if (getItemCoords(item) || resolvedCoords[item.id]) return false;
-        return getAddressForGeocode(item).length >= 3;
+    const placemarks = mapItems.map(entry => {
+      const coords = entry.coords!;
+      const marker = new ymaps.Placemark([coords.lat, coords.lng], {
+        hintContent: escapeMapHtml(entry.item.title || entry.item.name || publicationAuthor(entry.item)),
+        selected: "false",
+        publicationKey: entry.key,
+      }, {
+        iconLayout: layouts[entry.item.kind], iconShape: { type: "Circle", coordinates: [0, -18], radius: 24 },
+        openBalloonOnClick: false, zIndex: 600,
       });
-
-      if (missingItems.length === 0) {
-        setGeoStatus("");
-        return;
-      }
-
-      try {
-        const ymaps = await loadYandexMaps();
-
-        if (cancelled) return;
-
-        setGeoStatus("Определяем координаты объявлений по адресам...");
-
-        const updates: Record<string, Coordinates> = {};
-
-        for (const item of missingItems.slice(0, 80)) {
-          const address = getAddressForGeocode(item);
-
-          try {
-            // 1) Сначала пробуем геокодер из JS API Яндекса.
-            const result = await ymaps.geocode(address, { results: 1 });
-            const geoObject = result.geoObjects.get(0);
-            const coordinates = geoObject?.geometry?.getCoordinates?.();
-
-            if (Array.isArray(coordinates) && coordinates.length >= 2) {
-              const coords = normalizeCoords(coordinates[0], coordinates[1]);
-
-              if (coords) {
-                updates[item.id] = coords;
-                continue;
-              }
-            }
-
-            // 2) Если JS API не дал координаты — пробуем наш /api/geocode.
-            const apiResponse = await fetch(
-              `/api/geocode?address=${encodeURIComponent(address)}`
-            );
-            const apiData = await apiResponse.json();
-
-            if (apiResponse.ok) {
-              const coords = normalizeCoords(apiData?.lat, apiData?.lng);
-              if (coords) updates[item.id] = coords;
-            }
-          } catch (itemError) {
-            console.warn("Не удалось определить координаты:", address, itemError);
-          }
-        }
-
-        if (cancelled) return;
-
-        if (Object.keys(updates).length > 0) {
-          setResolvedCoords((prev) => ({ ...prev, ...updates }));
-
-          const firstCoords = Object.values(updates)[0];
-
-          if (firstCoords && !userCoords) {
-            setMapCenter(firstCoords);
-          }
-
-          setGeoStatus("");
-        } else {
-          setGeoStatus("Не получилось определить координаты по адресам. Уточни город и адрес в объявлении.");
-        }
-      } catch (geoError) {
-        console.error(geoError);
-        if (!cancelled) {
-          setGeoStatus("Не получилось запустить геокодер Яндекс.Карт.");
-        }
-      }
-    }
-
-    resolveMissingListingCoords();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [items, isMapReady, resolvedCoords, userCoords]);
-
-  const cities = useMemo(() => {
-    const set = new Set<string>();
-
-    items.forEach((item) => {
-      if (item.city) set.add(String(item.city));
+      marker.events.add("click", () => selectMapItem(entry.key));
+      markersRef.current.set(entry.key, marker);
+      return marker;
     });
-
-    return Array.from(set).sort((a, b) => a.localeCompare(b, "ru"));
-  }, [items]);
-
-  const categories = useMemo(() => {
-    const set = new Set<string>(baseCategories);
-
-    items.forEach((item) => {
-      if (item.category) set.add(String(item.category));
-      if (item.subcategory) set.add(String(item.subcategory));
+    const clusterer = new ymaps.Clusterer({
+      preset: "islands#blueClusterIcons", groupByCoordinates: false,
+      clusterDisableClickZoom: true, clusterOpenBalloonOnClick: false,
+      clusterIconLayout: ymaps.templateLayoutFactory.createClass(`<div class="${styles.mapCluster}">{{ properties.geoObjects.length }}</div>`),
+      clusterIconShape: { type: "Circle", coordinates: [0, 0], radius: 24 },
     });
-
-    return Array.from(set);
-  }, [items]);
-
-  const filteredItems = useMemo(() => {
-    const cityValue = normalize(city);
-    const categoryValue = normalize(category === "Все категории" ? "" : category);
-
-    return items.filter((item) => {
-      const location = normalize(getLocation(item));
-      const itemCategory = normalize(`${item.category || ""} ${item.subcategory || ""}`);
-
-      const cityOk = !cityValue || location.includes(cityValue);
-      const categoryOk = !categoryValue || itemCategory.includes(categoryValue);
-      const searchOk = publicationSearchRelevanceScore(item, deferredSearchText) >= 0;
-      const urgentOk = !onlyUrgent || Boolean(item.isUrgent);
-      const verifiedOk = !onlyVerified || Boolean(item.verified);
-
-      return matchesOfferSelection(item, mainActions.join(",")) && cityOk && categoryOk && searchOk && urgentOk && verifiedOk;
+    clusterer.add(placemarks);
+    clusterer.events.add("click", (event: any) => {
+      const group = event.get("target")?.properties?.get("geoObjects");
+      if (!Array.isArray(group)) return;
+      setActiveKey("");
+      setClusterKeys(group.map((marker: any) => marker.properties.get("publicationKey")).filter(Boolean));
     });
-  }, [items, city, category, deferredSearchText, onlyUrgent, onlyVerified, mainActions]);
-
-  const activeItem =
-    filteredItems.find((item) => item.id === activeId) || filteredItems[0] || null;
-
-  useEffect(() => {
-    if (!activeItem) {
-      setActiveId("");
-      return;
-    }
-
-    if (!filteredItems.some((item) => item.id === activeId)) {
-      setActiveId(activeItem.id);
-    }
-  }, [filteredItems, activeId, activeItem]);
-
-  useEffect(() => {
-    let cancelled = false;
-    async function redrawMap() {
-      if (!isMapReady || !mapRef.current) return;
-
-      const ymaps = await loadYandexMaps();
-      if (cancelled || !mapRef.current) return;
-      const map = mapRef.current;
-
-      if (clustererRef.current) {
-        map.geoObjects.remove(clustererRef.current);
-      }
-
-      if (userPlacemarkRef.current) {
-        map.geoObjects.remove(userPlacemarkRef.current);
-      }
-
-      const center = userCoords || mapCenter;
-
-      // Метку «Вы здесь» показываем только когда браузер реально дал геолокацию.
-      // Иначе карта не будет врать, что пользователь находится в Москве или в дефолтной точке.
-      if (userCoords) {
-        userPlacemarkRef.current = new ymaps.Placemark(
-          [userCoords.lat, userCoords.lng],
-          {
-            hintContent: "Вы здесь",
-            balloonContentHeader: "Вы здесь",
-            balloonContentBody: "Точка, которую вернул браузер по геолокации.",
-          },
-          {
-            preset: "islands#blueCircleDotIconWithCaption",
-            iconCaptionMaxWidth: 140,
-          }
-        );
-
-        map.geoObjects.add(userPlacemarkRef.current);
-      }
-
-      const placemarks = filteredItems.flatMap((item) => {
-        const coords = getResolvedItemCoords(item, resolvedCoords);
-
-        if (!coords) return [];
-
-        const image = getListingImage(item);
-        const profileLink = getProfileLink(item);
-        const listingLink = `/listing/${item.id}`;
-
-        const placemark = new ymaps.Placemark(
-          [coords.lat, coords.lng],
-          {
-            hintContent: item.title || item.name || getAuthor(item),
-            balloonContentHeader: `
-              <div style="font-weight:800;font-size:16px;line-height:1.2;">
-                ${item.title || item.name || "Исполнитель"}
-              </div>
-            `,
-            balloonContentBody: `
-              <div style="max-width:260px;font-family:Arial,sans-serif;">
-                ${
-                  image
-                    ? `<img src="${image}" style="width:100%;height:120px;object-fit:cover;border-radius:12px;margin:8px 0;" />`
-                    : ""
-                }
-                <div style="font-size:13px;color:#475569;margin-top:6px;">
-                  <b>${getAuthor(item)}</b>
-                </div>
-                <div style="font-size:13px;color:#475569;margin-top:6px;">
-                  ${getLocation(item) || "Локация не указана"}
-                </div>
-                <div style="font-size:13px;color:#0057ff;font-weight:800;margin-top:8px;">
-                  ${getPrice(item)}
-                </div>
-                <div style="display:flex;gap:8px;margin-top:12px;">
-                  <a href="${profileLink}" style="display:inline-block;background:#0057ff;color:white;text-decoration:none;font-weight:800;border-radius:12px;padding:10px 12px;">Профиль</a>
-                  <a href="${listingLink}" style="display:inline-block;background:#eff6ff;color:#0057ff;text-decoration:none;font-weight:800;border-radius:12px;padding:10px 12px;">Объявление</a>
-                </div>
-              </div>
-            `,
-          },
-          {
-            preset:
-              item.category?.toLowerCase().includes("техник") ||
-              item.subcategory?.toLowerCase().includes("кран") ||
-              item.subcategory?.toLowerCase().includes("экскаватор")
-                ? "islands#darkBlueTruckIcon"
-                : item.verified
-                ? "islands#bluePersonIcon"
-                : "islands#blueHomeIcon",
-          }
-        );
-
-        placemark.events.add("click", () => {
-          selectMapItem(item.id);
-        });
-
-        return [placemark];
-      });
-
-      const clusterer = new ymaps.Clusterer({
-        preset: "islands#blueClusterIcons",
-        groupByCoordinates: false,
-        clusterDisableClickZoom: false,
-        clusterOpenBalloonOnClick: true,
-      });
-
-      clusterer.add(placemarks);
-      clustererRef.current = clusterer;
-      map.geoObjects.add(clusterer);
-
-      if (focusUserRef.current && userCoords) {
-        map.setCenter([userCoords.lat, userCoords.lng], 15, { duration: 300 });
-      } else if (placemarks.length > 0) {
+    clustererRef.current = clusterer;
+    map.geoObjects.add(clusterer);
+    if (fittedSignatureRef.current !== mapSignature) {
+      fittedSignatureRef.current = mapSignature;
+      if (!focusUserRef.current && placemarks.length) {
         const bounds = clusterer.getBounds();
-
-        if (bounds) {
-          map.setBounds(bounds, {
-            checkZoomRange: true,
-            zoomMargin: 50,
-          });
-        }
-      } else {
-        map.setCenter([center.lat, center.lng], 11);
+        if (bounds) fitMapBounds(map, bounds);
       }
     }
-
-    redrawMap();
-    return () => { cancelled = true; };
-  }, [filteredItems, userCoords, mapCenter, isMapReady, resolvedCoords]);
+    return () => { if (mapRef.current === map) map.geoObjects.remove(clusterer); };
+  }, [mapItems, isMapReady, selectMapItem, mapSignature]);
 
   useEffect(() => {
-    async function focusActiveItem() {
-      if (!isMapReady || !mapRef.current || !activeItem || focusUserRef.current) return;
+    markersRef.current.forEach((marker, key) => {
+      marker.properties.set("selected", key === activeKey ? "true" : "false");
+      marker.options.set("zIndex", key === activeKey ? 1000 : 600);
+    });
+  }, [activeKey, mapItems, isMapReady]);
+  useEffect(() => { if (!activeKey) mapRef.current?.margin.setDefaultMargin(0); }, [activeKey]);
 
-      const coords = getResolvedItemCoords(activeItem, resolvedCoords);
-
-      if (!coords) return;
-
-      mapRef.current.setCenter([coords.lat, coords.lng], Math.max(mapRef.current.getZoom(), 12), {
-        duration: 250,
+  useEffect(() => {
+    const map = mapRef.current;
+    const ymaps = window.ymaps;
+    if (!isMapReady || !map || !ymaps) return;
+    if (userPlacemarkRef.current) map.geoObjects.remove(userPlacemarkRef.current);
+    if (radiusRef.current) map.geoObjects.remove(radiusRef.current);
+    userPlacemarkRef.current = null;
+    radiusRef.current = null;
+    if (!userCoords) return;
+    const point = [userCoords.lat, userCoords.lng];
+    userPlacemarkRef.current = new ymaps.Placemark(point, { hintContent: "Вы здесь" }, {
+      preset: "islands#blueCircleDotIcon", zIndex: 1100,
+    });
+    map.geoObjects.add(userPlacemarkRef.current);
+    if (radius !== null) {
+      radiusRef.current = new ymaps.Circle([point, radius * 1000], {}, {
+        fillColor: "#0057ff", fillOpacity: 0.05, strokeColor: "#0057ff", strokeOpacity: 0.38,
+        strokeWidth: 2, strokeStyle: "dash", interactivityModel: "default#transparent",
       });
-    }
-
-    focusActiveItem();
-  }, [activeItem?.id, resolvedCoords]);
+      map.geoObjects.add(radiusRef.current);
+      const bounds = radiusRef.current.geometry.getBounds();
+      if (bounds) fitMapBounds(map, bounds, 50);
+    } else if (focusUserRef.current) quietMapOperation(() => map.setCenter(point, 14, { duration: motionDuration(350) }));
+  }, [userCoords, radius, isMapReady]);
 
   function useMyLocation() {
     if (locating) return;
-    if (typeof navigator === "undefined" || !navigator.geolocation) {
-      setGeoStatus("Геолокация недоступна. Выбери город вручную.");
-      return;
-    }
-
-    setGeoStatus("Запрашиваем геолокацию...");
+    if (!navigator.geolocation) { setGeoStatus("Геопозиция недоступна в этом браузере. Выберите город в фильтрах."); return; }
     setLocating(true);
+    setGeoStatus("");
     const requestId = ++geoRequestRef.current;
+    navigator.geolocation.getCurrentPosition(position => {
+      if (requestId !== geoRequestRef.current) return;
+      const coords = normalizeCoordinates(position.coords.latitude, position.coords.longitude);
+      setLocating(false);
+      if (!coords) { setGeoStatus("Не удалось определить геопозицию. Попробуйте ещё раз."); return; }
+      focusUserRef.current = true;
+      setCity("");
+      setUserCoords(coords);
+      setGeoStatus("Геопозиция определена. Расстояния рассчитаны от вас.");
+      if (mapRef.current) quietMapOperation(() => mapRef.current.setCenter([coords.lat, coords.lng], 14, { duration: motionDuration(350) }));
+    }, error => {
+      if (requestId !== geoRequestRef.current) return;
+      setLocating(false);
+      setGeoStatus(error.code === 1 ? "Доступ к геопозиции закрыт. Разрешите его в настройках браузера или выберите город."
+        : error.code === 3 ? "Геопозиция пока не определилась. Повторите попытку или выберите город."
+          : "Не удалось определить местоположение. Проверьте геолокацию и попробуйте ещё раз.");
+    }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 });
+  }
 
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        if (requestId !== geoRequestRef.current) return;
-        setLocating(false);
-        focusUserRef.current = true;
-        const coords = {
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-        };
-
-        setUserCoords(coords);
-        setMapCenter(coords);
-        setGeoStatus("Геолокация включена. Карта перестроена вокруг вас.");
-
-        if (mapRef.current) {
-          mapRef.current.setCenter([coords.lat, coords.lng], 15, {
-            duration: 300,
-          });
-        }
-      },
-      (error) => {
-        if (requestId !== geoRequestRef.current) return;
-        setLocating(false);
-        setGeoStatus(error.code === 1 ? "Разрешите доступ к геопозиции в настройках браузера и нажмите кнопку ещё раз."
-          : error.code === 3 ? "Определение местоположения заняло слишком много времени. Попробуйте ещё раз."
-          : "Не удалось определить местоположение. Проверьте, включена ли геолокация, и повторите попытку.");
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 9000,
-        maximumAge: 0,
-      }
-    );
+  function selectRadius(value: number | null) {
+    focusUserRef.current = false;
+    setRadius(value);
+    if (value !== null && !userCoords) useMyLocation();
   }
 
   function resetFilters() {
-    setMainActions([]);
-    setCity("");
-    setCategory("Все категории");
-    setSearchText("");
-    setOnlyUrgent(false);
-    setOnlyVerified(false);
-    setGeoStatus("");
+    setCatalogSection(""); setCategoryId(""); setSubcategory(""); setMainActions([]); setFeatures([]);
+    setCity(""); setRadius(null); setPriceMin(""); setPriceMax(""); setSearchText("");
+    setOnlyUrgent(false); setOnlyVerified(false); setWithPhoto(false); setSort("nearest"); setActiveKey(""); setClusterKeys([]);
+    focusUserRef.current = false;
   }
 
-  function refreshMap() {
-    if (mapRef.current) {
-      mapRef.current.container.fitToViewport();
-    }
-  }
+  function openFilters() { setFiltersOpen(true); dialogRef.current?.showModal(); }
+  function closeFilters() { dialogRef.current?.close(); setFiltersOpen(false); filtersButtonRef.current?.focus(); }
 
-  return (
-    <main className="min-h-screen bg-[#f5f7fb] px-3 py-5 sm:px-4 sm:py-8 text-slate-950 md:px-6">
-      <div className="mx-auto max-w-7xl">
-        <Link
-          href="/"
-          className="inline-flex items-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-black text-blue-700 shadow-sm ring-1 ring-blue-100 transition hover:bg-blue-50"
-        >
-          <ArrowLeft size={18} />
-          На главную
-        </Link>
+  useEffect(() => {
+    if (!filtersOpen) return;
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = overflow; };
+  }, [filtersOpen]);
 
-        <section className="mt-5 overflow-hidden rounded-[26px] bg-[#0057ff] p-4 sm:mt-7 sm:rounded-[42px] sm:p-6 text-white shadow-2xl shadow-blue-500/20 md:p-10">
-          <div className="relative grid gap-8 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
-            <div className="absolute -right-24 -top-24 h-72 w-72 rounded-full bg-white/10 blur-3xl" />
-            <div className="absolute -bottom-28 left-1/4 h-72 w-72 rounded-full bg-blue-200/20 blur-3xl" />
+  const missingCount = filteredItems.length - mapItems.length;
+  const resultsLabel = audience === "customers" ? "Заявки заказчиков" : audience === "all" ? "Все объявления" : "Исполнители";
 
-            <div className="relative z-10">
-              <div className="inline-flex items-center gap-2 rounded-full bg-white/15 px-5 py-3 text-sm font-black ring-1 ring-white/20">
-                <Navigation size={18} />
-                Карта исполнителей
-              </div>
+  return <main className={styles.page}>
+    <div className={styles.container}>
+      <header className={styles.heading}>
+        <div className={styles.titleGroup}>
+          <Link href="/" className={styles.backButton} aria-label="Вернуться на главную"><ArrowLeft size={20} /></Link>
+          <div><p className={styles.eyebrow}><Navigation size={13} /> Люди и задачи на одной карте</p><h1>Исполнитель рядом<span className={styles.titleDot} /></h1></div>
+        </div>
+        <div className={styles.headingAside}><span className={styles.liveDot} /> Объявления обновляются онлайн</div>
+      </header>
 
-              <h1 className="mt-5 max-w-3xl text-3xl font-black leading-tight sm:mt-6 sm:text-4xl md:text-6xl">
-                Исполнитель рядом
-              </h1>
+      <section className={styles.commandBar} aria-label="Поиск на карте">
+        <div className={styles.searchField}>
+          <Search size={21} aria-hidden="true" />
+          <input aria-label="Поиск исполнителей и заявок" value={searchText} onChange={event => setSearchText(event.target.value)} placeholder="Услуга, материал или техника" autoComplete="off" />
+          {searchText && <button type="button" className={styles.clearSearch} onClick={() => setSearchText("")} aria-label="Очистить поиск"><X size={17} /></button>}
+          <span className={styles.searchIndicator} data-loading={searchText !== deferredSearch} aria-hidden="true" />
+        </div>
+        <div className={styles.audienceSwitch} role="group" aria-label="Кого показывать" style={{ "--segment-index": AUDIENCES.findIndex(value => value.id === audience) } as CSSProperties}>
+          <span className={styles.segmentThumb} />
+          {AUDIENCES.map(({ id, label, Icon }) => <button key={id} type="button" aria-pressed={audience === id} onClick={() => { setAudience(id); setActiveKey(""); setClusterKeys([]); if (id === "customers") { setMainActions([]); setFeatures([]); } focusUserRef.current = false; }}><Icon size={17} /><span>{label}</span></button>)}
+        </div>
+        <div className={styles.commandActions}>
+          <button type="button" className={styles.locationButton} onClick={useMyLocation} disabled={locating} aria-busy={locating}>
+            {locating ? <Loader2 size={19} className={styles.spin} /> : <LocateFixed size={19} />}<span>{locating ? "Определяем…" : "Моя геопозиция"}</span>
+          </button>
+          <button type="button" ref={filtersButtonRef} className={styles.filtersButton} onClick={openFilters} aria-haspopup="dialog" aria-expanded={filtersOpen}>
+            <SlidersHorizontal size={19} /> Фильтры {filterCount > 0 && <span className={styles.filterBadge}>{filterCount}</span>}
+          </button>
+        </div>
+      </section>
 
-              <p className="mt-5 max-w-2xl text-base font-medium leading-8 text-blue-50 md:text-lg">
-                Реальная карта: выбирай категорию, город или срочные заказы — и
-                на карте останутся только подходящие профили.
-              </p>
-
-              <div className="mt-7 flex flex-wrap gap-3">
-                <button
-                  type="button"
-                  onClick={useMyLocation}
-                  disabled={locating}
-                  className="inline-flex items-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-black text-[#0057ff] shadow-lg shadow-blue-950/10 transition hover:bg-blue-50"
-                >
-                  <LocateFixed size={18} />
-                  {locating ? "Определяем…" : "Моё местоположение"}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setOnlyUrgent((value) => !value)}
-                  className={`inline-flex items-center gap-2 rounded-2xl px-5 py-3 text-sm font-black transition ${
-                    onlyUrgent
-                      ? "bg-white text-[#0057ff]"
-                      : "bg-white/10 text-white ring-1 ring-white/15 hover:bg-white/20"
-                  }`}
-                >
-                  <Clock3 size={18} />
-                  Срочные
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setOnlyVerified((value) => !value)}
-                  className={`inline-flex items-center gap-2 rounded-2xl px-5 py-3 text-sm font-black transition ${
-                    onlyVerified
-                      ? "bg-white text-[#0057ff]"
-                      : "bg-white/10 text-white ring-1 ring-white/15 hover:bg-white/20"
-                  }`}
-                >
-                  <BadgeCheck size={18} />
-                  Проверенные
-                </button>
-              </div>
-
-              {geoStatus && (
-                <div role="status" aria-live="polite" className="mt-5 flex max-w-2xl gap-3 rounded-3xl bg-white/10 px-5 py-4 text-sm font-bold leading-6 text-blue-50 ring-1 ring-white/10">
-                  <AlertCircle className="mt-0.5 shrink-0" size={18} />
-                  {geoStatus}
-                </div>
-              )}
-            </div>
-
-            <div className="relative z-10 rounded-[24px] bg-white p-4 sm:rounded-[34px] sm:p-5 text-slate-950 shadow-2xl md:p-6">
-              <div className="flex items-center gap-3">
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-[#0057ff] ring-1 ring-blue-100">
-                  <Filter size={26} />
-                </div>
-
-                <div>
-                  <h2 className="text-2xl font-black">Фильтр карты</h2>
-                  <p className="text-sm font-medium text-slate-500">
-                    Категория сразу меняет метки на карте.
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-5 grid gap-3">
-                <label className="block">
-                  <span className="mb-2 block text-sm font-black text-slate-700">
-                    Категория
-                  </span>
-                  <select
-                    value={category}
-                    onChange={(event) => { setCategory(event.target.value); setMainActions([]); }}
-                    className="w-full rounded-2xl border border-blue-100 bg-slate-50 px-4 py-4 text-sm font-bold outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
-                  >
-                    {categories.map((item) => (
-                      <option key={item} value={item}>
-                        {item}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <label className="block">
-                  <span className="mb-2 block text-sm font-black text-slate-700">
-                    Город
-                  </span>
-                  <input
-                    value={city}
-                    onChange={(event) => setCity(event.target.value)}
-                    list="nearby-cities"
-                    placeholder="Например: Москва, Казань, Краснодар"
-                    className="w-full rounded-2xl border border-blue-100 bg-slate-50 px-4 py-4 text-sm font-bold outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
-                  />
-                  <datalist id="nearby-cities">
-                    {cities.map((item) => (
-                      <option key={item} value={item} />
-                    ))}
-                  </datalist>
-                </label>
-
-                <label className="block">
-                  <span className="mb-2 block text-sm font-black text-slate-700">
-                    Что нужно найти
-                  </span>
-                  <div className="relative">
-                    <Search
-                      className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-                      size={19}
-                    />
-                    <input
-                      value={searchText}
-                      onChange={(event) => setSearchText(event.target.value)}
-                      placeholder="Например: плиточник, кран, бетон, сантехник"
-                      className="w-full rounded-2xl border border-blue-100 bg-slate-50 py-4 pl-12 pr-4 text-sm font-bold outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
-                    />
-                  </div>
-                </label>
-
-<fieldset className="space-y-2"><legend className="text-sm font-bold">Основные варианты — можно несколько</legend><div className="flex flex-wrap gap-2">{(category === "Все категории" ? (["materials", "services", "equipment", "complex"] as const).flatMap(group => getOfferActions(group)) : getOfferActions(getOfferGroup(category))).map(action => <button type="button" key={action.id} aria-pressed={mainActions.includes(action.id)} onClick={() => setMainActions(current => current.includes(action.id) ? current.filter(id => id !== action.id) : [...current, action.id])} className={`rounded-xl border px-3 py-2 text-sm transition ${mainActions.includes(action.id) ? "bg-blue-600 text-white" : "bg-white text-slate-700"}`}>{action.label}</button>)}</div></fieldset>
-                <button
-                  type="button"
-                  onClick={resetFilters}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-100 px-5 py-4 text-sm font-black text-slate-700 transition hover:bg-slate-200"
-                >
-                  <X size={18} />
-                  Сбросить
-                </button>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="mt-5 grid grid-cols-2 gap-3 sm:mt-7 sm:gap-4 md:grid-cols-4">
-          <div className="rounded-[22px] bg-white p-4 shadow-sm ring-1 ring-blue-100 sm:rounded-3xl sm:p-5">
-            <UsersRound className="text-blue-600" size={28} />
-            <p className="mt-3 text-2xl font-black">{items.length}</p>
-            <p className="text-sm font-bold text-slate-500">профилей и объявлений</p>
-          </div>
-
-          <div className="rounded-[22px] bg-white p-4 shadow-sm ring-1 ring-blue-100 sm:rounded-3xl sm:p-5">
-            <MapPin className="text-blue-600" size={28} />
-            <p className="mt-3 text-2xl font-black">{cities.length}</p>
-            <p className="text-sm font-bold text-slate-500">городов в базе</p>
-          </div>
-
-          <div className="rounded-[22px] bg-white p-4 shadow-sm ring-1 ring-blue-100 sm:rounded-3xl sm:p-5">
-            <Layers3 className="text-blue-600" size={28} />
-            <p className="mt-3 truncate text-2xl font-black">{category}</p>
-            <p className="text-sm font-bold text-slate-500">выбранная категория</p>
-          </div>
-
-          <div className="rounded-[22px] bg-white p-4 shadow-sm ring-1 ring-blue-100 sm:rounded-3xl sm:p-5">
-            <Crosshair className="text-blue-600" size={28} />
-            <p className="mt-3 text-2xl font-black">{filteredItems.length}</p>
-            <p className="text-sm font-bold text-slate-500">показано на карте</p>
-          </div>
-        </section>
-
-        {error && (
-          <div className="mt-7 flex gap-3 rounded-3xl bg-red-50 p-5 text-sm font-bold text-red-700 ring-1 ring-red-100">
-            <AlertCircle className="shrink-0" size={20} />
-            {error}
-          </div>
-        )}
-
-        <section className="mt-5 grid gap-5 sm:mt-7 sm:gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]">
-          <div className="overflow-hidden rounded-[24px] bg-white p-3 sm:rounded-[38px] sm:p-4 shadow-sm ring-1 ring-blue-100 md:p-5">
-            <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <div>
-                <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-4 py-2 text-sm font-black text-blue-700 ring-1 ring-blue-100">
-                  <Sparkles size={16} />
-                  Реальная карта
-                </div>
-
-                <h2 className="mt-3 text-3xl font-black">
-                  {category === "Все категории" ? "Все исполнители рядом" : category}
-                </h2>
-              </div>
-
-              <button
-                type="button"
-                onClick={refreshMap}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-100 px-5 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-200"
-              >
-                <RefreshCcw size={17} />
-                Обновить карту
-              </button>
-            </div>
-
-            <div className="relative h-[420px] overflow-hidden rounded-[22px] sm:h-[520px] sm:rounded-[32px] lg:h-[620px] border border-blue-100 bg-slate-100">
-              <div ref={mapNodeRef} className="absolute inset-0" />
-              <button type="button" onClick={useMyLocation} disabled={locating || !isMapReady}
-                title="Показать моё местоположение" aria-label="Показать моё местоположение" aria-busy={locating}
-                className="absolute right-4 top-16 z-30 flex h-12 w-12 items-center justify-center rounded-2xl border border-blue-100 bg-white text-blue-600 shadow-lg transition hover:bg-blue-50 disabled:opacity-60">
-                {locating ? <Loader2 size={23} className="animate-spin" /> : <LocateFixed size={23} />}
-              </button>
-
-              {(mapStatus || isLoading) && (
-                <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/80 p-6 text-center backdrop-blur-sm">
-                  <div className="max-w-lg rounded-[30px] bg-white p-7 shadow-xl ring-1 ring-blue-100">
-                    {isLoading ? (
-                      <Loader2 className="mx-auto animate-spin text-blue-600" size={42} />
-                    ) : (
-                      <AlertCircle className="mx-auto text-blue-600" size={42} />
-                    )}
-                    <h3 className="mt-4 text-2xl font-black">
-                      {isLoading ? "Загружаем объявления..." : "Карта не загрузилась"}
-                    </h3>
-                    <p className="mt-2 text-sm font-bold leading-6 text-slate-500">
-                      {isLoading ? "Сейчас подтянем профили из Firestore." : mapStatus}
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {!isLoading && !mapStatus && filteredItems.length === 0 && (
-                <div className="absolute inset-0 z-20 flex items-center justify-center p-6">
-                  <div className="max-w-md rounded-[30px] bg-white p-7 text-center shadow-xl ring-1 ring-blue-100">
-                    <Search className="mx-auto text-blue-600" size={42} />
-                    <h3 className="mt-4 text-2xl font-black">Никого не найдено</h3>
-                    <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
-                      Попробуй выбрать другую категорию, город или убрать фильтры.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={resetFilters}
-                      className="mt-5 rounded-2xl bg-[#0057ff] px-6 py-4 text-sm font-black text-white shadow-lg shadow-blue-500/20"
-                    >
-                      Сбросить фильтры
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <aside className="space-y-5">
-            <div className="rounded-[24px] bg-white p-4 shadow-sm ring-1 ring-blue-100 sm:rounded-[34px] sm:p-5">
-              <div className="flex items-center gap-3">
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 ring-1 ring-blue-100">
-                  <ShieldCheck size={28} />
-                </div>
-                <div>
-                  <h3 className="text-2xl font-black">Профиль на карте</h3>
-                  <p className="text-sm font-medium text-slate-500">
-                    Нажми на метку на карте
-                  </p>
-                </div>
-              </div>
-
-              {activeItem ? (
-                <div className="mt-5">
-                  {getListingImage(activeItem) ? (
-                    <img
-                      src={getListingImage(activeItem)}
-                      alt={activeItem.title || "Профиль"}
-                      className="h-48 w-full rounded-[20px] object-cover sm:h-56 sm:rounded-[26px]"
-                    />
-                  ) : (
-                    <div className="flex h-48 w-full items-center justify-center rounded-[20px] sm:h-56 sm:rounded-[26px] bg-blue-50 text-blue-300">
-                      <Building2 size={72} />
-                    </div>
-                  )}
-
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <span className="rounded-full bg-blue-50 px-4 py-2 text-xs font-black text-blue-700 ring-1 ring-blue-100">
-                      {activeItem.category || "Категория"}
-                    </span>
-
-                    {activeItem.subcategory && (
-                      <span className="rounded-full bg-slate-100 px-4 py-2 text-xs font-black text-slate-700">
-                        {activeItem.subcategory}
-                      </span>
-                    )}
-
-                    {activeItem.isUrgent && (
-                      <span className="rounded-full bg-[#0057ff] px-4 py-2 text-xs font-black text-white">
-                        Срочно
-                      </span>
-                    )}
-
-                    {activeItem.verified && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-4 py-2 text-xs font-black text-blue-700 ring-1 ring-blue-100">
-                        <CheckCircle2 size={14} />
-                        Проверен
-                      </span>
-                    )}
-                  </div>
-
-                  <h3 className="mt-4 text-2xl font-black">
-                    {activeItem.title || activeItem.name || "Исполнитель"}
-                  </h3>
-
-                  <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
-                    {activeItem.description || "Описание пока не указано."}
-                  </p>
-
-                  <div className="mt-4 space-y-3">
-                    <div className="flex items-center gap-2 text-sm font-bold text-slate-700">
-                      <UserRound size={18} className="text-blue-600" />
-                      {getAuthor(activeItem)}
-                    </div>
-
-                    <div className="flex items-center gap-2 text-sm font-bold text-slate-700">
-                      <MapPin size={18} className="text-blue-600" />
-                      {getLocation(activeItem) || "Локация не указана"}
-                    </div>
-
-                    <div className="flex items-center gap-2 text-sm font-bold text-slate-700">
-                      <Star size={18} className="text-blue-600" />
-                      {getDistanceText(activeItem, userCoords, resolvedCoords)}
-                    </div>
-
-                    <div className="flex items-center gap-2 text-sm font-bold text-slate-700">
-                      <Phone size={18} className="text-blue-600" />
-                      {activeItem.phone || "Телефон в объявлении"}
-                    </div>
-                  </div>
-
-                  <div className="mt-5 grid gap-3">
-                    <Link
-                      href={getProfileLink(activeItem)}
-                      className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#0057ff] px-5 py-4 text-sm font-black text-white shadow-lg shadow-blue-500/20 transition hover:bg-[#0047d6]"
-                    >
-                      <UserRound size={18} />
-                      Открыть профиль
-                    </Link>
-
-                    <Link
-                      href={`/listing/${activeItem.id}`}
-                      className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-50 px-5 py-4 text-sm font-black text-blue-700 ring-1 ring-blue-100 transition hover:bg-blue-100"
-                    >
-                      <MessageCircle size={18} />
-                      Открыть объявление
-                    </Link>
-                  </div>
-                </div>
-              ) : (
-                <p className="mt-5 text-sm font-semibold leading-6 text-slate-500">
-                  Выбери метку на карте, и здесь появится профиль.
-                </p>
-              )}
-            </div>
-
-            <div className="rounded-[24px] bg-white p-4 shadow-sm ring-1 ring-blue-100 sm:rounded-[34px] sm:p-5">
-              <h3 className="text-xl font-black">Список рядом</h3>
-              <p className="mt-1 text-sm font-medium text-slate-500">
-                Те же результаты, что на карте.
-              </p>
-
-              <div className="mt-4 max-h-[420px] space-y-3 overflow-y-auto pr-1 sm:max-h-[520px]">
-                {filteredItems.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => selectMapItem(item.id)}
-                    className={`w-full rounded-3xl p-3 text-left transition ${
-                      activeItem?.id === item.id
-                        ? "bg-blue-50 ring-2 ring-blue-500"
-                        : "bg-slate-50 ring-1 ring-slate-100 hover:bg-blue-50"
-                    }`}
-                  >
-                    <div className="flex gap-3">
-                      {getListingImage(item) ? (
-                        <img
-                          src={getListingImage(item)}
-                          alt={item.title || "Профиль"}
-                          className="h-16 w-16 rounded-2xl object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-white text-blue-500 ring-1 ring-blue-100">
-                          <UserRound size={28} />
-                        </div>
-                      )}
-
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-black text-slate-950">
-                          {getAuthor(item)}
-                        </p>
-                        <p className="mt-1 line-clamp-2 text-xs font-bold leading-5 text-slate-500">
-                          {item.title || item.name || "Объявление"}
-                        </p>
-                        <p className="mt-1 text-xs font-black text-blue-700">
-                          {getPrice(item)}
-                        </p>
-                      </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </aside>
-        </section>
+      <div className={styles.scopeBar}>
+        <div className={styles.scopeChips}>
+          {catalogSection ? <button type="button" className={styles.scopeChip} onClick={() => { setCatalogSection(""); setCategoryId(""); setSubcategory(""); setMainActions([]); setFeatures([]); }}><Layers3 size={14} />{selectedSection?.title}<X size={13} /></button>
+            : <button type="button" className={styles.scopeChip} onClick={openFilters}><Layers3 size={14} />Все каталоги<ChevronRight size={14} /></button>}
+          {categoryId && <button type="button" className={styles.scopeChip} onClick={() => { setCategoryId(""); setSubcategory(""); }}>{selectedCategory?.title}<X size={13} /></button>}
+          {subcategory && <button type="button" className={styles.scopeChip} onClick={() => setSubcategory("")}>{subcategory}<X size={13} /></button>}
+          {city && <button type="button" className={styles.scopeChip} onClick={() => setCity("")}><MapPin size={14} />{city}<X size={13} /></button>}
+          {radius !== null && <button type="button" className={styles.scopeChip} data-pending={!userCoords} onClick={() => selectRadius(null)}><LocateFixed size={14} />{radius} км{!userCoords && " · нужна геопозиция"}<X size={13} /></button>}
+          {onlyVerified && <button type="button" className={styles.scopeChip} onClick={() => setOnlyVerified(false)}><BadgeCheck size={14} />Проверенные<X size={13} /></button>}
+          {onlyUrgent && <button type="button" className={styles.scopeChip} onClick={() => setOnlyUrgent(false)}><Zap size={14} />Срочные<X size={13} /></button>}
+          {withPhoto && <button type="button" className={styles.scopeChip} onClick={() => setWithPhoto(false)}><ImageIcon size={14} />С фото<X size={13} /></button>}
+          {(priceMin || priceMax) && <button type="button" className={styles.scopeChip} onClick={() => { setPriceMin(""); setPriceMax(""); }}>{priceMin ? `от ${priceMin}` : ""}{priceMin && priceMax ? " · " : ""}{priceMax ? `до ${priceMax}` : ""} ₽<X size={13} /></button>}
+          {mainActions.length > 0 && <button type="button" className={styles.scopeChip} onClick={() => setMainActions([])}>Основные варианты · {mainActions.length}<X size={13} /></button>}
+          {features.length > 0 && <button type="button" className={styles.scopeChip} onClick={() => setFeatures([])}>Дополнительно · {features.length}<X size={13} /></button>}
+          {filterCount > 0 && <button type="button" className={styles.resetLink} onClick={resetFilters}>Сбросить</button>}
+        </div>
+        <div className={styles.viewSwitch} role="group" aria-label="Вид результатов">
+          <button type="button" aria-pressed={viewMode === "list"} onClick={() => setViewMode("list")}><List size={16} />Список</button>
+          <button type="button" aria-pressed={viewMode === "map"} onClick={() => setViewMode("map")}><MapIcon size={16} />Карта</button>
+        </div>
       </div>
-    </main>
-  );
+
+      {(geoStatus || Object.values(sourceErrors).some(Boolean)) && <div className={styles.statusBar} role="status">
+        <AlertCircle size={16} /><span>{Object.values(sourceErrors).some(Boolean) ? "Часть объявлений не удалось загрузить. Доступные результаты уже показаны." : geoStatus}</span>
+        {Object.values(sourceErrors).some(Boolean) ? <button type="button" onClick={() => setDataRetry(value => value + 1)}>Повторить</button> : <button type="button" onClick={() => setGeoStatus("")} aria-label="Скрыть сообщение"><X size={16} /></button>}
+      </div>}
+
+      <section className={styles.workspace} data-view={viewMode} aria-label="Результаты поиска рядом">
+        <aside className={styles.resultsPanel}>
+          <div className={styles.resultsHeading}>
+            <div><span className={styles.smallEyebrow}>{resultsLabel}</span><h2 aria-live="polite">{isLoading ? "Ищем рядом…" : `${filteredItems.length} найдено`}</h2></div>
+            <div className={styles.resultsIcon}><Compass size={25} strokeWidth={1.5} /></div>
+          </div>
+          <div className={styles.sortRow}>
+            <span>{userCoords ? <><span className={styles.liveDot} />От вашей геопозиции</> : <><MapPin size={13} />{city || "Все города"}</>}</span>
+            <select aria-label="Сортировка результатов" value={sort} onChange={event => setSort(event.target.value as NearbySort)}>
+              <option value="nearest">{deferredSearch.trim() ? "По релевантности" : "Сначала рядом"}</option><option value="newest">Сначала новые</option><option value="priceAsc">Дешевле</option><option value="priceDesc">Дороже</option>
+            </select>
+          </div>
+          <div ref={listNodeRef} className={styles.resultList} aria-busy={isLoading || searchText !== deferredSearch}>
+            {isLoading && items.length === 0 ? Array.from({ length: 5 }, (_, index) => <div key={index} className={styles.skeletonCard} aria-hidden="true"><span /><div><i /><i /><i /></div></div>)
+              : filteredItems.length ? filteredItems.map((entry, index) => <button key={entry.key} type="button" data-result-key={entry.key} className={styles.resultCard} data-selected={entry.key === activeKey} aria-pressed={entry.key === activeKey} onClick={() => selectMapItem(entry.key)} style={{ "--reveal-delay": `${Math.min(index, 6) * 35}ms` } as CSSProperties}>
+                <ResultImage entry={entry} />
+                <div className={styles.resultBody}>
+                  <div className={styles.resultMeta}><span className={styles.roleLabel} data-kind={entry.item.kind}>{entry.item.kind === "request" ? "Заказчик" : "Исполнитель"}</span>{entry.verified && <BadgeCheck size={14} aria-label="Проверен" />}{entry.urgent && <span className={styles.urgentLabel}><Zap size={11} />Срочно</span>}</div>
+                  <h3>{entry.item.title || entry.item.name || "Объявление"}</h3>
+                  <p>{publicationAuthor(entry.item)}</p>
+                  <div className={styles.resultBottom}><strong>{priceLabel(entry.item)}</strong><span><MapPin size={11} />{entry.distance !== null ? distanceLabel(entry.distance).replace(" от вас", "") : entry.item.city || "Город не указан"}</span></div>
+                  {!entry.coords && <span className={styles.noCoords}>Пока без точки на карте</span>}
+                </div><ChevronRight size={15} className={styles.resultArrow} />
+              </button>) : <div className={styles.emptyState}><div className={styles.emptyIcon}><Search size={27} strokeWidth={1.5} /></div><h3>Пока ничего не найдено</h3><p>Попробуйте другой запрос, увеличьте радиус или уберите часть фильтров.</p><button type="button" className={styles.primaryButton} onClick={resetFilters}>Сбросить фильтры<ArrowRight size={16} /></button></div>}
+          </div>
+          <div className={styles.resultsFooter}><span className={styles.liveDot} />{geocoding ? "Уточняем точки по адресам…" : limited ? "Показана доступная выборка. Уточните фильтры." : "Только опубликованные объявления"}</div>
+        </aside>
+
+        <div className={styles.mapPanel}>
+          <div ref={mapNodeRef} className={styles.mapCanvas} aria-label="Карта исполнителей и заявок заказчиков" />
+          <div className={styles.mapLegend}><span><i className={styles.contractorDot} />Исполнители</span><span><i className={styles.customerDot} />Заказчики</span></div>
+          <div className={styles.mapControls}>
+            <button type="button" onClick={useMyLocation} disabled={locating || !isMapReady} aria-label="Показать моё местоположение" title="Моя геопозиция">{locating ? <Loader2 size={20} className={styles.spin} /> : <LocateFixed size={21} />}</button>
+            <div className={styles.zoomControls}><button type="button" disabled={!isMapReady} onClick={() => quietMapOperation(() => mapRef.current?.setZoom(Math.min(19, mapRef.current.getZoom() + 1), { duration: motionDuration(200) }))} aria-label="Приблизить карту">+</button><button type="button" disabled={!isMapReady} onClick={() => quietMapOperation(() => mapRef.current?.setZoom(Math.max(2, mapRef.current.getZoom() - 1), { duration: motionDuration(200) }))} aria-label="Отдалить карту">−</button></div>
+            <button type="button" onClick={() => { focusUserRef.current = false; fitResults(); }} disabled={!isMapReady} aria-label="Показать все найденные метки" title="Все найденные метки"><Layers3 size={20} /></button>
+          </div>
+          {(!isMapReady || mapError) && <div className={styles.mapLoading}><div className={styles.mapLoadingCard}>
+            {mapError ? <AlertCircle size={30} /> : <div className={styles.loadingCompass}><Compass size={38} strokeWidth={1.4} /></div>}
+            <h3>{mapError ? "Не получилось открыть карту" : "Прокладываем путь"}</h3><p>{mapError || "Загружаем карту и собираем объявления рядом."}</p>
+            {mapError && <button type="button" className={styles.primaryButton} onClick={() => setMapRetry(value => value + 1)}><RotateCcw size={16} />Повторить</button>}
+          </div></div>}
+          {isMapReady && !isLoading && !activeItem && !clusterItems.length && <div className={styles.mapHint}><MapPin size={17} /><span>{mapItems.length ? `На карте ${mapItems.length} · нажмите на метку` : "По этим фильтрам нет точек на карте"}{missingCount > 0 && ` · ещё ${missingCount} в списке`}</span>{!mapItems.length && <button type="button" onClick={resetFilters}>Сбросить</button>}</div>}
+          {!activeItem && clusterItems.length > 0 && <article className={`${styles.detailCard} ${styles.clusterCard}`} aria-label="Объявления в группе">
+            <button type="button" className={styles.closeDetail} onClick={() => setClusterKeys([])} aria-label="Закрыть группу"><X size={17} /></button>
+            <h3 className={styles.clusterHeading}>В этой группе · {clusterItems.length}</h3>
+            <p className={styles.filterHelp}>Выберите объявление, чтобы открыть карточку.</p>
+            <div className={styles.clusterList}>{clusterItems.map(entry => <button key={entry.key} type="button" className={styles.clusterResult} onClick={() => selectMapItem(entry.key)}><ResultImage entry={entry} /><span><b>{entry.item.title || "Объявление"}</b><small>{entry.item.kind === "request" ? "Заказчик" : "Исполнитель"} · {priceLabel(entry.item)}</small></span><ChevronRight size={15} /></button>)}</div>
+          </article>}
+          {activeItem && <article key={activeItem.key} className={styles.detailCard} aria-label="Выбранное объявление">
+            <button type="button" className={styles.closeDetail} onClick={() => setActiveKey("")} aria-label="Закрыть карточку"><X size={17} /></button>
+            <div className={styles.detailTop}><ResultImage entry={activeItem} large /><div className={styles.detailBody}>
+              <div className={styles.resultMeta}><span className={styles.roleLabel} data-kind={activeItem.item.kind}>{activeItem.item.kind === "request" ? "Заявка заказчика" : "Исполнитель"}</span>{activeItem.verified && <span className={styles.verifiedLabel}><BadgeCheck size={14} />Проверен</span>}</div>
+              <h3>{activeItem.item.title || activeItem.item.name || "Объявление"}</h3><p>{publicationAuthor(activeItem.item)}</p><strong>{priceLabel(activeItem.item)}</strong>
+            </div></div>
+            <div className={styles.detailLocation}><MapPin size={15} /><span>{publicationAddress(activeItem.item) || "Адрес не указан"}</span>{activeItem.distance !== null && <b>{distanceLabel(activeItem.distance)}</b>}</div>
+            {!activeItem.coords && <p className={styles.noCoords}>Точка не определена — адрес можно уточнить в объявлении.</p>}
+            <div className={styles.detailLinks}><Link href={publicationLink(activeItem.item)} className={styles.primaryButton}>{activeItem.item.kind === "request" ? "Посмотреть заявку" : "Открыть объявление"}<ArrowRight size={16} /></Link><Link href={profileLink(activeItem.item)} className={styles.secondaryButton}><UserRound size={16} />Профиль</Link></div>
+          </article>}
+        </div>
+      </section>
+      <div className={styles.bottomNote}><span><MapPin size={14} />И — исполнитель · З — заказчик · число — группа объявлений</span><span>Найдите подходящих людей. Договоритесь о работе.</span></div>
+    </div>
+
+    <dialog ref={dialogRef} className={styles.filterDialog} aria-labelledby="nearby-filter-title" onCancel={() => setFiltersOpen(false)} onClose={() => setFiltersOpen(false)} onClick={event => { if (event.target === event.currentTarget) { const box = event.currentTarget.getBoundingClientRect(); if (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom) closeFilters(); } }}>
+      <div className={styles.filterHeader}><div><p className={styles.eyebrow}>Точный поиск</p><h2 id="nearby-filter-title">Фильтры рядом</h2></div><button type="button" className={styles.iconButton} onClick={closeFilters} aria-label="Закрыть фильтры"><X size={22} /></button></div>
+      <div className={styles.filterContent}>
+        <fieldset className={styles.filterSection}><legend><Layers3 size={17} />Каталог</legend>
+          <div className={styles.catalogGrid}><button type="button" className={styles.catalogButton} data-active={!catalogSection} aria-pressed={!catalogSection} onClick={() => { setCatalogSection(""); setCategoryId(""); setSubcategory(""); setMainActions([]); setFeatures([]); }}><Layers3 size={20} /><span>Все каталоги</span>{!catalogSection && <Check size={15} />}</button>
+            {CATALOG_FORM_SECTIONS.map(section => { const Icon = SECTION_ICONS[section.id]; return <button key={section.id} type="button" className={styles.catalogButton} data-active={catalogSection === section.id} aria-pressed={catalogSection === section.id} onClick={() => { setCatalogSection(section.id); setCategoryId(""); setSubcategory(""); setMainActions([]); setFeatures([]); }}><Icon size={20} /><span>{section.title}</span>{catalogSection === section.id && <Check size={15} />}</button>; })}
+          </div>
+          {catalogSection && <div className={styles.catalogLevels}>
+            <label>Категория<select value={categoryId} onChange={event => { setCategoryId(event.target.value); setSubcategory(""); }}><option value="">Все категории</option>{catalogCategories.map(option => <option key={option.id} value={option.id}>{option.title}</option>)}</select></label>
+            {selectedCategory && <label>Подкатегория<select value={subcategory} onChange={event => setSubcategory(event.target.value)}><option value="">Все подкатегории</option>{selectedCategory.subcategories.map(option => <option key={option} value={option}>{option}</option>)}</select></label>}
+          </div>}
+        </fieldset>
+
+        {audience !== "customers" && <>
+          <fieldset className={styles.filterSection}><legend><Wrench size={17} />Основные варианты</legend><p className={styles.filterHelp}>Можно выбрать несколько. Покажем любой из выбранных вариантов.</p><div className={styles.optionChips}>{actionOptions.map(action => <button key={action.id} type="button" aria-pressed={mainActions.includes(action.id)} data-active={mainActions.includes(action.id)} onClick={() => setMainActions(current => current.includes(action.id) ? current.filter(id => id !== action.id) : [...current, action.id])}>{mainActions.includes(action.id) && <Check size={14} />}{action.label}</button>)}</div></fieldset>
+          <fieldset className={styles.filterSection}><legend><SlidersHorizontal size={17} />Дополнительные возможности</legend><div className={styles.optionChips}>{featureOptions.map(feature => <button key={feature.id} type="button" aria-pressed={features.includes(feature.id)} data-active={features.includes(feature.id)} onClick={() => setFeatures(current => current.includes(feature.id) ? current.filter(id => id !== feature.id) : [...current, feature.id])}>{features.includes(feature.id) && <Check size={14} />}{feature.label}</button>)}</div>{audience === "all" && <p className={styles.filterHelp}>Основные и дополнительные варианты фильтруют только исполнителей, не заявки.</p>}</fieldset>
+        </>}
+
+        <fieldset className={styles.filterSection}><legend><MapPin size={17} />Где искать</legend>
+          <label className={styles.fieldLabel}>Город или район<input list="nearby-cities" value={city} onChange={event => setCity(event.target.value)} placeholder="Например, Нижний Новгород" /><datalist id="nearby-cities">{cities.map(value => <option key={value} value={value} />)}</datalist></label>
+          <span className={styles.fieldLabel}>Расстояние от вас</span><div className={styles.optionChips}>{[5, 10, 25, 50, 100].map(value => <button key={value} type="button" aria-pressed={radius === value} data-active={radius === value} onClick={() => selectRadius(value)}>{radius === value && <Check size={14} />}{value} км</button>)}<button type="button" aria-pressed={radius === null} data-active={radius === null} onClick={() => selectRadius(null)}>Без ограничения</button></div>
+          {radius !== null && !userCoords ? <div className={styles.locationNotice}><LocateFixed size={18} /><div><p>Для радиуса нужна ваша геопозиция</p><span>Пока она не определена, расстояние не ограничивает результаты.</span><button type="button" onClick={useMyLocation} disabled={locating}>{locating ? "Определяем…" : "Разрешить геопозицию"}<ArrowRight size={13} /></button>{geoStatus && <span role="status">{geoStatus}</span>}</div></div> : userCoords && <p className={styles.filterHelp}>Расстояние по прямой от вашей геопозиции, не длина маршрута.</p>}
+        </fieldset>
+
+        <fieldset className={styles.filterSection}><legend>Цена или бюджет, ₽</legend><div className={styles.priceFields}><label>От<input inputMode="decimal" value={priceMin} onChange={event => setPriceMin(event.target.value)} placeholder="Любая" aria-invalid={invalidPriceRange} /></label><span>—</span><label>До<input inputMode="decimal" value={priceMax} onChange={event => setPriceMax(event.target.value)} placeholder="Без лимита" aria-invalid={invalidPriceRange} /></label></div>{invalidPriceRange && <p className={styles.validationError} role="alert">Цена «от» не должна быть больше цены «до».</p>}</fieldset>
+
+        <fieldset className={styles.filterSection}><legend>Дополнительно</legend>
+          {[{ label: "Только проверенные", help: "Профиль прошёл проверку", checked: onlyVerified, change: setOnlyVerified, Icon: BadgeCheck }, { label: "Только срочные", help: "В объявлении отмечена срочность", checked: onlyUrgent, change: setOnlyUrgent, Icon: Zap }, { label: "Только с фотографией", help: "Можно сразу увидеть предложение", checked: withPhoto, change: setWithPhoto, Icon: ImageIcon }].map(({ label, help, checked, change, Icon }) => <label key={label} className={styles.toggleRow}><Icon size={20} /><span><b>{label}</b><small>{help}</small></span><input type="checkbox" checked={checked} onChange={event => change(event.target.checked)} /><i className={styles.toggleTrack} /></label>)}
+        </fieldset>
+      </div>
+      <div className={styles.filterFooter}><button type="button" className={styles.secondaryButton} onClick={resetFilters}><RotateCcw size={16} />Сбросить</button><button type="button" className={styles.primaryButton} onClick={closeFilters} disabled={invalidPriceRange}>Показать {filteredItems.length}<ArrowRight size={17} /></button></div>
+    </dialog>
+  </main>;
 }
