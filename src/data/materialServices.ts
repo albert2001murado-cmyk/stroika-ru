@@ -61,6 +61,8 @@ const MATERIAL_ACTION_TITLE_OVERRIDES = new Map<string, string>([
   [normalize("Ванны"), "Найти установщика ванны"],
   [normalize("Душевые кабины"), "Найти установщика душевой кабины"],
   [normalize("Шумоизоляция"), "Найти специалиста по шумоизоляции"],
+  [normalize("3D-панели"), "Найти монтажника 3D-панелей"],
+  [normalize("Холодный асфальт"), "Найти дорожную бригаду"],
 ]);
 
 function createMaterialActionTitle(material: string, baseTitle?: string) {
@@ -189,6 +191,14 @@ register(["Подвесные потолки", "Потолочные панел�
   section: "services",
   imageCategoryId: "finishing",
   actionTitle: "Найти монтажника потолков",
+});
+
+register(["3D-панели"], {
+  category: "Отделочные работы",
+  subcategory: "Монтаж 3D-панелей",
+  section: "services",
+  imageCategoryId: "finishing",
+  actionTitle: "Найти монтажника 3D-панелей",
 });
 
 register(["Шумоизоляция", "Звукоизоляционные панели", "Акустические мембраны", "Демпферная лента"], {
@@ -512,7 +522,7 @@ register(["Светильники"], {
   actionTitle: "Найти электрика",
 });
 
-register(["Асфальт"], {
+register(["Асфальт", "Холодный асфальт"], {
   category: "Участок и благоустройство",
   subcategory: "Асфальтирование",
   section: "services",

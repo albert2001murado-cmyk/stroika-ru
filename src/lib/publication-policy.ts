@@ -45,7 +45,7 @@ export type LocalModerationResult = {
   media: Array<{ type: "image" | "video"; url: string }>;
 };
 
-export const MODERATION_POLICY_VERSION = "ru-service-2026-10-06.1";
+export const MODERATION_POLICY_VERSION = "ru-service-2026-10-12.1";
 
 const SERVICE_RULES = "Правила публикации Стройка.ру";
 const LAW_INFORMATION = "149-ФЗ «Об информации, информационных технологиях и о защите информации»";
@@ -326,6 +326,36 @@ export function normalizePublicationCatalog(dataValue: unknown): NormalizedCatal
     catalogKey: `${selected.section}:${selected.option.id}`,
     subcategoryKey: normalizeModerationText(canonicalSubcategory),
   };
+}
+
+/**
+ * Gives the local semantic model real catalog alternatives. This lets it
+ * distinguish a valid construction photo from a photo that belongs to a
+ * different category instead of comparing only with one broad prompt.
+ */
+export function moderationCatalogAlternatives(catalog: NormalizedCatalog) {
+  if (!catalog.valid || !catalog.section) return [];
+
+  const alternatives = new Set<string>();
+  const add = (value: string) => {
+    const clean = text(value, 180);
+    if (
+      clean &&
+      comparableCategory(clean) !== comparableCategory(catalog.subcategory)
+    ) {
+      alternatives.add(clean);
+    }
+  };
+
+  // Include every current subcategory, not just the first alphabetic entries.
+  // The local model caches individual label embeddings across publications.
+  CATALOG_FORM_SECTIONS.forEach((section) => {
+    getCatalogFormCategories(section.id).forEach((option) => {
+      option.subcategories.forEach(add);
+    });
+  });
+
+  return [...alternatives].slice(0, 800);
 }
 
 function validRemoteUrl(value: unknown) {

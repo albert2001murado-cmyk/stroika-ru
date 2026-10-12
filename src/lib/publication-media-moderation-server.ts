@@ -10,6 +10,7 @@ type CatalogContext = {
   section?: string;
   category?: string;
   subcategory?: string;
+  alternatives?: string[];
 };
 type ExternalModerationResult = {
   decision: "approved" | "manual_review" | "rejected";
@@ -183,6 +184,10 @@ async function evaluateWithLocalClassifier(input: {
           section: String(input.catalog?.section || "").slice(0, 80),
           category: String(input.catalog?.category || "").slice(0, 180),
           subcategory: String(input.catalog?.subcategory || "").slice(0, 180),
+          alternatives: (input.catalog?.alternatives || [])
+            .filter((value) => typeof value === "string" && value.trim())
+            .slice(0, 800)
+            .map((value) => value.trim().slice(0, 180)),
         },
         media: trusted,
       }),
@@ -354,19 +359,20 @@ export async function evaluateWithExternalClassifier(input: {
   catalog?: CatalogContext;
 }): Promise<ExternalModerationResult> {
   const provider = mediaClassifierProvider();
+  const needsCatalogCheck = Boolean(input.catalog?.subcategory);
   if (provider === "none") {
     return {
-      decision: input.media.length ? "manual_review" : "approved",
+      decision: input.media.length || needsCatalogCheck ? "manual_review" : "approved",
       provider: "local-only",
       mediaChecked: 0,
-      flags: input.media.length
+      flags: input.media.length || needsCatalogCheck
         ? [
             {
-              code: "media-classifier-not-configured",
-              field: "media",
+              code: input.media.length ? "media-classifier-not-configured" : "catalog-classifier-not-configured",
+              field: input.media.length ? "media" : "category",
               severity: "review",
               message:
-                "Фото или видео ожидают дополнительной проверки: серверный анализ медиа пока не настроен.",
+                "Публикация ожидает проверки соответствия каталогу: локальная модель пока не настроена.",
               legalBasis: "Правила публикации Стройка.ру",
             },
           ]
@@ -375,9 +381,21 @@ export async function evaluateWithExternalClassifier(input: {
   }
 
   try {
-    return provider === "local"
+    const result = provider === "local"
       ? await evaluateWithLocalClassifier(input)
       : await evaluateWithOpenAI(input);
+    if (provider === "openai" && needsCatalogCheck && result.decision !== "rejected") {
+      result.decision = "manual_review";
+      result.flags.push({
+        code: "catalog-classifier-not-configured", field: "category", severity: "review",
+        message: "Проверка безопасности пройдена, но соответствие фото и текста подкатегории должен подтвердить модератор. Для автоматической проверки подключите локальную модель.",
+      });
+    }
+    if (result.decision === "approved" && result.mediaChecked < input.media.length) {
+      result.decision = "manual_review";
+      result.flags.push(unavailableFlag("Не все вложения были проверены. До полной проверки объявление не публикуется."));
+    }
+    return result;
   } catch {
     return {
       decision: "manual_review",

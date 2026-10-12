@@ -14,6 +14,10 @@ import PremiumCategoryGrid from "@/components/PremiumCategoryGrid";
 import SolutionWidgets, { type SolutionSelection } from "@/components/SolutionWidgets";
 import { categories } from "@/data/categories";
 import {
+  locationMatchesFilter,
+  withNizhnyNovgorodLocations,
+} from "@/data/nizhnyNovgorodLocations";
+import {
   CATALOG_FORM_SECTIONS,
   getCatalogFormCategories,
   resolveCatalogPath,
@@ -140,10 +144,19 @@ function toFiniteNumber(value: unknown): number | null {
 }
 
 function cityMatches(itemCity: unknown, selectedCity: string) {
-  if (!selectedCity.trim()) return true;
-  const item = normalize(itemCity);
-  const selected = normalize(selectedCity);
-  return Boolean(item) && (item === selected || item.includes(selected) || selected.includes(item));
+  return locationMatchesFilter(itemCity, selectedCity);
+}
+
+function publicationLocation(item: Listing | CustomerRequest) {
+  const value = item as unknown as {
+    city?: unknown;
+    district?: unknown;
+    address?: unknown;
+    location?: { address?: unknown };
+  };
+  return [value.city, value.district, value.address, value.location?.address]
+    .filter(Boolean)
+    .join(", ");
 }
 
 function hasImages(item: Listing | CustomerRequest) {
@@ -505,9 +518,7 @@ export default function HomePage() {
       .map((item) => String(item.city || "").trim())
       .filter(Boolean);
 
-    return Array.from(new Set([...POPULAR_CITIES, ...dynamicCities])).sort((a, b) =>
-      a.localeCompare(b, "ru")
-    );
+    return withNizhnyNovgorodLocations([...POPULAR_CITIES, ...dynamicCities]);
   }, [feedMode, listings, requests]);
 
   // Верхняя граница фильтра фиксирована на 9 млн рублей,
@@ -547,7 +558,7 @@ export default function HomePage() {
         selectedOfferAction,
         requiredOfferFeatures
       );
-      const matchesCity = cityMatches(listing.city, city);
+      const matchesCity = cityMatches(publicationLocation(listing), city);
       const range = listingPriceRange(listing);
       const matchesPrice = overlapsPriceRange(
         range.from,
@@ -622,7 +633,7 @@ export default function HomePage() {
         const catalogSelection = publicationCatalogSelection(request);
       const matchesCatalogCategory = !catalogCategoryId || catalogSelection.categoryId === catalogCategoryId;
       const matchesCatalogSection = !catalogSection || catalogSelection.section === catalogSection;
-      const matchesCity = cityMatches(request.city, city);
+      const matchesCity = cityMatches(publicationLocation(request), city);
         const range = requestPriceRange(request);
         const matchesPrice = overlapsPriceRange(
           range.from,

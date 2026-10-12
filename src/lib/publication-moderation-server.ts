@@ -1,4 +1,5 @@
 import { validatePayment, validateBankOwner } from "./payments";
+import { moderationReasonDetails, publicationModerationReason, publicationModerationNotice, validateManualModerationReason } from "./publication-moderation-feedback";
 import { createHash, randomUUID } from "crypto";
 import {
   FieldValue,
@@ -13,6 +14,7 @@ import {
   normalizeCityKey,
   normalizeModerationText,
   normalizePublicationCatalog,
+  moderationCatalogAlternatives,
   type ModerationFlag,
   type PublicationKind,
   type PublicationModerationStatus,
@@ -170,13 +172,7 @@ async function duplicateFlag(
 }
 
 function finalReason(decision: FinalDecision, flags: ModerationFlag[]) {
-  const messages = [...new Set(flags.map((flag) => flag.message))].slice(0, 3);
-  if (messages.length) return messages.join(" ");
-  if (decision === "approved") return "Автоматическая проверка пройдена.";
-  if (decision === "manual_review") {
-    return "Публикация направлена модератору для дополнительной проверки.";
-  }
-  return "Исправьте публикацию и отправьте её повторно.";
+  return publicationModerationReason(decision, flags);
 }
 
 function combineDecision(
@@ -200,30 +196,15 @@ async function notifyOwner(input: {
 }) {
   const recipientId = ownerId(input.kind, input.data);
   if (!recipientId) return;
-  const title = safeText(input.data.title, 80) || "Публикация";
-  const url = input.kind === "listing" ? `/listing/${input.id}` : `/requests/${input.id}`;
-  const heading =
-    input.decision === "approved"
-      ? "Публикация одобрена"
-      : input.decision === "manual_review"
-        ? "Нужна дополнительная проверка"
-        : "Публикацию нужно исправить";
-  const body =
-    input.decision === "approved"
-      ? `«${title}» прошла проверку и опубликована.`
-      : input.decision === "manual_review"
-        ? `«${title}» проверит модератор. Мы сообщим о решении.`
-        : `«${title}»: ${input.reason}`;
+  const notice = publicationModerationNotice({ ...input, title: input.data.title });
   await deliverServerNotification({
     recipientId,
     actorId: "system",
     actorName: "Стройка.ру",
-    title: heading,
-    body,
-    url,
+    ...notice,
     type: "moderation",
     entityId: input.id,
-    dedupeKey: `moderation:${input.kind}:${input.id}:${input.fingerprint}:${input.decision}`,
+    dedupeKey: `moderation:${input.kind}:${input.id}:${safeText(input.data.moderationRunId, 160) || input.fingerprint}:${input.decision}`,
   });
 }
 
@@ -286,10 +267,16 @@ export async function processPublication(kind: PublicationKind, idValue: string)
               section: local.catalog.section,
               category: local.catalog.categoryTitle || local.catalog.category,
               subcategory: local.catalog.subcategory,
+              alternatives: moderationCatalogAlternatives(local.catalog),
             },
           });
     const flags = [...local.flags, ...external.flags];
-    const decision = combineDecision(localDecision, external.decision);
+    let decision = combineDecision(localDecision, external.decision);
+    if (decision === "rejected" && !moderationReasonDetails(decision, flags).length) {
+      decision = "manual_review";
+      flags.push({ code: "missing-rejection-reason", field: "content", severity: "review",
+        message: "Автоматическая проверка не вернула конкретную причину. Публикацию проверит модератор." });
+    }
     const reason = finalReason(decision, flags);
     const reviewedAt = FieldValue.serverTimestamp();
 
@@ -504,6 +491,10 @@ export async function applyManualModerationDecision(input: {
   reason?: string;
   reviewerId: string;
 }) {
+  if (input.status === "rejected") {
+    const reasonError = validateManualModerationReason(input.reason);
+    if (reasonError) throw new Error(reasonError);
+  }
   const id = safeText(input.id, 160);
   if (!id || id.includes("/")) throw new Error("Некорректная публикация.");
   const reference = getAdminDb().collection(CONFIG[input.kind].collection).doc(id);
@@ -514,7 +505,7 @@ export async function applyManualModerationDecision(input: {
   const catalog = normalizePublicationCatalog(data);
   const reason =
     input.status === "rejected"
-      ? safeText(input.reason, 500) || "Публикация не соответствует правилам размещения."
+      ? safeText(input.reason, 1000)
       : "";
   const reviewedAt = FieldValue.serverTimestamp();
   const runId = randomUUID();
@@ -590,7 +581,7 @@ export async function runPublicationNotificationJobs() {
         continue;
       }
       await notifyOwner({ kind, id: publication.id, data, decision,
-        reason: safeText(data.moderationReason, 500), fingerprint: fingerprint(data) });
+        reason: typeof data.moderationReason === "string" ? data.moderationReason.slice(0, 11000) : "Причина пока не указана. Обратитесь в поддержку.", fingerprint: fingerprint(data) });
       const sourceProfile = await getAdminDb().doc(`users/${ownerId(kind, data)}`).get();
       const canMatch = decision === "approved" && sourceProfile.exists &&
         sourceProfile.data()?.moderationStatus !== "blocked" && (kind !== "request" || data.status === "active");

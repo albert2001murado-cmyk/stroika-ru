@@ -3,6 +3,7 @@ import { matchesOfferSelection, type SearchableListingFields } from "./listingOf
 import { isPublicationApproved } from "./moderation";
 import { publicationSearchRelevanceScore } from "./searchKeywords";
 import type { CatalogSectionId } from "@/data/catalogForm";
+import { locationMatchesFilter } from "@/data/nizhnyNovgorodLocations";
 
 export type Coordinates = { lat: number; lng: number };
 export type NearbyAudience = "contractors" | "customers" | "all";
@@ -243,7 +244,7 @@ export function filterNearbyPublications(entries: IndexedNearbyPublication[], fi
     if (filters.section && selection.section !== filters.section) return false;
     if (filters.categoryId && selection.categoryId !== filters.categoryId) return false;
     if (subcategory && entry.subcategory !== subcategory) return false;
-    if (city && !entry.city.includes(city)) return false;
+    if (city && !locationMatchesFilter(entry.city, filters.city)) return false;
     if (filters.radius !== null && filters.hasOrigin && (distance === null || distance > filters.radius)) return false;
     if (filters.onlyVerified && !entry.verified) return false;
     if (filters.onlyUrgent && !entry.urgent) return false;

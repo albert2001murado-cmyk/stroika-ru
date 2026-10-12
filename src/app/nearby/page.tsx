@@ -1,6 +1,7 @@
 "use client";
 
 import { CATALOG_FORM_SECTIONS, getCatalogFormCategories, type CatalogSectionId } from "@/data/catalogForm";
+import { withNizhnyNovgorodLocations } from "@/data/nizhnyNovgorodLocations";
 import { getOfferActions, getOfferFeatures, getOfferGroup } from "@/lib/listingOffer";
 import { mapProfileLink } from "@/lib/mapProfileLink";
 import { db } from "@/lib/firebase";
@@ -306,7 +307,10 @@ export default function NearbyPage() {
   const mapItems = useMemo(() => filteredItems.filter(entry => entry.coords), [filteredItems]);
   const activeItem = filteredItems.find(entry => entry.key === activeKey) || null;
   const clusterItems = filteredItems.filter(entry => clusterKeys.includes(entry.key));
-  const cities = useMemo(() => [...new Set(items.map(item => item.city || "").filter(Boolean))].sort((a, b) => a.localeCompare(b, "ru")), [items]);
+  const cities = useMemo(
+    () => withNizhnyNovgorodLocations(items.map(item => item.city || "")),
+    [items]
+  );
   const catalogCategories = useMemo(() => catalogSection ? getCatalogFormCategories(catalogSection) : [], [catalogSection]);
   const selectedCategory = catalogCategories.find(option => option.id === categoryId);
   const selectedSection = CATALOG_FORM_SECTIONS.find(option => option.id === catalogSection);

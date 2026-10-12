@@ -17,6 +17,10 @@ export function registerNodeInstrumentation() {
     globalThis.__stroikaModerationRunning = true;
 
     try {
+      const { runProfileAvatarSyncBatch } = await import("@/lib/profile-avatar-sync-server");
+      await runProfileAvatarSyncBatch(10).catch(error => {
+        console.error("scheduled avatar sync failed", error);
+      });
       const { runModerationBatch } = await import(
         "@/lib/publication-moderation-server"
       );

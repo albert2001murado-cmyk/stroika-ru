@@ -1,5 +1,6 @@
 "use client";
 import { uploadAuthHeaders } from "@/lib/uploadAuth";
+import { syncSavedProfileAvatar } from "@/lib/profileAvatarSync";
 
 
 import CustomerRequestCard from "@/components/CustomerRequestCard";
@@ -262,7 +263,12 @@ export default function ProfilePage() {
         { merge: true }
       );
 
-      setMessage("Профиль сохранён.");
+      const avatarSync = await syncSavedProfileAvatar();
+      setMessage(avatarSync.synced
+        ? "Профиль сохранён. Аватар обновлён во всех ваших объявлениях."
+        : avatarSync.queued
+          ? "Профиль сохранён. Аватары старых объявлений обновляются в фоне."
+          : "Профиль сохранён. Не удалось обновить аватары старых объявлений — нажмите «Сохранить» ещё раз при стабильном интернете.");
     } catch (error) {
       console.error(error);
       setMessage(
