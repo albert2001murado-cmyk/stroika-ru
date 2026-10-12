@@ -26,6 +26,7 @@ import {
 } from "@/lib/publication-media-moderation-server";
 import { deliverServerNotification } from "@/lib/server-notifications";
 import { notifyNearbyRequestMatches } from "@/lib/nearby-request-matches-server";
+import { onlyTemporaryModerationFlags, moderationRetryAttempt, moderationRetryDelay } from "./publication-moderation-retry";
 
 const LEASE_MS = 6 * 60 * 1000;
 const BATCH_LIMIT = 30;
@@ -196,7 +197,8 @@ async function notifyOwner(input: {
 }) {
   const recipientId = ownerId(input.kind, input.data);
   if (!recipientId) return;
-  const notice = publicationModerationNotice({ ...input, title: input.data.title });
+  const temporaryFailure = input.decision === "manual_review" && onlyTemporaryModerationFlags(input.data.moderationFlags);
+  const notice = publicationModerationNotice({ ...input, title: input.data.title, flags: input.data.moderationFlags });
   await deliverServerNotification({
     recipientId,
     actorId: "system",
@@ -204,7 +206,9 @@ async function notifyOwner(input: {
     ...notice,
     type: "moderation",
     entityId: input.id,
-    dedupeKey: `moderation:${input.kind}:${input.id}:${safeText(input.data.moderationRunId, 160) || input.fingerprint}:${input.decision}`,
+    dedupeKey: temporaryFailure
+      ? `moderation:${input.kind}:${input.id}:${moderationInputFingerprint(input.data)}:temporary-wait`
+      : `moderation:${input.kind}:${input.id}:${safeText(input.data.moderationRunId, 160) || input.fingerprint}:${input.decision}`,
   });
 }
 
@@ -217,6 +221,8 @@ async function claimPublication(kind: PublicationKind, id: string, runId: string
     if (!snapshot.exists) return null;
     const data = dataObject(snapshot.data());
     if (safeText(data.moderationStatus, 32) !== "pending") return null;
+    if (data.moderationRetryFingerprint === moderationInputFingerprint(data)
+      && timestampMillis(data.moderationNextRetryAt) > now) return null;
     const leaseUntil = timestampMillis(data.moderationLeaseUntil);
     if (data.moderationStage === "checking" && leaseUntil > now) return null;
     transaction.update(reference, {
@@ -279,6 +285,13 @@ export async function processPublication(kind: PublicationKind, idValue: string)
     }
     const reason = finalReason(decision, flags);
     const reviewedAt = FieldValue.serverTimestamp();
+    const temporaryFailure = decision === "manual_review" && onlyTemporaryModerationFlags(flags);
+    const retryFingerprint = moderationInputFingerprint({
+      ...data,
+      catalogCategoryId: local.catalog.categoryId || safeText(data.catalogCategoryId, 80),
+      catalogGroupId: local.catalog.groupId || null,
+    });
+    const retryCount = temporaryFailure ? moderationRetryAttempt(data, retryFingerprint) : 0;
 
     const committed = await getAdminDb().runTransaction(async (transaction) => {
       const latest = await transaction.get(reference);
@@ -320,6 +333,10 @@ export async function processPublication(kind: PublicationKind, idValue: string)
         moderationMediaChecked: external.mediaChecked,
         moderationReviewedBy: "system",
         moderationReviewedAt: reviewedAt,
+        moderationRetryCount: retryCount,
+        moderationRetryFingerprint: temporaryFailure ? retryFingerprint : FieldValue.delete(),
+        moderationNextRetryAt: temporaryFailure
+          ? Timestamp.fromMillis(Date.now() + moderationRetryDelay(retryCount)) : FieldValue.delete(),
         moderationLeaseUntil: FieldValue.delete(),
         moderationRunId: runId,
         contentFingerprint: currentFingerprint,
@@ -374,13 +391,6 @@ export async function processPublication(kind: PublicationKind, idValue: string)
 async function requeueMediaWaitingForClassifier(perKind: number) {
   if (!mediaClassifierConfigured()) return 0;
 
-  const retryableCodes = new Set([
-    "media-classifier-not-configured",
-    "classifier-unavailable",
-    "local-model-error",
-    "media-download-failed",
-  ]);
-
   const snapshots = await Promise.all(
     (["listing", "request"] as const).map((kind) =>
       getAdminDb()
@@ -394,44 +404,36 @@ async function requeueMediaWaitingForClassifier(perKind: number) {
 
   let requeued = 0;
   for (const { snapshot } of snapshots) {
-    const batch = getAdminDb().batch();
     let changed = 0;
 
-    snapshot.docs.forEach((document) => {
+    for (const document of snapshot.docs) {
       const data = dataObject(document.data());
-      const flags = Array.isArray(data.moderationFlags)
-        ? data.moderationFlags.map(dataObject)
-        : [];
-      const onlyRetryableFlags =
-        flags.length > 0 &&
-        flags.every(
-          (flag) => retryableCodes.has(safeText(flag.code, 80))
-        );
-      const reasonCode = safeText(data.moderationReasonCode, 80);
-      const attempt = Number(data.moderationAttempt || 0);
-      const mayRetry =
-        reasonCode === "media-classifier-not-configured" ||
-        !Number.isFinite(attempt) ||
-        attempt < 30;
-
-      if (!onlyRetryableFlags || !mayRetry) return;
-      batch.update(document.ref, {
-        moderationStatus: "pending",
-        moderationStage: "queued",
-        moderationReason: "",
-        moderationReasonCode: "",
-        moderationFlags: [],
-        moderationRunId: FieldValue.delete(),
-        moderationLeaseUntil: FieldValue.delete(),
-        moderationAutoRetryAt: FieldValue.serverTimestamp(),
+      if (!onlyTemporaryModerationFlags(data.moderationFlags)) continue;
+      // Only the local model can finish catalog alignment; OpenAI safety checking cannot.
+      if (Array.isArray(data.moderationFlags) && data.moderationFlags.some(flag =>
+        dataObject(flag).code === "catalog-classifier-not-configured") && mediaClassifierProvider() !== "local") continue;
+      const changedInput = Boolean(data.moderationRetryFingerprint)
+        && data.moderationRetryFingerprint !== moderationInputFingerprint(data);
+      if (!changedInput && timestampMillis(data.moderationNextRetryAt) > Date.now()) continue;
+      // A moderator may have made a decision since the query. Check it in the transaction.
+      const queued = await getAdminDb().runTransaction(async (transaction) => {
+        const latest = await transaction.get(document.ref);
+        const current = dataObject(latest.data());
+        if (!latest.exists || current.moderationStatus !== "manual_review"
+          || current.moderationReviewedBy !== "system"
+          || !onlyTemporaryModerationFlags(current.moderationFlags)) return false;
+        const sameInput = current.moderationRetryFingerprint === moderationInputFingerprint(current);
+        if (sameInput && timestampMillis(current.moderationNextRetryAt) > Date.now()) return false;
+        transaction.update(document.ref, {
+          moderationStatus: "pending", moderationStage: "queued",
+          moderationRunId: FieldValue.delete(), moderationLeaseUntil: FieldValue.delete(),
+          moderationAutoRetryAt: FieldValue.serverTimestamp(),
+        });
+        return true;
       });
-      changed += 1;
-    });
-
-    if (changed > 0) {
-      await batch.commit();
-      requeued += changed;
+      if (queued) changed += 1;
     }
+    requeued += changed;
   }
   return requeued;
 }

@@ -1,4 +1,5 @@
 import type { ModerationFlag } from "./publication-policy";
+import { onlyTemporaryModerationFlags } from "./publication-moderation-retry";
 
 type Decision = "approved" | "rejected" | "manual_review";
 const fieldNames: Record<string, string> = {
@@ -36,11 +37,17 @@ export function validateManualModerationReason(value: unknown): string | null {
 }
 export function publicationModerationNotice(input: {
   kind: "listing" | "request"; id: string; title: unknown; decision: Decision; reason: string;
+  flags?: unknown;
 }) {
   const name = clean(input.title, 80) || "Публикация";
   const detailUrl = `${input.kind === "listing" ? "/listing" : "/requests"}/${encodeURIComponent(input.id)}`;
   if (input.decision === "approved") return {
     title: "Публикация одобрена", body: `«${name}» прошла проверку и опубликована.`, url: detailUrl, actionLabel: "Открыть публикацию",
+  };
+  if (input.decision === "manual_review" && onlyTemporaryModerationFlags(input.flags)) return {
+    title: "Проверка временно задерживается",
+    body: `«${name}» сохранена и ожидает автоматической проверки. Система повторит попытку. Заново создавать объявление не нужно; мы сообщим о результате.`,
+    url: detailUrl, actionLabel: "Открыть публикацию",
   };
   if (input.decision === "manual_review") return {
     title: "Нужна дополнительная проверка", body: `«${name}»\n\nПричина проверки:\n${input.reason}\n\nПубликация ещё не отклонена. Мы сообщим о решении модератора.`,

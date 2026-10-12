@@ -5,6 +5,23 @@ const OPENAI_MODEL = "omni-moderation-latest";
 const LOCAL_TIMEOUT_MS = 4.5 * 60 * 1000;
 const MAX_CLASSIFIER_IMAGES = 15;
 
+class ClassifierRequestError extends Error {
+  constructor(readonly flagCode: string, readonly httpStatus?: number) {
+    super("Moderation service request failed");
+    this.name = "ClassifierRequestError";
+  }
+}
+
+function httpFailure(status: number) {
+  return new ClassifierRequestError(
+    status === 401 || status === 403 ? "classifier-auth-error"
+      : status === 422 ? "classifier-protocol-mismatch"
+        : status === 429 || status === 503 ? "classifier-busy"
+          : "classifier-http-error",
+    status
+  );
+}
+
 type MediaItem = { type: "image" | "video"; url: string };
 type CatalogContext = {
   section?: string;
@@ -89,10 +106,11 @@ function trustedMediaUrl(value: string) {
 }
 
 function unavailableFlag(
-  message = "Автоматическая проверка временно недоступна; публикация передана модератору."
+  message = "Автоматическая проверка временно недоступна. Система повторит попытку; заново создавать объявление не нужно.",
+  code = "classifier-unavailable"
 ): ModerationFlag {
   return {
-    code: "classifier-unavailable",
+    code,
     field: "content",
     severity: "review",
     message,
@@ -194,15 +212,20 @@ async function evaluateWithLocalClassifier(input: {
       signal: controller.signal,
     });
     if (!response.ok) {
-      throw new Error(`Local classifier returned ${response.status}`);
+      throw httpFailure(response.status);
     }
-    const payload = (await response.json()) as Record<string, unknown>;
+    const payload = await response.json().catch(() => {
+      throw new ClassifierRequestError("classifier-response-invalid");
+    }) as Record<string, unknown>;
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+      throw new ClassifierRequestError("classifier-response-invalid");
+    }
     if (!validDecision(payload.decision)) {
-      throw new Error("Local classifier returned invalid decision");
+      throw new ClassifierRequestError("classifier-response-invalid");
     }
     const flags = safeClassifierFlags(payload.flags);
     if (payload.decision !== "approved" && flags.length === 0) {
-      throw new Error("Local classifier returned an unexplained decision");
+      throw new ClassifierRequestError("classifier-response-invalid");
     }
     const decisionFromFlags: ExternalModerationResult["decision"] = flags.some(
       (flag) => flag.severity === "critical" || flag.severity === "changes"
@@ -224,6 +247,9 @@ async function evaluateWithLocalClassifier(input: {
         ? Math.max(0, Math.floor(checked))
         : 0,
     };
+  } catch (error) {
+    if (controller.signal.aborted) throw new ClassifierRequestError("classifier-timeout");
+    throw error;
   } finally {
     clearTimeout(timer);
   }
@@ -264,7 +290,7 @@ async function evaluateWithOpenAI(input: {
         signal: controller.signal,
       }
     );
-    if (!response.ok) throw new Error(`Classifier returned ${response.status}`);
+    if (!response.ok) throw httpFailure(response.status);
     const payload = (await response.json()) as {
       results?: Array<{
         flagged?: boolean;
@@ -393,15 +419,24 @@ export async function evaluateWithExternalClassifier(input: {
     }
     if (result.decision === "approved" && result.mediaChecked < input.media.length) {
       result.decision = "manual_review";
-      result.flags.push(unavailableFlag("Не все вложения были проверены. До полной проверки объявление не публикуется."));
+      result.flags.push(unavailableFlag("Не все вложения были проверены. До полной проверки объявление не публикуется.", "classifier-response-invalid"));
     }
     return result;
-  } catch {
+  } catch (error) {
+    const failure = error instanceof ClassifierRequestError ? error : null;
+    const code = failure?.flagCode || (
+      error instanceof Error && error.name === "AbortError"
+        ? "classifier-timeout" : "classifier-unavailable"
+    );
+    // Only machine codes and HTTP status: never log URLs, request bodies or credentials.
+    console.error("moderation classifier unavailable", {
+      provider, code, ...(failure?.httpStatus ? { httpStatus: failure.httpStatus } : {}),
+    });
     return {
       decision: "manual_review",
       provider: provider === "local" ? "stroika-local" : "openai",
       mediaChecked: 0,
-      flags: [unavailableFlag()],
+      flags: [unavailableFlag(undefined, code)],
     };
   }
 }
