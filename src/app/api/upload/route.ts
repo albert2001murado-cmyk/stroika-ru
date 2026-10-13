@@ -96,7 +96,8 @@ export async function POST(request: NextRequest) {
         Key: key,
         Body: buffer,
         ContentType: file.type,
-      })
+      }),
+      { abortSignal: AbortSignal.timeout(30_000) }
     );
 
     const url = `https://${bucket}.storage.yandexcloud.net/${key}`;

@@ -1,4 +1,6 @@
-import { limitRequests } from "@/lib/api-guard";
+import { readJsonObject, RequestBodyError } from "@/lib/request-body";
+import { hasModeratorClaim, safeInternalUrl, isDocumentId, pushPreview, validExpoPushToken } from "@/lib/security-policy";
+import { limitRequests, activeProfileGuard } from "@/lib/api-guard";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { NextRequest, NextResponse } from "next/server";
@@ -15,36 +17,37 @@ function safeType(value: unknown, chatId: string) {
 }
 
 export async function POST(request: NextRequest) {
+  const totalLimit = limitRequests("push/send:total", 120);
+  if (totalLimit) return totalLimit;
   try {
     const idToken = bearer(request);
     if (!idToken) return NextResponse.json({ error: "Нужна авторизация." }, { status: 401 });
 
-    const decoded = await getAdminAuth().verifyIdToken(idToken);
+    const decoded = await getAdminAuth().verifyIdToken(idToken, true);
+    const inactive = await activeProfileGuard(decoded.uid);
+    if (inactive) return inactive;
     const throttled = limitRequests("push/send:" + decoded.uid, 30);
     if (throttled) return throttled;
-    const body = await request.json();
+    const body = await readJsonObject(request);
     const recipientId = String(body?.recipientId || "");
     const title = String(body?.title || "Стройка.ру").slice(0, 80);
     const messageBody = String(body?.body || "Новое уведомление").slice(0, 240);
-    const url = String(body?.url || "/notifications").slice(0, 300);
+    const url = safeInternalUrl(body?.url);
     const chatId = String(body?.chatId || "").slice(0, 160);
-    const type = safeType(body?.type, chatId);
+    let type = safeType(body?.type, chatId);
     const entityId = String(body?.entityId || chatId || "").slice(0, 160);
 
-    if (!recipientId || recipientId === decoded.uid) {
+    if (!isDocumentId(recipientId) || (chatId && !isDocumentId(chatId)) || recipientId === decoded.uid) {
       return NextResponse.json({ error: "Некорректный получатель." }, { status: 400 });
     }
 
     const db = getAdminDb();
     const senderProfile = await db.doc(`users/${decoded.uid}`).get();
     const senderData = senderProfile.data() || {};
-    const isModerator =
-      senderData.role === "moderator" ||
-      senderData.role === "admin" ||
-      senderData.isModerator === true ||
-      senderData.isAdmin === true;
+    const isModerator = hasModeratorClaim(decoded);
 
     if (!isModerator) {
+      type = "message";
       if (!chatId) return NextResponse.json({ error: "Не указан чат." }, { status: 403 });
       const chat = await db.doc(`chats/${chatId}`).get();
       const chatData = chat.data() || {};
@@ -92,14 +95,13 @@ export async function POST(request: NextRequest) {
     const tokensSnapshot = await db
       .collection(`users/${recipientId}/pushTokens`)
       .where("enabled", "==", true)
+      .select("token")
+      .limit(100)
       .get();
 
-    const tokens = tokensSnapshot.docs
-      .map((item) => String(item.data().token || ""))
-      .filter(
-        (token) =>
-          token.startsWith("ExponentPushToken[") || token.startsWith("ExpoPushToken[")
-      );
+    const tokens = [...new Set(tokensSnapshot.docs
+      .map((item) => item.data().token)
+      .filter(validExpoPushToken))];
 
     if (!tokens.length) {
       return NextResponse.json({ ok: true, sent: 0, notificationId: notificationRef.id });
@@ -109,23 +111,21 @@ export async function POST(request: NextRequest) {
       to,
       sound: "default",
       channelId: type === "message" ? "messages" : "default",
-      title,
-      body: messageBody,
-      data: { url, chatId, type, entityId, notificationId: notificationRef.id },
+      ...pushPreview(type, title, messageBody),
+      data: { url, chatId, type, entityId, recipientId, notificationId: notificationRef.id },
     }));
 
     const response = await fetch("https://exp.host/--/api/v2/push/send", {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify(messages),
+      signal: AbortSignal.timeout(10_000),
     });
 
-    const result = await response.json().catch(() => null);
     if (!response.ok) {
       return NextResponse.json(
         {
           error: "Сервис push-уведомлений недоступен.",
-          details: result,
           notificationId: notificationRef.id,
         },
         { status: 502 }
@@ -136,9 +136,9 @@ export async function POST(request: NextRequest) {
       ok: true,
       sent: tokens.length,
       notificationId: notificationRef.id,
-      result,
     });
   } catch (error) {
+    if (error instanceof RequestBodyError) return NextResponse.json({ error: error.message }, { status: error.status });
     console.error("push send route error:", error);
     return NextResponse.json({ error: "Не получилось отправить уведомление." }, { status: 500 });
   }

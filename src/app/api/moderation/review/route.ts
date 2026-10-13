@@ -1,5 +1,8 @@
+import { limitRequests, activeProfileGuard } from "@/lib/api-guard";
+import { readJsonObject, RequestBodyError } from "@/lib/request-body";
+import { hasModeratorClaim } from "@/lib/security-policy";
 import { NextRequest, NextResponse } from "next/server";
-import { getAdminAuth, getAdminDb } from "@/lib/firebase-admin";
+import { getAdminAuth } from "@/lib/firebase-admin";
 import { applyManualModerationDecision } from "@/lib/publication-moderation-server";
 import { validateManualModerationReason } from "@/lib/publication-moderation-feedback";
 import type { PublicationKind } from "@/lib/publication-policy";
@@ -18,24 +21,24 @@ function kindValue(value: unknown): PublicationKind | null {
 }
 
 export async function POST(request: NextRequest) {
+  const totalLimit = limitRequests("moderation/review:total", 120);
+  if (totalLimit) return totalLimit;
   try {
     const token = bearer(request);
     if (!token) {
       return NextResponse.json({ error: "Нужна авторизация." }, { status: 401 });
     }
-    const decoded = await getAdminAuth().verifyIdToken(token);
-    const profile = await getAdminDb().collection("users").doc(decoded.uid).get();
-    const data = (profile.data() || {}) as Record<string, unknown>;
-    const isModerator =
-      data.role === "admin" ||
-      data.role === "moderator" ||
-      data.isAdmin === true ||
-      data.isModerator === true;
+    const decoded = await getAdminAuth().verifyIdToken(token, true);
+    const inactive = await activeProfileGuard(decoded.uid);
+    if (inactive) return inactive;
+    const userLimit = limitRequests("moderation/review:user:" + decoded.uid, 30);
+    if (userLimit) return userLimit;
+    const isModerator = hasModeratorClaim(decoded);
     if (!isModerator) {
       return NextResponse.json({ error: "Нет доступа." }, { status: 403 });
     }
 
-    const body = await request.json();
+    const body = await readJsonObject(request);
     const kind = kindValue(body?.kind);
     const id = String(body?.publicationId || "").trim().slice(0, 160);
     const status = body?.status === "approved" || body?.status === "rejected"
@@ -58,6 +61,7 @@ export async function POST(request: NextRequest) {
     });
     return NextResponse.json({ ok: true, ...result });
   } catch (error) {
+    if (error instanceof RequestBodyError) return NextResponse.json({ error: error.message }, { status: error.status });
     console.error("moderation review route error", error);
     return NextResponse.json({ error: "Не удалось сохранить решение." }, { status: 500 });
   }

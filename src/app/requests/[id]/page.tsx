@@ -1,4 +1,6 @@
 "use client";
+import { getPublicProfile } from "@/lib/publicProfiles";
+
 import SharePublicationButton from "@/components/SharePublicationButton";
 
 import { useAuth } from "@/components/AuthProvider";
@@ -190,7 +192,7 @@ export default function CustomerRequestPage() {
       };
     }
 
-    getDoc(doc(db, "users", request.customerId))
+    getPublicProfile(request.customerId)
       .then((snapshot) => {
         if (cancelled) return;
 

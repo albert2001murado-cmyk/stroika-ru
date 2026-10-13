@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAdminAuth } from "./firebase-admin";
+import { getAdminAuth, getAdminDb } from "./firebase-admin";
 
 // Per-process safety net. Edge/WAF limits are required for distributed traffic.
 const buckets = new Map<string, { count: number; until: number }>();
@@ -20,13 +20,24 @@ export async function uploadGuard(request: NextRequest) {
   if (!value.startsWith("Bearer ") || value.length > 8192) return NextResponse.json({ error: "Войдите в аккаунт, чтобы загрузить файл." }, { status: 401 });
   try {
     const user = await getAdminAuth().verifyIdToken(value.slice(7), true);
+    const inactive = await activeProfileGuard(user.uid);
+    if (inactive) return inactive;
     return limitRequests(`upload:${user.uid}`, 40);
   } catch { return NextResponse.json({ error: "Сессия недействительна. Войдите снова." }, { status: 401 }); }
 }
 
+export async function activeProfileGuard(uid: string, allowMissing = false) {
+  const profile = await getAdminDb().collection("users").doc(uid).get();
+  if ((!profile.exists && !allowMissing) || profile.data()?.moderationStatus === "blocked") {
+    return NextResponse.json({ error: "Аккаунту недоступно это действие." }, { status: 403 });
+  }
+  return null;
+}
+
 let activeUploads = 0;
+const uploadConcurrency = Math.max(1, Math.min(3, Math.floor(Number(process.env.UPLOAD_CONCURRENCY) || 1)));
 export function acquireUploadSlot() {
-  if (activeUploads >= 3) return null;
+  if (activeUploads >= uploadConcurrency) return null;
   activeUploads++;
   let released = false;
   return () => { if (!released) { released = true; activeUploads--; } };

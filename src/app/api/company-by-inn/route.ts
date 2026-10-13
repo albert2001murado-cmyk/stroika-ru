@@ -1,3 +1,4 @@
+import { readJsonObject, RequestBodyError } from "@/lib/request-body";
 import type { AccountType } from "@/types";
 import { lookupCompanyByInn } from "@/lib/company-registry-server";
 import { NextResponse } from "next/server";
@@ -6,7 +7,7 @@ export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as {
+    const body = (await readJsonObject(request)) as {
       inn?: string;
       accountType?: AccountType;
     };
@@ -24,6 +25,7 @@ export async function POST(request: Request) {
       { headers: { "Cache-Control": "no-store" } }
     );
   } catch (error) {
+    if (error instanceof RequestBodyError) return NextResponse.json({ error: error.message }, { status: error.status });
     const message =
       error instanceof Error ? error.message : "Не получилось проверить ИНН.";
     const status = message.includes("DADATA_API_KEY") ? 503 : 400;

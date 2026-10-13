@@ -1,4 +1,5 @@
-import { limitRequests } from "@/lib/api-guard";
+import { readJsonObject, RequestBodyError } from "@/lib/request-body";
+import { limitRequests, activeProfileGuard } from "@/lib/api-guard";
 import { NextRequest, NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase-admin";
@@ -12,13 +13,17 @@ function bearerToken(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const totalLimit = limitRequests("groups/join:total", 120);
+  if (totalLimit) return totalLimit;
   try {
     const authToken = bearerToken(request);
     if (!authToken) return NextResponse.json({ error: "Нужно войти в аккаунт." }, { status: 401 });
-    const decoded = await getAdminAuth().verifyIdToken(authToken);
+    const decoded = await getAdminAuth().verifyIdToken(authToken, true);
+    const inactive = await activeProfileGuard(decoded.uid);
+    if (inactive) return inactive;
     const throttled = limitRequests("groups/join:" + decoded.uid, 15);
     if (throttled) return throttled;
-    const body = await request.json();
+    const body = await readJsonObject(request);
     const inviteToken = String(body?.token || "").trim();
     if (!/^[a-f0-9]{32}$/i.test(inviteToken)) {
       return NextResponse.json({ error: "Ссылка-приглашение недействительна." }, { status: 400 });
@@ -62,6 +67,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ ok: true, chatId: groupRef.id });
   } catch (error) {
+    if (error instanceof RequestBodyError) return NextResponse.json({ error: error.message }, { status: error.status });
     if (error instanceof Error && error.message === "INVITE_DISABLED") {
       return NextResponse.json({ error: "Приглашение больше не действует." }, { status: 410 });
     }

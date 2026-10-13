@@ -1,4 +1,6 @@
 "use client";
+import { getPublicProfile } from "@/lib/publicProfiles";
+
 import BankDetailsCard from "@/components/BankDetailsCard";
 import { paymentLabel, normalizePaymentChoice } from "@/lib/payments";
 import SharePublicationButton from "@/components/SharePublicationButton";
@@ -113,7 +115,7 @@ export default function ListingPage() {
         }
 
         if (data.authorId) {
-          const userSnap = await getDoc(doc(db, "users", data.authorId));
+          const userSnap = await getPublicProfile(data.authorId);
 
           if (userSnap.exists()) {
             const userData = {

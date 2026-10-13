@@ -1,4 +1,6 @@
 "use client";
+import { getPublicProfile } from "@/lib/publicProfiles";
+
 
 import { CATALOG_FORM_SECTIONS, getCatalogFormCategories, type CatalogSectionId } from "@/data/catalogForm";
 import { withNizhnyNovgorodLocations } from "@/data/nizhnyNovgorodLocations";
@@ -196,7 +198,7 @@ export default function NearbyPage() {
       while (!cancelled && cursor < pending.length) {
         const uid = pending[cursor++];
         try {
-          const snapshot = await getDoc(doc(db, "users", uid));
+          const snapshot = await getPublicProfile(uid);
           if (cancelled) return;
           const verified = snapshot.exists() && isOwnerVerified(snapshot.data());
           ownerCacheRef.current.set(uid, verified);

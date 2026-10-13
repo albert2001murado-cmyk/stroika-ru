@@ -1,4 +1,6 @@
 "use client";
+import { getPublicProfile } from "@/lib/publicProfiles";
+
 
 import { db } from "@/lib/firebase";
 import {
@@ -61,7 +63,7 @@ export default function PortfolioCasePage() {
         const first = data.coverUrl || data.afterUrl || data.beforeUrl || data.imageUrls?.[0] || "";
         setActiveImage(first);
         if (data.userId) {
-          const userSnap = await getDoc(doc(db, "users", data.userId));
+          const userSnap = await getPublicProfile(data.userId);
           if (userSnap.exists()) setProfile(userSnap.data());
         }
       })

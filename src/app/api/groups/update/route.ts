@@ -1,3 +1,5 @@
+import { limitRequests, activeProfileGuard } from "@/lib/api-guard";
+import { readJsonObject, RequestBodyError } from "@/lib/request-body";
 import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
@@ -82,14 +84,20 @@ function hasPermission(
 }
 
 export async function POST(request: NextRequest) {
+  const totalLimit = limitRequests("groups/update:total", 120);
+  if (totalLimit) return totalLimit;
   try {
     const token = bearerToken(request);
     if (!token) {
       return NextResponse.json({ error: "Нужно войти в аккаунт." }, { status: 401 });
     }
 
-    const decoded = await getAdminAuth().verifyIdToken(token);
-    const body = await request.json();
+    const decoded = await getAdminAuth().verifyIdToken(token, true);
+    const inactive = await activeProfileGuard(decoded.uid);
+    if (inactive) return inactive;
+    const userLimit = limitRequests("groups/update:user:" + decoded.uid, 30);
+    if (userLimit) return userLimit;
+    const body = await readJsonObject(request);
     const chatId = String(body?.chatId || "").trim();
     const action = String(body?.action || "update").trim();
     if (!chatId) {
@@ -287,6 +295,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ ...result, apiVersion: 2 });
   } catch (error) {
+    if (error instanceof RequestBodyError) return NextResponse.json({ error: error.message }, { status: error.status });
     if (error instanceof GroupActionError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }

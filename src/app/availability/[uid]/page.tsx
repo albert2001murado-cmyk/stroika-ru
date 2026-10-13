@@ -1,4 +1,6 @@
 "use client";
+import { getPublicProfile } from "@/lib/publicProfiles";
+
 
 import { db } from "@/lib/firebase";
 import { CalendarDays, ChevronLeft, ChevronRight, UserRound } from "lucide-react";
@@ -28,7 +30,7 @@ export default function PublicAvailabilityPage() {
 
   useEffect(() => {
     if (!uid) return;
-    getDoc(doc(db, "users", uid)).then((snap) => setProfile(snap.exists() ? snap.data() : null));
+    getPublicProfile(uid).then((snap) => setProfile(snap.exists() ? snap.data() : null));
     return onSnapshot(collection(db, "availability", uid, "days"), (snap) => {
       const next: Record<string, Day> = {};
       snap.docs.forEach((item) => { const data=item.data() as any; if (STATUS[data.status as DayStatus]) next[item.id]={id:item.id,date:data.date||item.id,status:data.status}; });

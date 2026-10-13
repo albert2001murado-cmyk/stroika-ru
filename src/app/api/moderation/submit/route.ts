@@ -1,4 +1,6 @@
-import { limitRequests } from "@/lib/api-guard";
+import { readJsonObject, RequestBodyError } from "@/lib/request-body";
+import { hasModeratorClaim } from "@/lib/security-policy";
+import { limitRequests, activeProfileGuard } from "@/lib/api-guard";
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase-admin";
 import {
@@ -20,26 +22,22 @@ function publicationKind(value: unknown): PublicationKind | null {
   return value === "listing" || value === "request" ? value : null;
 }
 
-function moderator(data: Record<string, unknown>) {
-  return (
-    data.role === "admin" ||
-    data.role === "moderator" ||
-    data.isAdmin === true ||
-    data.isModerator === true
-  );
-}
 
 export async function POST(request: NextRequest) {
+  const totalLimit = limitRequests("moderation/submit:total", 120);
+  if (totalLimit) return totalLimit;
   try {
     const token = bearer(request);
     if (!token) {
       return NextResponse.json({ error: "Нужна авторизация." }, { status: 401 });
     }
 
-    const decoded = await getAdminAuth().verifyIdToken(token);
+    const decoded = await getAdminAuth().verifyIdToken(token, true);
+    const inactive = await activeProfileGuard(decoded.uid);
+    if (inactive) return inactive;
     const throttled = limitRequests("moderation/submit:" + decoded.uid, 15);
     if (throttled) return throttled;
-    const body = await request.json();
+    const body = await readJsonObject(request);
     const kind = publicationKind(body?.kind);
     const publicationId = String(body?.publicationId || "").trim().slice(0, 160);
     if (!kind || !publicationId || publicationId.includes("/")) {
@@ -48,23 +46,20 @@ export async function POST(request: NextRequest) {
 
     const db = getAdminDb();
     const collectionName = kind === "listing" ? "listings" : "customerRequests";
-    const [publication, profile] = await Promise.all([
-      db.collection(collectionName).doc(publicationId).get(),
-      db.collection("users").doc(decoded.uid).get(),
-    ]);
+    const publication = await db.collection(collectionName).doc(publicationId).get();
     if (!publication.exists) {
       return NextResponse.json({ error: "Публикация не найдена." }, { status: 404 });
     }
 
-    const profileData = (profile.data() || {}) as Record<string, unknown>;
     const owner = publicationOwnerId(kind, publication.data() || {});
-    if (owner !== decoded.uid && !moderator(profileData)) {
+    if (owner !== decoded.uid && !hasModeratorClaim(decoded)) {
       return NextResponse.json({ error: "Нет доступа." }, { status: 403 });
     }
 
     const result = await processPublication(kind, publicationId);
     return NextResponse.json({ ok: true, ...result });
   } catch (error) {
+    if (error instanceof RequestBodyError) return NextResponse.json({ error: error.message }, { status: error.status });
     console.error("moderation submit route error", error);
     return NextResponse.json(
       { error: "Проверка поставлена в очередь и будет повторена автоматически." },

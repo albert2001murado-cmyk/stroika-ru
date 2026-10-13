@@ -1,3 +1,4 @@
+import { pushPreview, validExpoPushToken } from "./security-policy";
 import { createHash } from "crypto";
 import { FieldValue, type Transaction } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase-admin";
@@ -62,8 +63,7 @@ async function sendExpoPush(
       to,
       sound: "default",
       channelId: input.type === "message" ? "messages" : input.type === "nearby_request" ? "nearby-orders" : "default",
-      title: input.title,
-      body: input.body,
+      ...pushPreview(input.type, input.title, input.body),
       data: {
         url: input.url,
         chatId: input.chatId,
@@ -157,15 +157,14 @@ export async function deliverServerNotification(
   const tokensSnapshot = await db
     .collection(`users/${recipientId}/pushTokens`)
     .where("enabled", "==", true)
+    .select("token")
+    .limit(100)
     .get();
   const tokens = [
     ...new Set(
       tokensSnapshot.docs
-        .map((item) => clean(item.data().token, 220))
-        .filter(
-          (token) =>
-            token.startsWith("ExponentPushToken[") || token.startsWith("ExpoPushToken[")
-        )
+        .map((item) => item.data().token)
+        .filter(validExpoPushToken)
     ),
   ];
   const sent = await sendExpoPush(tokens, {

@@ -6,7 +6,11 @@
     "dev": "next dev --webpack",
     "build": "next build",
     "start": "node server.js",
-    "lint": "next lint"
+    "lint": "next lint",
+    "postbuild": "node scripts/prepare-standalone.mjs",
+    "typecheck": "tsc --noEmit",
+    "test:security": "node --test tests/security.test.mjs",
+    "test:rules": "npm --prefix security-tests test"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1075.0",
@@ -14,8 +18,8 @@
     "firebase": "^12.15.0",
     "firebase-admin": "^14.2.0",
     "lucide-react": "^1.21.0",
-    "next": "16.2.9",
-    "nodemailer": "^9.0.3",
+    "next": "16.4.0",
+    "nodemailer": "10.1.0",
     "react": "19.2.4",
     "react-dom": "19.2.4"
   },
@@ -26,8 +30,11 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.2.9",
+    "eslint-config-next": "16.4.0",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "overrides": {
+    "@grpc/grpc-js": "^1.14.6"
   }
 }

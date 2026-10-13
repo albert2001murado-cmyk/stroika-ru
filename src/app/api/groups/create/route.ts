@@ -1,4 +1,5 @@
-import { limitRequests } from "@/lib/api-guard";
+import { readJsonObject, RequestBodyError } from "@/lib/request-body";
+import { limitRequests, activeProfileGuard } from "@/lib/api-guard";
 import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
@@ -13,14 +14,18 @@ function bearerToken(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const totalLimit = limitRequests("groups/create:total", 120);
+  if (totalLimit) return totalLimit;
   try {
     const token = bearerToken(request);
     if (!token) return NextResponse.json({ error: "Нужно войти в аккаунт." }, { status: 401 });
 
-    const decoded = await getAdminAuth().verifyIdToken(token);
+    const decoded = await getAdminAuth().verifyIdToken(token, true);
+    const inactive = await activeProfileGuard(decoded.uid);
+    if (inactive) return inactive;
     const throttled = limitRequests("groups/create:" + decoded.uid, 6);
     if (throttled) return throttled;
-    const body = await request.json();
+    const body = await readJsonObject(request);
     const title = String(body?.title || "").trim().slice(0, 80);
     const avatarUrl = String(body?.avatarUrl || "").trim().slice(0, 1200);
     const avatarPath = String(body?.avatarPath || "").trim().slice(0, 600);
@@ -74,6 +79,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ ok: true, chatId: chatRef.id, inviteToken });
   } catch (error) {
+    if (error instanceof RequestBodyError) return NextResponse.json({ error: error.message }, { status: error.status });
     console.error("group create error", error);
     return NextResponse.json({ error: "Не получилось создать групповой чат." }, { status: 500 });
   }

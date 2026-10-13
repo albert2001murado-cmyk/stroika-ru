@@ -1,4 +1,5 @@
-import { limitRequests } from "@/lib/api-guard";
+import { readJsonObject, RequestBodyError } from "@/lib/request-body";
+import { limitRequests, activeProfileGuard } from "@/lib/api-guard";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase-admin";
 import { lookupCompanyByInn } from "@/lib/company-registry-server";
 import type { AccountType } from "@/types";
@@ -27,7 +28,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Не передан токен пользователя." }, { status: 401 });
     }
 
-    const body = (await request.json()) as Body;
+    const body = (await readJsonObject(request)) as Body;
     if (body.accountType !== "ip" && body.accountType !== "ooo") {
       return NextResponse.json({ error: "Выберите ИП или ООО." }, { status: 400 });
     }
@@ -40,6 +41,8 @@ export async function POST(request: Request) {
     const adminAuth = getAdminAuth();
     const adminDb = getAdminDb();
     const decoded = await adminAuth.verifyIdToken(token, true);
+    const inactive = await activeProfileGuard(decoded.uid, true);
+    if (inactive) return inactive;
     const throttled = limitRequests("register-business:" + decoded.uid, 6);
     if (throttled) return throttled;
     const authUser = await adminAuth.getUser(decoded.uid);
@@ -169,6 +172,7 @@ export async function POST(request: Request) {
       },
     });
   } catch (error) {
+    if (error instanceof RequestBodyError) return NextResponse.json({ error: error.message }, { status: error.status });
     console.error("Business registration error:", error);
     const message = error instanceof Error ? error.message : "Ошибка регистрации ИП или ООО.";
 

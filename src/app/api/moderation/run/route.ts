@@ -1,6 +1,9 @@
+import { limitRequests, activeProfileGuard } from "@/lib/api-guard";
+import { readJsonObject, RequestBodyError } from "@/lib/request-body";
+import { hasModeratorClaim } from "@/lib/security-policy";
 import { timingSafeEqual } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { getAdminAuth, getAdminDb } from "@/lib/firebase-admin";
+import { getAdminAuth } from "@/lib/firebase-admin";
 import { runModerationBatch } from "@/lib/publication-moderation-server";
 import { runReviewModerationBatch } from "@/lib/review-moderation-server";
 import { runProfileAvatarSyncBatch } from "@/lib/profile-avatar-sync-server";
@@ -32,27 +35,23 @@ async function authorized(request: NextRequest) {
   if (!token) return false;
 
   try {
-    const decoded = await getAdminAuth().verifyIdToken(token);
-    const profile = await getAdminDb().collection("users").doc(decoded.uid).get();
-    const data = (profile.data() || {}) as Record<string, unknown>;
-    return (
-      data.role === "admin" ||
-      data.role === "moderator" ||
-      data.isAdmin === true ||
-      data.isModerator === true
-    );
+    const decoded = await getAdminAuth().verifyIdToken(token, true);
+    if (await activeProfileGuard(decoded.uid)) return false;
+    return hasModeratorClaim(decoded);
   } catch {
     return false;
   }
 }
 
 export async function POST(request: NextRequest) {
+  const totalLimit = limitRequests("moderation/run:total", 120);
+  if (totalLimit) return totalLimit;
   if (!(await authorized(request))) {
     return NextResponse.json({ error: "Нет доступа." }, { status: 401 });
   }
 
   try {
-    const body = await request.json().catch(() => ({}));
+    const body = await readJsonObject(request, true);
     const requested = Number(body?.limit);
     const limit = Number.isFinite(requested)
       ? Math.max(1, Math.min(100, Math.floor(requested)))
@@ -64,6 +63,7 @@ export async function POST(request: NextRequest) {
     ]);
     return NextResponse.json({ ok: true, ...result, reviews, avatars });
   } catch (error) {
+    if (error instanceof RequestBodyError) return NextResponse.json({ error: error.message }, { status: error.status });
     console.error("moderation batch route error", error);
     return NextResponse.json({ error: "Не удалось выполнить очередь." }, { status: 500 });
   }

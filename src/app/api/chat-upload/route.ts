@@ -1,4 +1,5 @@
 import { uploadGuard, limitedFormData, UploadSizeError, acquireUploadSlot, UploadTimeoutError } from "@/lib/api-guard";
+import { safeFileExtension } from "@/lib/security-policy";
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { execFile } from "child_process";
 import { randomUUID } from "crypto";
@@ -47,9 +48,7 @@ function getMediaType(file: File): MediaType | null {
 }
 
 function getExtension(file: File) {
-  const ext = file.name.split(".").pop()?.toLowerCase();
-  if (ext && /^[a-z0-9]{1,8}$/.test(ext)) return ext;
-  return file.type.split("/").pop() || "bin";
+  return safeFileExtension(file.name, file.type);
 }
 
 async function makeVoiceLouder(input: Buffer, originalExtension: string) {
@@ -63,7 +62,10 @@ async function makeVoiceLouder(input: Buffer, originalExtension: string) {
 
   try {
     await execFileAsync(ffmpegPath, [
+      "-nostdin",
       "-y",
+      "-protocol_whitelist", "file,pipe",
+      "-threads", "1",
       "-i",
       inputPath,
       "-af",
@@ -76,6 +78,8 @@ async function makeVoiceLouder(input: Buffer, originalExtension: string) {
         "volume=2.4",
         "alimiter=limit=0.97:attack=5:release=50",
       ].join(","),
+      "-t", "600",
+      "-threads", "1",
       "-ac",
       "1",
       "-ar",
@@ -85,7 +89,7 @@ async function makeVoiceLouder(input: Buffer, originalExtension: string) {
       "-b:a",
       "192k",
       outputPath,
-    ]);
+    ], { timeout: 60_000, killSignal: "SIGKILL", maxBuffer: 1024 * 1024 });
 
     return await readFile(outputPath);
   } finally {
@@ -162,7 +166,8 @@ export async function POST(request: NextRequest) {
         Body: body,
         ContentType: mediaType === "document" ? "application/octet-stream" : contentType,
         ContentDisposition: mediaType === "document" ? "attachment" : undefined,
-      })
+      }),
+      { abortSignal: AbortSignal.timeout(30_000) }
     );
 
     const url = `https://${bucket}.storage.yandexcloud.net/${key}`;
@@ -185,7 +190,7 @@ export async function POST(request: NextRequest) {
     const message = String(error?.message || "");
     if (message.includes("ENOENT") || message.includes("ffmpeg")) {
       return NextResponse.json(
-        { error: "На сервере не установлен ffmpeg. Выполни: apt install -y ffmpeg" },
+        { error: "Обработка голосовых сообщений временно недоступна." },
         { status: 500 }
       );
     }

@@ -1,3 +1,4 @@
+import { limitRequests } from "@/lib/api-guard";
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase-admin";
 
@@ -5,6 +6,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
+  const throttled = limitRequests("groups/resolve:total", 120);
+  if (throttled) return throttled;
   try {
     const token = request.nextUrl.searchParams.get("token")?.trim() || "";
     if (!/^[a-f0-9]{32}$/i.test(token)) {

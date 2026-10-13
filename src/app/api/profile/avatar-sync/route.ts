@@ -1,3 +1,4 @@
+import { limitRequests, activeProfileGuard } from "@/lib/api-guard";
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminAuth } from "@/lib/firebase-admin";
 import { queueProfileAvatarSync, syncProfileAvatar } from "@/lib/profile-avatar-sync-server";
@@ -7,6 +8,8 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
+  const totalLimit = limitRequests("profile/avatar-sync:total", 120);
+  if (totalLimit) return totalLimit;
   const header = request.headers.get("authorization") || "";
   const token = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
   if (!token) return NextResponse.json({ error: "Нужна авторизация." }, { status: 401 });
@@ -16,7 +19,11 @@ export async function POST(request: NextRequest) {
   } catch {
     return NextResponse.json({ error: "Войдите в аккаунт повторно." }, { status: 401 });
   }
+  const userLimit = limitRequests("profile/avatar-sync:user:" + uid, 10);
+  if (userLimit) return userLimit;
   try {
+    const inactive = await activeProfileGuard(uid);
+    if (inactive) return inactive;
     // No body is accepted: the owner and avatar come from the verified account.
     const pending = await queueProfileAvatarSync(uid);
     const result = pending

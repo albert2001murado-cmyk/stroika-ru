@@ -1,3 +1,5 @@
+import { limitRequests } from "@/lib/api-guard";
+import { readJsonObject, RequestBodyError } from "@/lib/request-body";
 import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -41,26 +43,25 @@ function htmlRow(label: string, value?: string) {
 }
 
 export async function GET() {
-  return NextResponse.json({
-    ok: true,
-    route: "/api/support",
-    smtpHost: process.env.SMTP_HOST ? "set" : "missing",
-    smtpUser: process.env.SMTP_USER ? "set" : "missing",
-    smtpPass: process.env.SMTP_PASS ? "set" : "missing",
-    supportEmailTo: process.env.SUPPORT_EMAIL_TO ? "set" : "missing",
-    supportEmailFrom: process.env.SUPPORT_EMAIL_FROM ? "set" : "missing",
-  });
+  return NextResponse.json({ ok: true });
 }
 
 export async function POST(request: NextRequest) {
+  const throttled = limitRequests("support:total", 20);
+  if (throttled) return throttled;
   try {
-    const body = (await request.json()) as SupportBody;
+    const body = (await readJsonObject(request)) as SupportBody;
 
     const name = String(body.name || "").trim();
     const email = String(body.email || "").trim();
     const topic = String(body.topic || "Обращение в поддержку").trim();
     const priority = String(body.priority || "Обычный вопрос").trim();
     const message = String(body.message || "").trim();
+
+    if (name.length > 100 || email.length > 254 || topic.length > 150 ||
+        priority.length > 80 || message.length > 10_000 || /[\r\n]/.test(email + topic + priority)) {
+      return NextResponse.json({ error: "Поля обращения слишком длинные или некорректные." }, { status: 400 });
+    }
 
     if (!name) {
       return NextResponse.json(
@@ -108,6 +109,10 @@ export async function POST(request: NextRequest) {
       secure:
         process.env.SMTP_SECURE === "true" ||
         (!process.env.SMTP_SECURE && smtpPort === 465),
+      requireTLS: true,
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 15_000,
       auth: {
         user: smtpUser,
         pass: smtpPass,
@@ -182,6 +187,7 @@ export async function POST(request: NextRequest) {
       message: "Обращение отправлено. Мы ответим на указанную почту.",
     });
   } catch (error) {
+    if (error instanceof RequestBodyError) return NextResponse.json({ error: error.message }, { status: error.status });
     console.error("Support request error:", error);
 
     return NextResponse.json(

@@ -1,4 +1,6 @@
 "use client";
+import { getPublicProfile } from "@/lib/publicProfiles";
+
 
 import { db } from "@/lib/firebase";
 import { BadgeCheck } from "lucide-react";
@@ -61,7 +63,7 @@ export default function ListingAuthorVerifiedBadge({
       setLoading(true);
 
       try {
-        const userSnap = await getDoc(doc(db, "users", authorId));
+        const userSnap = await getPublicProfile(authorId);
 
         if (!userSnap.exists()) {
           if (!cancelled) setVerified(false);

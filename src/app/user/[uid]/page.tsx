@@ -1,4 +1,6 @@
 "use client";
+import { getPublicProfile } from "@/lib/publicProfiles";
+
 
 import { useAuth } from "@/components/AuthProvider";
 import ReportDialog from "@/components/ReportDialog";
@@ -165,7 +167,7 @@ export default function PublicUserPage() {
 
     let active = true;
 
-    getDoc(doc(db, "users", uid))
+    getPublicProfile(uid)
       .then((snapshot) => {
         if (!active) return;
 
