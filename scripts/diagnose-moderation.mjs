@@ -8,8 +8,9 @@ const timeout = Math.max(5, Math.min(290, Number(timeoutArgument?.split('=')[1])
 const secret = String(process.env.LOCAL_MODERATION_SECRET || '').trim();
 const provider = String(process.env.MODERATION_AI_PROVIDER || '').trim().toLowerCase();
 const scheduler = process.env.MODERATION_SCHEDULER_ENABLED === 'true';
+const localSelected = (provider === 'local' || !provider) && Boolean(endpoint());
 console.log('Секреты, токены и тексты пользовательских объявлений не выводятся. Настройки файлов и окружения этой команды могут отличаться от старого окружения PM2/systemd.');
-console.log('Провайдер local:', provider === 'local');
+console.log('Провайдер local:', localSelected);
 console.log('Планировщик включён:', scheduler);
 console.log('Ключ сайта задан:', Boolean(secret));
 
@@ -22,6 +23,14 @@ function endpoint() {
     if (url.pathname === '/') url.pathname = '/moderate';
     return url;
   } catch { return null; }
+}
+
+function rejectsCatalogAlternatives(value) {
+  const detail = value?.detail;
+  return Array.isArray(detail) && detail.length > 0 && detail.every(error =>
+    error?.type === 'extra_forbidden' && Array.isArray(error.loc)
+    && error.loc.length === 3 && error.loc[0] === 'body'
+    && error.loc[1] === 'catalog' && error.loc[2] === 'alternatives');
 }
 
 async function request(url, body, duration) {
@@ -73,11 +82,21 @@ async function main() {
   console.log('Протокол:', typeof health.payload.protocolVersion === 'number' ? health.payload.protocolVersion : 'не указан', 'сравнение каталога:', health.payload.supportsCatalogAlternatives === true, 'занят:', health.payload.busy === true);
   if (health.payload.busy === true) { console.log('Сервис отвечает, но занят. Повторите тест после завершения текущей проверки.'); return 1; }
   if (!secret) { console.log('У сайта нет LOCAL_MODERATION_SECRET. Заполните серверную настройку; ключ в приложение не переносится.'); return 1; }
-  const result = await request(url, {
+  const testBody = {
     title: 'Укладка асфальта', description: 'Выполняем асфальтирование дорожек и площадок. Подготавливаем основание и укладываем дорожное покрытие.',
     catalog: { section: 'services', category: 'Участок и благоустройство', subcategory: 'Асфальтирование', alternatives: ['Асфальтирование', 'Экскаваторы', 'Окна ПВХ'] }, media: [],
-  }, timeout);
+  };
+  const deadline = Date.now() + timeout;
+  let result = await request(url, testBody, timeout);
   console.log('Проверка /moderate HTTP:', result.status, result.diagnostic || '');
+  if (result.status === 422 && rejectsCatalogAlternatives(result.payload)) {
+    console.log('Найдена старая схема: catalog.alternatives не поддерживается. Повторяем один тест с выбранной категорией и подкатегорией.');
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) { console.log('Время теста истекло до совместимого запроса. Повторите диагностику.'); return 1; }
+    result = await request(url, { ...testBody, catalog: { section: testBody.catalog.section, category: testBody.catalog.category, subcategory: testBody.catalog.subcategory } }, remaining);
+    console.log('Совместимый /moderate HTTP:', result.status, result.diagnostic || '');
+    if (result.status === 200) console.log('Для объявлений сайт должен использовать обновлённый publication-media-moderation-server.ts. Новая версия модели дополнительно поддерживает сравнение с другими подкатегориями.');
+  }
   if ([401, 403].includes(result.status)) { console.log('Причина: ключ доступа не принят. Проверьте ключ в запущенном контейнере и перезапуск сайта с новым окружением.'); return 1; }
   if (result.status === 404) { console.log('Причина: маршрут запроса не найден. Укажите /moderate, а не /health или адрес сайта.'); return 1; }
   if (result.status === 422) {
@@ -92,7 +111,7 @@ async function main() {
   if (codes.some(code => ['local-model-error', 'classifier-unavailable', 'classifier-timeout'].includes(code))) { console.log('HTTP доступен, но сама модель не завершила проверку. Посмотрите docker compose logs --tail=80.'); return 1; }
   console.log('Модель отвечает на запрос сайта. Тест не публиковал объявление и не проверял реальные фото.');
   if (!scheduler) { console.log('Очередь не запущена этим окружением. Включите MODERATION_SCHEDULER_ENABLED=true либо проверьте существующий cron /api/moderation/run.'); return 1; }
-  if (provider && provider !== 'local') { console.log('Сайт выбирает другой провайдер. Для локального сервиса нужен MODERATION_AI_PROVIDER=local.'); return 1; }
+  if (!localSelected) { console.log('Сайт выбирает другой провайдер. Для локального сервиса нужен MODERATION_AI_PROVIDER=local.'); return 1; }
   return 0;
 }
 

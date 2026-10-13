@@ -100,6 +100,22 @@ export function mediaClassifierProvider(): MediaClassifierProvider {
 }
 
 let localFailure: { key: string; until: number; error: ClassifierRequestError } | null = null;
+let legacyCatalogSchema: { key: string; until: number } | null = null;
+const LOCAL_SCHEMA_CACHE_MS = 5 * 60 * 1000;
+
+function rejectsCatalogAlternatives(value: unknown): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const detail = (value as Record<string, unknown>).detail;
+  return Array.isArray(detail) && detail.length > 0 && detail.every(item => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return false;
+    const error = item as Record<string, unknown>;
+    const location = error.loc;
+    return error.type === "extra_forbidden" && Array.isArray(location)
+      && location.length === 3 && location[0] === "body"
+      && location[1] === "catalog" && location[2] === "alternatives";
+  });
+}
+
 function localFailureKey() {
   // Internal comparison only. This value is never logged or returned to a client.
   return `${localModerationEndpoint()}\n${process.env.LOCAL_MODERATION_SECRET || ""}`;
@@ -249,7 +265,19 @@ async function evaluateWithLocalClassifier(input: {
   const timer = setTimeout(() => controller.abort(), timeout);
   try {
     const secret = String(process.env.LOCAL_MODERATION_SECRET || "").trim();
-    const response = await fetch(endpoint, {
+    const schemaKey = localFailureKey();
+    let withAlternatives = !(legacyCatalogSchema?.key === schemaKey && legacyCatalogSchema.until > Date.now());
+    let learnedLegacySchema = false;
+    const catalog = {
+      section: String(input.catalog?.section || "").slice(0, 80),
+      category: String(input.catalog?.category || "").slice(0, 180),
+      subcategory: String(input.catalog?.subcategory || "").slice(0, 180),
+    };
+    const alternatives = (input.catalog?.alternatives || [])
+      .filter((value) => typeof value === "string" && value.trim())
+      .slice(0, 800)
+      .map((value) => value.trim().slice(0, 180));
+    const post = (includeAlternatives: boolean) => fetch(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -258,19 +286,21 @@ async function evaluateWithLocalClassifier(input: {
       body: JSON.stringify({
         title: String(input.title || "").slice(0, 120),
         description: String(input.description || input.text || "").slice(0, 5_000),
-        catalog: {
-          section: String(input.catalog?.section || "").slice(0, 80),
-          category: String(input.catalog?.category || "").slice(0, 180),
-          subcategory: String(input.catalog?.subcategory || "").slice(0, 180),
-          alternatives: (input.catalog?.alternatives || [])
-            .filter((value) => typeof value === "string" && value.trim())
-            .slice(0, 800)
-            .map((value) => value.trim().slice(0, 180)),
-        },
+        catalog: { ...catalog, ...(includeAlternatives ? { alternatives } : {}) },
         media: trusted,
       }),
       signal: controller.signal,
     });
+    let response = await post(withAlternatives);
+    if (response.status === 422 && withAlternatives) {
+      const validation = await readClassifierResponse(response).catch(() => null);
+      if (!rejectsCatalogAlternatives(validation)) throw httpFailure(422);
+      // Older strict schemas reject this optional comparison list. Retry once with
+      // the same text, selected catalog and all media, under the original deadline.
+      withAlternatives = false;
+      learnedLegacySchema = true;
+      response = await post(false);
+    }
     if (!response.ok) {
       throw httpFailure(response.status);
     }
@@ -281,12 +311,17 @@ async function evaluateWithLocalClassifier(input: {
     if (!validDecision(payload.decision)) {
       throw new ClassifierRequestError("classifier-response-invalid");
     }
+    if (!Array.isArray(payload.flags) || payload.flags.some(item => !item || typeof item !== "object" || !validSeverity(item.severity))) {
+      throw new ClassifierRequestError("classifier-response-invalid");
+    }
     const flags = safeClassifierFlags(payload.flags);
     localFailure = null;
     if (flags.some(flag => flag.code === "local-model-error")) rememberLocalFailure(new ClassifierRequestError("local-model-error"));
     if (payload.decision !== "approved" && flags.length === 0) {
       throw new ClassifierRequestError("classifier-response-invalid");
     }
+    if (learnedLegacySchema) legacyCatalogSchema = { key: schemaKey, until: Date.now() + LOCAL_SCHEMA_CACHE_MS };
+    else if (withAlternatives && legacyCatalogSchema?.key === schemaKey) legacyCatalogSchema = null;
     const decisionFromFlags: ExternalModerationResult["decision"] = flags.some(
       (flag) => flag.severity === "critical" || flag.severity === "changes"
     )
