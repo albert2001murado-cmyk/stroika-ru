@@ -22,6 +22,27 @@ function httpFailure(status: number) {
   );
 }
 
+async function readClassifierResponse(response: Response, maxBytes = 256 * 1024): Promise<Record<string, unknown>> {
+  const reader = response.body?.getReader();
+  if (!reader) throw new ClassifierRequestError("classifier-response-invalid");
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > maxBytes) { await reader.cancel(); throw new ClassifierRequestError("classifier-response-invalid"); }
+      chunks.push(value);
+    }
+    try {
+      const value: unknown = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("invalid-shape");
+      return value as Record<string, unknown>;
+    } catch { throw new ClassifierRequestError("classifier-response-invalid"); }
+  } finally { reader.releaseLock(); }
+}
+
 type MediaItem = { type: "image" | "video"; url: string };
 type CatalogContext = {
   section?: string;
@@ -43,19 +64,22 @@ function configuredApiKey() {
   ).trim();
 }
 
-function localEndpoint() {
+export function localModerationEndpoint() {
   const raw = String(process.env.LOCAL_MODERATION_URL || "").trim();
   if (!raw) return "";
   try {
     const url = new URL(raw);
-    const loopback = ["127.0.0.1", "localhost", "::1"].includes(url.hostname);
+    const loopback = ["127.0.0.1", "localhost", "::1"].includes(url.hostname.replace(/^\[|\]$/g, ""));
     if (
       (!loopback && url.protocol !== "https:") ||
       (loopback && !["http:", "https:"].includes(url.protocol))
     ) {
       return "";
     }
-    if (url.username || url.password) return "";
+    if (url.username || url.password || url.search || url.hash) return "";
+    if (url.hostname === "localhost" && url.protocol === "http:") url.hostname = "127.0.0.1";
+    // A base address is a common configuration mistake: the service's POST route is /moderate.
+    if (url.pathname === "/") url.pathname = "/moderate";
     return url.toString();
   } catch {
     return "";
@@ -66,13 +90,48 @@ export function mediaClassifierProvider(): MediaClassifierProvider {
   const requested = String(process.env.MODERATION_AI_PROVIDER || "")
     .trim()
     .toLowerCase();
-  if ((requested === "local" || (!requested && localEndpoint())) && localEndpoint()) {
+  if ((requested === "local" || (!requested && localModerationEndpoint())) && localModerationEndpoint()) {
     return "local";
   }
   if ((requested === "openai" || (!requested && configuredApiKey())) && configuredApiKey()) {
     return "openai";
   }
   return "none";
+}
+
+let localFailure: { key: string; until: number; error: ClassifierRequestError } | null = null;
+function localFailureKey() {
+  // Internal comparison only. This value is never logged or returned to a client.
+  return `${localModerationEndpoint()}\n${process.env.LOCAL_MODERATION_SECRET || ""}`;
+}
+function rememberLocalFailure(error: ClassifierRequestError) {
+  const value = Number(process.env.LOCAL_MODERATION_RETRY_COOLDOWN_MS || 60_000);
+  const cooldown = Number.isFinite(value) ? Math.max(5_000, Math.min(300_000, value)) : 60_000;
+  localFailure = { key: localFailureKey(), until: Date.now() + cooldown, error };
+}
+
+/** Read-only, bounded check. A healthy response proves connectivity, not a completed classification. */
+export async function inspectLocalModerationService() {
+  const provider = mediaClassifierProvider();
+  const endpoint = localModerationEndpoint();
+  const common = { provider, endpointConfigured: Boolean(endpoint), secretConfigured: Boolean(String(process.env.LOCAL_MODERATION_SECRET || "").trim()), schedulerEnabled: process.env.MODERATION_SCHEDULER_ENABLED === "true" };
+  if (provider !== "local" || !endpoint) return { ...common, state: "not-configured", message: "Локальная автопроверка не настроена. Проверьте переменные окружения сервера." };
+  const health = new URL(endpoint);
+  health.pathname = health.pathname.replace(/\/(?:moderate|classify)\/?$/, "/health");
+  if (health.toString() === endpoint) return { ...common, state: "unknown-route", message: "В LOCAL_MODERATION_URL должен быть адрес /moderate сервиса модерации." };
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5000);
+  try {
+    const secret = String(process.env.LOCAL_MODERATION_SECRET || "").trim();
+    const response = await fetch(health, { cache: "no-store", signal: controller.signal, headers: { ...(secret ? { Authorization: `Bearer ${secret}` } : {}) } });
+    if (!response.ok) return { ...common, state: "http-error", httpStatus: response.status, message: "Проверка состояния сервиса вернула HTTP " + response.status + "." };
+    const value = await readClassifierResponse(response, 16 * 1024).catch(() => null);
+    if (!value || value.status !== "ok") return { ...common, state: "invalid-response", message: "Сервис вернул неожиданный ответ /health. Проверьте адрес и контейнер." };
+    return { ...common, state: value.busy === true ? "busy" : "reachable", protocolVersion: typeof value.protocolVersion === "number" ? value.protocolVersion : null, supportsCatalogAlternatives: value.supportsCatalogAlternatives === true, message: value.busy === true ? "Сервис отвечает и занят проверкой. Очередь повторит запрос позднее." : "Сервис отвечает. Это ещё не подтверждает успешную проверку объявления; её покажет диагностический тест /moderate." };
+  } catch (error) {
+    const timeout = error instanceof Error && error.name === "AbortError";
+    return { ...common, state: timeout ? "timeout" : "unreachable", message: timeout ? "Сервис не ответил за 5 секунд. Проверьте загрузку контейнера и память." : "Сайт не смог соединиться с сервисом. Проверьте порт, адрес и сеть Docker." };
+  } finally { clearTimeout(timer); }
 }
 
 export function mediaClassifierConfigured() {
@@ -162,7 +221,7 @@ async function evaluateWithLocalClassifier(input: {
   media: MediaItem[];
   catalog?: CatalogContext;
 }): Promise<ExternalModerationResult> {
-  const endpoint = localEndpoint();
+  const endpoint = localModerationEndpoint();
   const trusted = input.media.filter((item) => trustedMediaUrl(item.url));
   if (trusted.length !== input.media.length) {
     return {
@@ -182,7 +241,8 @@ async function evaluateWithLocalClassifier(input: {
   }
 
   const controller = new AbortController();
-  const configuredTimeout = Number(process.env.LOCAL_MODERATION_TIMEOUT_MS);
+  if (localFailure?.key === localFailureKey() && localFailure.until > Date.now()) throw localFailure.error;
+  const configuredTimeout = String(process.env.LOCAL_MODERATION_TIMEOUT_MS || "").trim() ? Number(process.env.LOCAL_MODERATION_TIMEOUT_MS) : NaN;
   const timeout = Number.isFinite(configuredTimeout)
     ? Math.max(30_000, Math.min(290_000, configuredTimeout))
     : LOCAL_TIMEOUT_MS;
@@ -214,9 +274,7 @@ async function evaluateWithLocalClassifier(input: {
     if (!response.ok) {
       throw httpFailure(response.status);
     }
-    const payload = await response.json().catch(() => {
-      throw new ClassifierRequestError("classifier-response-invalid");
-    }) as Record<string, unknown>;
+    const payload = await readClassifierResponse(response);
     if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
       throw new ClassifierRequestError("classifier-response-invalid");
     }
@@ -224,6 +282,8 @@ async function evaluateWithLocalClassifier(input: {
       throw new ClassifierRequestError("classifier-response-invalid");
     }
     const flags = safeClassifierFlags(payload.flags);
+    localFailure = null;
+    if (flags.some(flag => flag.code === "local-model-error")) rememberLocalFailure(new ClassifierRequestError("local-model-error"));
     if (payload.decision !== "approved" && flags.length === 0) {
       throw new ClassifierRequestError("classifier-response-invalid");
     }
@@ -248,8 +308,9 @@ async function evaluateWithLocalClassifier(input: {
         : 0,
     };
   } catch (error) {
-    if (controller.signal.aborted) throw new ClassifierRequestError("classifier-timeout");
-    throw error;
+    const failure = controller.signal.aborted ? new ClassifierRequestError("classifier-timeout") : error instanceof ClassifierRequestError ? error : new ClassifierRequestError(error instanceof Error && error.name === "AbortError" ? "classifier-timeout" : "classifier-unavailable");
+    rememberLocalFailure(failure);
+    throw failure;
   } finally {
     clearTimeout(timer);
   }

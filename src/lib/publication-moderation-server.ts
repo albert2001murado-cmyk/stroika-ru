@@ -196,10 +196,10 @@ async function notifyOwner(input: {
   fingerprint: string;
 }) {
   const recipientId = ownerId(input.kind, input.data);
-  if (!recipientId) return;
+  if (!recipientId) return null;
   const temporaryFailure = input.decision === "manual_review" && onlyTemporaryModerationFlags(input.data.moderationFlags);
   const notice = publicationModerationNotice({ ...input, title: input.data.title, flags: input.data.moderationFlags });
-  await deliverServerNotification({
+  return deliverServerNotification({
     recipientId,
     actorId: "system",
     actorName: "Стройка.ру",
@@ -209,7 +209,31 @@ async function notifyOwner(input: {
     dedupeKey: temporaryFailure
       ? `moderation:${input.kind}:${input.id}:${moderationInputFingerprint(input.data)}:temporary-wait`
       : `moderation:${input.kind}:${input.id}:${safeText(input.data.moderationRunId, 160) || input.fingerprint}:${input.decision}`,
+  }, async transaction => {
+    const current = await transaction.get(getAdminDb().collection(CONFIG[input.kind].collection).doc(input.id));
+    return current.exists && current.data()?.moderationRunId === input.data.moderationRunId
+      && current.data()?.moderationStatus === input.decision;
   });
+}
+
+async function deliverPublicationOwnerNotice(kind: PublicationKind, id: string, runId: string) {
+  const db = getAdminDb();
+  const reference = db.collection(CONFIG[kind].collection).doc(id);
+  const job = db.collection("publicationNotificationJobs").doc(`${kind}_${id}_${runId}`);
+  const publication = await reference.get();
+  const data = dataObject(publication.data());
+  const decision = data.moderationStatus as FinalDecision;
+  if (!publication.exists || data.moderationRunId !== runId ||
+    !["approved", "manual_review", "rejected"].includes(decision)) {
+    await job.update({ done: true, obsolete: true });
+    return false;
+  }
+  const result = await notifyOwner({ kind, id, data, decision,
+    reason: typeof data.moderationReason === "string" ? data.moderationReason.slice(0, 11000)
+      : "Причина пока не указана. Обратитесь в поддержку.", fingerprint: fingerprint(data) });
+  if (!result?.ok) throw new Error("Owner notification has not been stored");
+  await job.update({ ownerNotified: true, ownerNotifiedAt: FieldValue.serverTimestamp() });
+  return true;
 }
 
 async function claimPublication(kind: PublicationKind, id: string, runId: string) {
@@ -313,7 +337,7 @@ export async function processPublication(kind: PublicationKind, idValue: string)
       }
 
       transaction.set(getAdminDb().collection("publicationNotificationJobs").doc(`${kind}_${id}_${runId}`), {
-        kind, publicationId: id, runId, done: false, cursor: "",
+        kind, publicationId: id, runId, done: false, ownerNotified: false, cursor: "",
         createdAt: FieldValue.serverTimestamp(),
       });
       transaction.update(reference, {
@@ -358,6 +382,11 @@ export async function processPublication(kind: PublicationKind, idValue: string)
     if (!committed) {
       return { state: "superseded" as const, kind, id };
     }
+
+    // The decision is already durable. Do not wait for other publications or geocoding.
+    await deliverPublicationOwnerNotice(kind, id, runId).catch(() => {
+      console.error("publication owner notification queued for retry", { kind, id });
+    });
 
     await getAdminDb().collection("moderationLogs").doc(`${kind}_${id}_${runId}`).set({
       kind,
@@ -439,6 +468,9 @@ async function requeueMediaWaitingForClassifier(perKind: number) {
 }
 
 export async function runModerationBatch(maximum = BATCH_LIMIT) {
+  await runPublicationOwnerNotificationJobs().catch(() => {
+    console.error("publication owner notification recovery will retry");
+  });
   const perKind = Math.max(1, Math.min(50, Math.ceil(maximum / 2)));
   const requeuedMedia = await requeueMediaWaitingForClassifier(perKind);
   const snapshots = await Promise.all(
@@ -517,7 +549,7 @@ export async function applyManualModerationDecision(input: {
       throw new Error("Публикация изменилась. Обновите страницу перед решением.");
     }
     transaction.set(getAdminDb().collection("publicationNotificationJobs").doc(`${input.kind}_${id}_${runId}`), {
-      kind: input.kind, publicationId: id, runId, done: false, cursor: "", createdAt: FieldValue.serverTimestamp(),
+      kind: input.kind, publicationId: id, runId, done: false, ownerNotified: false, cursor: "", createdAt: FieldValue.serverTimestamp(),
     });
     transaction.update(reference, {
     moderationRunId: runId,
@@ -538,6 +570,9 @@ export async function applyManualModerationDecision(input: {
     updatedAt: reviewedAt,
   });
   });
+  await deliverPublicationOwnerNotice(input.kind, id, runId).catch(() => {
+    console.error("manual moderation owner notification queued for retry", { kind: input.kind, id });
+  });
   await getAdminDb().collection("moderationLogs").doc(`${input.kind}_${id}_${runId}`).set({
     kind: input.kind,
     publicationId: id,
@@ -556,6 +591,32 @@ export async function applyManualModerationDecision(input: {
 
 // Round-robin prevents one geocoder outage from starving newer notifications.
 let notificationJobCursor = "";
+let ownerNotificationJobCursor = "";
+
+/** Lightweight retry queue: never calls an ML model or geocoder. */
+export async function runPublicationOwnerNotificationJobs() {
+  const base = getAdminDb().collection("publicationNotificationJobs")
+    .where("done", "==", false).orderBy(FieldPath.documentId()).limit(25);
+  let jobs = await (ownerNotificationJobCursor ? base.startAfter(ownerNotificationJobCursor) : base).get();
+  if (jobs.empty && ownerNotificationJobCursor) {
+    ownerNotificationJobCursor = "";
+    jobs = await base.get();
+  }
+  let delivered = 0;
+  for (const job of jobs.docs) {
+    ownerNotificationJobCursor = job.id;
+    const value = job.data();
+    if (value.ownerNotified === true) continue;
+    const kind = value.kind as PublicationKind;
+    if (kind !== "listing" && kind !== "request") continue;
+    try {
+      if (await deliverPublicationOwnerNotice(kind, safeText(value.publicationId, 160), safeText(value.runId, 160))) delivered++;
+    } catch {
+      console.error("publication owner notification will retry", { jobId: job.id });
+    }
+  }
+  return { inspected: jobs.size, delivered };
+}
 // Job data is written only by Admin SDK. Firestore clients have no access.
 export async function runPublicationNotificationJobs() {
   const base = getAdminDb().collection("publicationNotificationJobs")
@@ -582,8 +643,7 @@ export async function runPublicationNotificationJobs() {
         await job.ref.update({ done: true, obsolete: true });
         continue;
       }
-      await notifyOwner({ kind, id: publication.id, data, decision,
-        reason: typeof data.moderationReason === "string" ? data.moderationReason.slice(0, 11000) : "Причина пока не указана. Обратитесь в поддержку.", fingerprint: fingerprint(data) });
+      if (value.ownerNotified !== true && !(await deliverPublicationOwnerNotice(kind, publication.id, value.runId))) continue;
       const sourceProfile = await getAdminDb().doc(`users/${ownerId(kind, data)}`).get();
       const canMatch = decision === "approved" && sourceProfile.exists &&
         sourceProfile.data()?.moderationStatus !== "blocked" && (kind !== "request" || data.status === "active");
