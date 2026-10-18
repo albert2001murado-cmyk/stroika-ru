@@ -278,7 +278,7 @@ export default function GroupInfoPage() {
   const ids = useMemo(() => getParticipantIds(chat), [chat]);
   const isOwner = Boolean(user && chat?.ownerId === user.uid);
   const myPermissions = permissionsFor(chat, user?.uid || "");
-  const origin = typeof window === "undefined" ? "https://stroika-ru.ru" : window.location.origin;
+  const origin = typeof window === "undefined" ? "https://strovaru.ru" : window.location.origin;
   const inviteLink = chat?.inviteToken ? `${origin}/join/${chat.inviteToken}` : "";
 
   const media = useMemo(
@@ -435,7 +435,7 @@ export default function GroupInfoPage() {
       if (navigator.share) {
         await navigator.share({
           title: chat?.groupTitle || "Групповой чат",
-          text: `Присоединяйтесь к группе «${chat?.groupTitle || "Стройка.ру"}»`,
+          text: `Присоединяйтесь к группе «${chat?.groupTitle || "Строва.ру"}»`,
           url: inviteLink,
         });
       } else {

@@ -185,7 +185,7 @@ export default function Header() {
             href="/"
             onClick={handleHomeLogoClick}
             className="flex min-w-[300px] shrink-0 items-center gap-3"
-            aria-label="Стройка.ру — обновить главную"
+            aria-label="Строва.ру — обновить главную"
           >
             <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white text-[#0057ff] shadow-lg shadow-blue-500/20">
               <HardHat size={30} strokeWidth={2.8} />
@@ -193,7 +193,7 @@ export default function Header() {
 
             <div className="flex min-w-0 flex-col">
               <span className="whitespace-nowrap text-3xl font-black leading-none tracking-tight text-white">
-                Стройка.ру
+                Строва.ру
               </span>
               <span className="mt-1 whitespace-nowrap text-sm font-extrabold leading-none text-blue-100">
                 все для стройки в одном месте
@@ -314,13 +314,13 @@ export default function Header() {
             href="/"
             onClick={handleHomeLogoClick}
             className="flex min-w-0 items-center gap-2.5"
-            aria-label="Стройка.ру — обновить главную"
+            aria-label="Строва.ру — обновить главную"
           >
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] bg-white text-[#0057ff] shadow-lg shadow-blue-950/10">
               <HardHat size={23} strokeWidth={2.8} />
             </span>
             <span className="min-w-0">
-              <span className="block truncate text-xl font-black leading-none tracking-tight">Стройка.ру</span>
+              <span className="block truncate text-xl font-black leading-none tracking-tight max-[360px]:text-base">Строва.ру</span>
               <span className="mt-1 block truncate text-[10px] font-extrabold leading-none text-blue-100 sm:text-xs">
                 всё для стройки
               </span>
@@ -544,7 +544,7 @@ export default function Header() {
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
                 <p className="text-xs font-black uppercase tracking-[0.18em] text-[#0057ff] sm:text-sm">
-                  Стройка.ру
+                  Строва.ру
                 </p>
                 <h2 id="publication-menu-title" className="mt-2 text-2xl font-black sm:text-4xl">
                   Что разместить?

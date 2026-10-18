@@ -167,7 +167,7 @@ async function duplicateFlag(
         field: "content",
         severity: "changes",
         message: "Такая публикация уже существует. Не создавайте дубликаты для увеличения охвата.",
-        legalBasis: "Правила публикации Стройка.ру",
+        legalBasis: "Правила публикации Строва.ру",
       }
     : null;
 }
@@ -202,7 +202,7 @@ async function notifyOwner(input: {
   return deliverServerNotification({
     recipientId,
     actorId: "system",
-    actorName: "Стройка.ру",
+    actorName: "Строва.ру",
     ...notice,
     type: "moderation",
     entityId: input.id,

@@ -13,7 +13,7 @@ export const CONTACT_PREFERENCE_OPTIONS: Array<{
   {
     value: "messages",
     title: "Только сообщения",
-    description: "Связь только через чат Стройка.ру",
+    description: "Связь только через чат Строва.ру",
   },
   {
     value: "calls",

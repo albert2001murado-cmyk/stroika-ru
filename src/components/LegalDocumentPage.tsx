@@ -8,7 +8,7 @@ export default function LegalDocumentPage({ document }: { document: LegalDocumen
         <header className="bg-[#0057ff] px-6 py-10 text-white sm:px-10 sm:py-14">
           <Link href="/" className="inline-flex items-center gap-3 font-black text-white">
             <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-xl text-[#0057ff]">С</span>
-            <span className="text-2xl">Стройка.ру</span>
+            <span className="text-2xl">Строва.ру</span>
           </Link>
           <h1 className="mt-8 max-w-4xl text-4xl font-black leading-tight tracking-tight sm:text-6xl">{document.title}</h1>
           <p className="mt-5 max-w-3xl text-base font-bold leading-7 text-blue-100">{document.description}</p>

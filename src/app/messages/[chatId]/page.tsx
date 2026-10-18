@@ -7,7 +7,8 @@ import ReportDialog from "@/components/ReportDialog";
 import UserBlockButton from "@/components/UserBlockButton";
 import { db } from "@/lib/firebase";
 import { getApiUrl } from "@/lib/getApiUrl";
-import { bankDetailsFromProfile, formatBankDetailsMessage, isBankDetailsMessage, validatePayment } from "@/lib/payments";
+import { bankDetailsFromProfile, bankDetailsMessageText, formatBankDetailsMessage, isBankDetailsMessage, validatePayment } from "@/lib/payments";
+import { GROUP_INVITE_URL_PATTERN } from "@/lib/brand";
 import type { Timestamp } from "firebase/firestore";
 import {
   arrayUnion,
@@ -263,7 +264,7 @@ function formatDuration(seconds: number) {
 }
 
 function messagePreview(message: ChatMessage) {
-  if (message.text) return message.text;
+  if (message.text) return bankDetailsMessageText(message.text);
   if (message.type === "audio") return "Голосовое сообщение";
   if (message.type === "video") return "Видео";
   if (message.type === "document") return message.fileName || "Файл";
@@ -279,9 +280,6 @@ type GroupInvitePreview = {
   avatarUrl?: string;
   memberCount: number;
 };
-
-const GROUP_INVITE_URL_PATTERN =
-  /(?:(?:https?:\/\/)?(?:www\.)?stroika-ru\.ru)?\/join\/([a-f0-9]{32})(?=$|[\s/?#])/i;
 
 function getGroupInviteToken(text?: string) {
   return text?.match(GROUP_INVITE_URL_PATTERN)?.[1] || "";
@@ -358,7 +356,7 @@ function GroupInviteCard({ token, mine }: { token: string; mine: boolean }) {
           <p className="mt-1 truncate text-sm font-black text-slate-950">
             {loadingPreview
               ? "Загружаем группу..."
-              : preview?.title || "Рабочая группа Стройка.ру"}
+              : preview?.title || "Рабочая группа Строва.ру"}
           </p>
           <p className="mt-0.5 text-xs font-bold text-slate-500">
             {preview
@@ -1226,7 +1224,7 @@ export default function ChatPage() {
               <p className="truncate text-sm font-black text-slate-950">
                 {chat.listingTitle}
               </p>
-              <p className="text-xs font-bold text-slate-500">Объявление из Стройка.ру</p>
+              <p className="text-xs font-bold text-slate-500">Объявление из Строва.ру</p>
             </div>
             <span className="text-xs font-black text-[#0057ff]">Открыть →</span>
           </Link>
@@ -1294,9 +1292,9 @@ export default function ChatPage() {
               const audioUrl = message.type === "audio" ? message.mediaUrl || "" : "";
               const documentUrl = message.type === "document" ? message.mediaUrl || "" : "";
               const groupInviteToken = getGroupInviteToken(message.text);
-              const visibleMessageText = groupInviteToken
+              const visibleMessageText = bankDetailsMessageText(groupInviteToken
                 ? withoutGroupInviteUrl(message.text)
-                : message.text?.trim() || "";
+                : message.text?.trim() || "");
               const bankDetailsMessage = isBankDetailsMessage(visibleMessageText);
 
               return (

@@ -114,7 +114,7 @@ export default function FavoritesPage() {
     <main className="min-h-screen bg-[#f5f7fb] px-3 py-5 sm:px-5 sm:py-8">
       <div className="mx-auto max-w-6xl">
         <section className="rounded-[26px] bg-[#0057ff] p-5 sm:rounded-[34px] sm:p-8 text-white">
-          <p className="font-black text-[#ffd233]">Стройка.ру</p>
+          <p className="font-black text-[#ffd233]">Строва.ру</p>
 
           <h1 className="mt-3 text-3xl font-black sm:text-4xl">Избранные анкеты</h1>
 
@@ -176,7 +176,7 @@ export default function FavoritesPage() {
                         />
                       ) : (
                         <div className="flex h-full items-center justify-center text-3xl font-black text-blue-200">
-                          Стройка.ру
+                          Строва.ру
                         </div>
                       )}
 

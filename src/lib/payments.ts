@@ -57,7 +57,9 @@ export function validateBankOwner(methods: unknown, bankValue: unknown, profile:
   return null;
 }
 
-export const BANK_DETAILS_MESSAGE_PREFIX = "Реквизиты для оплаты Стройка.ру";
+export const BANK_DETAILS_MESSAGE_PREFIX = "Реквизиты для оплаты Строва.ру";
+// Read old card headers without changing the stored financial details.
+const BANK_DETAILS_HEADER = /^Реквизиты для оплаты (?:Строва\.ру|Мастер Строй|Стройк[аи]\.ру)(?=\r?\n|$)/i;
 
 export function formatBankDetailsMessage(value: unknown) {
   const bank = normalizeBankDetails(value);
@@ -74,5 +76,9 @@ export function formatBankDetailsMessage(value: unknown) {
 }
 
 export function isBankDetailsMessage(value: unknown) {
-  return String(value || "").startsWith(BANK_DETAILS_MESSAGE_PREFIX);
+  return typeof value === "string" && BANK_DETAILS_HEADER.test(value);
+}
+
+export function bankDetailsMessageText(value: string): string {
+  return value.replace(BANK_DETAILS_HEADER, BANK_DETAILS_MESSAGE_PREFIX);
 }

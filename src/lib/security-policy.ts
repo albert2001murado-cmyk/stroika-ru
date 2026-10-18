@@ -5,7 +5,7 @@ export function hasModeratorClaim(claims: Record<string, unknown>): boolean {
 
 export function pushPreview(type: string, title: string, body: string) {
   return type === "message"
-    ? { title: "Стройка.ру", body: "Новое сообщение" }
+    ? { title: "Строва.ру", body: "Новое сообщение" }
     : { title, body };
 }
 

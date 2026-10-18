@@ -24,7 +24,7 @@ export default function VerifiedProfileCard({
           <div>
             <VerifiedBadge size="lg" />
             <p className="mt-3 text-sm font-semibold leading-6 text-slate-600">
-              Этот профиль прошёл проверку модератором Стройка.ру. Клиенты будут
+              Этот профиль прошёл проверку модератором Строва.ру. Клиенты будут
               видеть галочку в профиле и объявлениях.
             </p>
           </div>

@@ -47,7 +47,7 @@ export type LocalModerationResult = {
 
 export const MODERATION_POLICY_VERSION = "ru-service-2026-10-12.1";
 
-const SERVICE_RULES = "Правила публикации Стройка.ру";
+const SERVICE_RULES = "Правила публикации Строва.ру";
 const LAW_INFORMATION = "149-ФЗ «Об информации, информационных технологиях и о защите информации»";
 const LAW_PERSONAL_DATA = "152-ФЗ «О персональных данных»";
 const LAW_ADVERTISING = "38-ФЗ «О рекламе»";

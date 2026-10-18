@@ -4,6 +4,7 @@ import { AuthProvider } from "@/components/AuthProvider";
 import Header from "@/components/Header";
 import Link from "next/link";
 import PhoneMigrationPrompt from "@/components/PhoneMigrationPrompt";
+import { BRAND_NAME, SITE_URL } from "@/lib/brand";
 
 
 export const viewport: Viewport = {
@@ -15,8 +16,19 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "Стройка.ру — строительные услуги",
+  metadataBase: new URL(SITE_URL),
+  applicationName: BRAND_NAME,
+  title: "Строва.ру — строительные услуги",
   description: "Доска объявлений для строительных услуг, ремонта и спецтехники.",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: { capable: true, title: BRAND_NAME, statusBarStyle: "default" },
+  openGraph: {
+    type: "website",
+    locale: "ru_RU",
+    siteName: BRAND_NAME,
+    title: "Строва.ру — строительные услуги",
+    description: "Материалы, спецтехника, мастера и заказчики — всё для стройки в одном месте.",
+  },
 };
 
 export default function RootLayout({

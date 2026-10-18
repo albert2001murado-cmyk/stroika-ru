@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { collection, limit, onSnapshot, orderBy, query, type Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { serviceNotificationText } from "./brand";
 
 export type AppNotification = {
   id: string;
@@ -29,7 +30,14 @@ export function useNotifications(uid?: string) {
       query(collection(db, "users", uid, "notifications"), orderBy("createdAt", "desc"), limit(100)),
       (snapshot) => setState({
         uid,
-        items: snapshot.docs.map((item) => ({ ...item.data(), id: item.id } as AppNotification)),
+        items: snapshot.docs.map((item) => {
+          const data = item.data() as AppNotification;
+          return {
+            ...data, id: item.id,
+            title: serviceNotificationText(data.title, data.type),
+            body: serviceNotificationText(data.body, data.type),
+          };
+        }),
         loading: false, error: "",
       }),
       () => setState({ uid, items: [], loading: false, error: "Не удалось загрузить уведомления. Попробуйте ещё раз." }),

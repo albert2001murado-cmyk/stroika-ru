@@ -3,9 +3,9 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 export const metadata: Metadata = {
-  title: "Политика конфиденциальности — Стройка.ру",
+  title: "Политика конфиденциальности — Строва.ру",
   description:
-    "Политика обработки персональных данных сайта и мобильного приложения Стройка.ру.",
+    "Политика обработки персональных данных сайта и мобильного приложения Строва.ру.",
 };
 
 const EFFECTIVE_DATE = "23 июля 2026 года";
@@ -38,15 +38,15 @@ export default function PrivacyPolicyPage() {
             <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-xl text-[#0057ff]">
               С
             </span>
-            <span className="text-2xl">Стройка.ру</span>
+            <span className="text-2xl">Строва.ру</span>
           </Link>
 
           <h1 className="mt-8 max-w-3xl text-4xl font-black leading-tight tracking-tight sm:text-6xl">
             Политика конфиденциальности и обработки персональных данных
           </h1>
           <p className="mt-5 max-w-3xl text-base font-bold leading-7 text-blue-100">
-            Документ действует для сайта stroika-ru.ru и мобильного приложения
-            «Стройка.ру» на iOS и Android.
+            Документ действует для сайта strovaru.ru и мобильного приложения
+            «Строва.ру» на iOS и Android.
           </p>
           <p className="mt-4 text-sm font-black text-[#ffd43b]">
             Дата вступления в силу: {EFFECTIVE_DATE}
@@ -63,7 +63,7 @@ export default function PrivacyPolicyPage() {
           <Section title="1. Общие положения">
             <p>
               Настоящая Политика описывает, какие сведения обрабатывает сервис
-              «Стройка.ру» (далее — «Сервис»), для каких целей они используются,
+              «Строва.ру» (далее — «Сервис»), для каких целей они используются,
               кому могут передаваться, как защищаются и какими правами обладает
               пользователь.
             </p>
@@ -87,7 +87,7 @@ export default function PrivacyPolicyPage() {
             </p>
             <p>
               <strong className="text-slate-950">Email по вопросам данных:</strong>{" "}
-              [УКАЖИТЕ ДЕЙСТВУЮЩИЙ EMAIL, НАПРИМЕР privacy@stroika-ru.ru].
+              [УКАЖИТЕ ДЕЙСТВУЮЩИЙ EMAIL, НАПРИМЕР privacy@strovaru.ru].
             </p>
           </Section>
 
@@ -301,7 +301,7 @@ export default function PrivacyPolicyPage() {
             <p>
               Политика может обновляться при изменении функций Сервиса,
               законодательства или состава поставщиков. Актуальная редакция всегда
-              публикуется по адресу stroika-ru.ru/privacy. Существенные изменения
+              публикуется по адресу strovaru.ru/privacy. Существенные изменения
               могут дополнительно сообщаться в приложении или по email.
             </p>
           </Section>

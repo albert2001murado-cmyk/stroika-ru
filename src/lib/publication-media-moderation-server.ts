@@ -1,4 +1,5 @@
 import type { ModerationFlag } from "@/lib/publication-policy";
+import { serviceNotificationText } from "./brand";
 
 const OPENAI_ENDPOINT = "https://api.openai.com/v1/moderations";
 const OPENAI_MODEL = "omni-moderation-latest";
@@ -169,6 +170,8 @@ function trustedMediaUrl(value: string) {
     const host = url.hostname.toLocaleLowerCase("en-US");
     if (url.protocol !== "https:" || url.username || url.password) return false;
     return (
+      host === "strovaru.ru" ||
+      host === "www.strovaru.ru" ||
       host === "stroika-ru.ru" ||
       host === "www.stroika-ru.ru" ||
       (!!process.env.YANDEX_S3_BUCKET &&
@@ -189,7 +192,7 @@ function unavailableFlag(
     field: "content",
     severity: "review",
     message,
-    legalBasis: "Правила публикации Стройка.ру",
+    legalBasis: "Правила публикации Строва.ру",
   };
 }
 
@@ -220,12 +223,12 @@ function safeClassifierFlags(value: unknown): ModerationFlag[] {
     if (!validSeverity(flag.severity)) return [];
     const code = String(flag.code || "local-review").slice(0, 80);
     const field = String(flag.field || "content").slice(0, 80);
-    const message = String(
+    const message = serviceNotificationText(String(
       flag.message || "Материал требует дополнительной проверки."
-    ).slice(0, 500);
-    const legalBasis = String(
-      flag.legalBasis || "Правила публикации Стройка.ру"
-    ).slice(0, 500);
+    ), "moderation").slice(0, 500);
+    const legalBasis = serviceNotificationText(String(
+      flag.legalBasis || "Правила публикации Строва.ру"
+    ), "moderation").slice(0, 500);
     return [{ code, field, severity: flag.severity, message, legalBasis }];
   });
 }
@@ -250,7 +253,7 @@ async function evaluateWithLocalClassifier(input: {
           field: "media",
           severity: "review",
           message: "Одно из вложений находится на неподтверждённом сервере.",
-          legalBasis: "Правила публикации Стройка.ру",
+          legalBasis: "Правила публикации Строва.ру",
         },
       ],
     };
@@ -437,7 +440,7 @@ async function evaluateWithOpenAI(input: {
         severity: "critical",
         message: `Автопроверка обнаружила признаки ${detectedHardCategories.map(key => categoryLabels[key]).join(", ")}. Удалите соответствующий текст или вложения перед повторной отправкой.`,
         legalBasis:
-          "149-ФЗ «Об информации, информационных технологиях и о защите информации»; Правила публикации Стройка.ру",
+          "149-ФЗ «Об информации, информационных технологиях и о защите информации»; Правила публикации Строва.ру",
       });
     } else if (flagged) {
       flags.push({
@@ -445,7 +448,7 @@ async function evaluateWithOpenAI(input: {
         field: "content",
         severity: "review",
         message: "Содержание требует проверки модератором.",
-        legalBasis: "Правила публикации Стройка.ру",
+        legalBasis: "Правила публикации Строва.ру",
       });
     }
     if (videoFailed) {
@@ -455,7 +458,7 @@ async function evaluateWithOpenAI(input: {
         severity: "review",
         message:
           "Видео или недоступное вложение требует полной проверки модератором.",
-        legalBasis: "Правила публикации Стройка.ру",
+        legalBasis: "Правила публикации Строва.ру",
       });
     }
     return {
@@ -495,7 +498,7 @@ export async function evaluateWithExternalClassifier(input: {
               severity: "review",
               message:
                 "Публикация ожидает проверки соответствия каталогу: локальная модель пока не настроена.",
-              legalBasis: "Правила публикации Стройка.ру",
+              legalBasis: "Правила публикации Строва.ру",
             },
           ]
         : [],

@@ -961,7 +961,7 @@ export default function PublicUserPage() {
                         />
                       ) : (
                         <div className="flex h-full items-center justify-center text-2xl font-black text-blue-200">
-                          Стройка.ру
+                          Строва.ру
                         </div>
                       )}
 

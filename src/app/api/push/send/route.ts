@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
     if (throttled) return throttled;
     const body = await readJsonObject(request);
     const recipientId = String(body?.recipientId || "");
-    const title = String(body?.title || "Стройка.ру").slice(0, 80);
+    const title = String(body?.title || "Строва.ру").slice(0, 80);
     const messageBody = String(body?.body || "Новое уведомление").slice(0, 240);
     const url = safeInternalUrl(body?.url);
     const chatId = String(body?.chatId || "").slice(0, 160);

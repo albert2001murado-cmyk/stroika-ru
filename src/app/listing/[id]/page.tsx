@@ -488,7 +488,7 @@ export default function ListingPage() {
                 </>
               ) : (
                 <div className="flex h-72 items-center justify-center bg-blue-50 text-5xl font-black text-blue-200">
-                  Стройка.ру
+                  Строва.ру
                 </div>
               )}
             </div>
