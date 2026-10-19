@@ -1,0 +1,23 @@
+.plain { color:#7e91aa; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif; }
+.heading { display:flex; align-items:flex-end; justify-content:space-between; gap:15px; margin-bottom:19px; }
+.eyebrow { display:block; color:#74859b; font-size:10px; font-weight:500; letter-spacing:.105em; text-transform:uppercase; line-height:1.5; }
+.heading h2 { display:flex; align-items:center; gap:11px; margin:7px 0 0; color:#355a86; font-size:27px; font-weight:500; letter-spacing:-.035em; line-height:1.25; }
+.heading h2 span { font-size:13px; font-weight:400; color:#aab6c6; letter-spacing:0; }
+.rating { display:flex; align-items:center; gap:6px; color:#b5a27c; font-size:15px; }
+.list { display:grid; gap:13px; }
+.review { border:1px solid #e4eaf1; border-radius:11px; padding:20px 22px; background:white; }
+.reviewTop { display:flex; align-items:center; gap:10px; }
+.avatar { display:flex; align-items:center; justify-content:center; width:33px; height:33px; flex-shrink:0; overflow:hidden; border-radius:10px; background:#eff3f8; color:#a4b3c9; }
+.avatar img { width:100%; height:100%; object-fit:cover; }
+.author { margin:0; color:#6887ae; font-size:12px; font-weight:500; }
+.reviewTop time { display:block; margin-top:4px; color:#b2bdcc; font-size:9px; }
+.stars { display:flex; flex-shrink:0; gap:2px; margin-left:auto; color:#dedfdf; }
+.stars svg[data-filled="true"] { color:#c6b58d; }
+.text { margin:15px 0 0; color:#6e829c; font-size:12px; font-weight:400; line-height:1.9; white-space:pre-line; }
+.link { display:inline-flex; align-items:center; gap:6px; margin-top:13px; color:#8aa5ca; font-size:10px; text-decoration:none; }
+.link:hover { color:#376bc4; }
+.empty { display:flex; align-items:center; gap:16px; padding:27px 23px; border:1px solid #e6ebf1; border-radius:11px; background:white; color:#b4c1d2; }
+.empty h3 { margin:0; color:#6a809a; font-size:13px; font-weight:400; }
+.empty p { margin:6px 0 0; color:#8798ad; font-size:11px; line-height:1.7; }
+.expand { display:inline-flex; align-items:center; gap:6px; padding:8px 0; margin-top:12px; border:0; background:transparent; color:#7798c6; font-size:11px; cursor:pointer; }
+@media (max-width:480px) { .review { padding:17px; } .heading h2 { font-size:25px; } .eyebrow { font-size:9px; } .reviewTop { flex-wrap:wrap; gap:8px; } .stars { gap:1px; } .text { font-size:11px; } .empty { padding:23px 18px; } .empty h3 { font-size:12px; } .empty p { font-size:10px; } }

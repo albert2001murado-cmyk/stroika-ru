@@ -388,7 +388,7 @@ export default function AuthPage() {
 
             <span>
               <span className="block text-xl font-black tracking-[-0.03em] text-slate-950 sm:text-2xl">
-                Строва.ру
+                Строва
               </span>
               <span className="block text-xs font-bold text-slate-400 sm:text-sm">
                 все для стройки в одном месте

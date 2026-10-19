@@ -18,7 +18,7 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   applicationName: BRAND_NAME,
-  title: "Строва.ру — строительные услуги",
+  title: "Строва — строительные услуги",
   description: "Доска объявлений для строительных услуг, ремонта и спецтехники.",
   manifest: "/manifest.webmanifest",
   appleWebApp: { capable: true, title: BRAND_NAME, statusBarStyle: "default" },
@@ -26,7 +26,7 @@ export const metadata: Metadata = {
     type: "website",
     locale: "ru_RU",
     siteName: BRAND_NAME,
-    title: "Строва.ру — строительные услуги",
+    title: "Строва — строительные услуги",
     description: "Материалы, спецтехника, мастера и заказчики — всё для стройки в одном месте.",
   },
 };

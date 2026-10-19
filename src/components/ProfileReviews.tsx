@@ -7,8 +7,9 @@ import { collection, getDocs, query, where } from "firebase/firestore";
 import { ArrowRight, MessageSquareText, Star, UserRound } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import styles from "./ProfileReviews.module.css";
 
-type Props = { userId: string; listingIds?: string[]; requestIds?: string[]; compact?: boolean };
+type Props = { userId: string; listingIds?: string[]; requestIds?: string[]; compact?: boolean; plain?: boolean };
 
 function chunks(values: string[], size = 10) {
   return Array.from({ length: Math.ceil(values.length / size) }, (_, index) => values.slice(index * size, index * size + size));
@@ -20,7 +21,7 @@ function dateTime(value: unknown) {
   return new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(millis));
 }
 
-export default function ProfileReviews({ userId, listingIds = [], requestIds = [], compact = false }: Props) {
+export default function ProfileReviews({ userId, listingIds = [], requestIds = [], compact = false, plain = false }: Props) {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [expanded, setExpanded] = useState(false);
 
@@ -46,6 +47,21 @@ export default function ProfileReviews({ userId, listingIds = [], requestIds = [
   }, [userId, listingIds.join("|"), requestIds.join("|")]);
 
   const average = useMemo(() => reviews.length ? reviews.reduce((sum, item) => sum + Number(item.rating || 0), 0) / reviews.length : 0, [reviews]);
+
+  if (plain) return <div className={styles.plain}>
+    <div className={styles.heading}><div><span className={styles.eyebrow}>Опыт сотрудничества</span><h2>Отзывы<span>{reviews.length}</span></h2></div>{reviews.length ? <span className={styles.rating}><Star size={15} fill="currentColor" />{average.toFixed(1)}</span> : null}</div>
+    {reviews.length ? <div className={styles.list}>{(expanded ? reviews : reviews.slice(0, 3)).map(review => {
+      const kind = review.publicationKind || (review.requestId ? "request" : "listing");
+      const publicationId = review.publicationId || review.requestId || review.listingId || "";
+      const title = review.publicationTitle || review.requestTitle || review.listingTitle || "Публикация";
+      const href = kind === "request" ? `/requests/${publicationId}` : `/listing/${publicationId}`;
+      return <article key={review.id} className={styles.review}>
+        <div className={styles.reviewTop}><span className={styles.avatar}>{review.authorAvatarUrl ? <img src={review.authorAvatarUrl} alt="" /> : <UserRound size={19} />}</span><div><p className={styles.author}>{review.authorName || "Пользователь"}</p><time>{dateTime(review.createdAt)}</time></div><span className={styles.stars} aria-label={`${review.rating} из 5`}>{[1,2,3,4,5].map(star => <Star key={star} size={12} fill={star <= Number(review.rating || 0) ? "currentColor" : "none"} data-filled={star <= Number(review.rating || 0)} />)}</span></div>
+        <p className={styles.text}>{review.text || "Без текста"}</p>{publicationId ? <Link href={href} className={styles.link}>{title}<ArrowRight size={13} /></Link> : null}
+      </article>;
+    })}</div> : <div className={styles.empty}><MessageSquareText size={23} strokeWidth={1.5} /><div><h3>Здесь будут отзывы</h3><p>Отзывы появятся после проверки модератором.</p></div></div>}
+    {reviews.length > 3 ? <button type="button" className={styles.expand} onClick={() => setExpanded(value => !value)} aria-expanded={expanded}>{expanded ? "Свернуть" : `Все отзывы · ${reviews.length}`}<ArrowRight size={14} /></button> : null}
+  </div>;
 
   if (compact && !expanded) {
     const latest = reviews[0];

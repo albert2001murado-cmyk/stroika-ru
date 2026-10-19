@@ -1,5 +1,5 @@
 /** Public identity. Firebase and release identifiers are deliberately separate. */
-export const BRAND_NAME = "Строва.ру";
+export const BRAND_NAME = "Строва";
 export const SITE_URL = "https://strovaru.ru";
 
 // Accept previously shared invitations, but generate all new links on SITE_URL.
@@ -10,7 +10,7 @@ export const GROUP_INVITE_URL_PATTERN =
 export function serviceNotificationText(value: unknown, type?: string): string {
   const text = typeof value === "string" ? value : "";
   const official = type === "system" || type === "moderation" || type === "verification";
-  const oldServiceName = /^(?:стройк[аи]\s*\.\s*ру|мастер[\s-]+строй)$/i.test(text.trim());
+  const oldServiceName = /^(?:строва\s*\.\s*ру|стройк[аи]\s*\.\s*ру|мастер[\s-]+строй)$/i.test(text.trim());
   if (!official && !oldServiceName) return text;
-  return text.replace(/стройк[аи]\s*\.\s*ру|мастер[\s-]+строй/gi, BRAND_NAME);
+  return text.replace(/строва\s*\.\s*ру|стройк[аи]\s*\.\s*ру|мастер[\s-]+строй/gi, BRAND_NAME);
 }

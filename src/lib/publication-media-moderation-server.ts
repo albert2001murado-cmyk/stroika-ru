@@ -192,7 +192,7 @@ function unavailableFlag(
     field: "content",
     severity: "review",
     message,
-    legalBasis: "Правила публикации Строва.ру",
+    legalBasis: "Правила публикации Строва",
   };
 }
 
@@ -227,7 +227,7 @@ function safeClassifierFlags(value: unknown): ModerationFlag[] {
       flag.message || "Материал требует дополнительной проверки."
     ), "moderation").slice(0, 500);
     const legalBasis = serviceNotificationText(String(
-      flag.legalBasis || "Правила публикации Строва.ру"
+      flag.legalBasis || "Правила публикации Строва"
     ), "moderation").slice(0, 500);
     return [{ code, field, severity: flag.severity, message, legalBasis }];
   });
@@ -253,7 +253,7 @@ async function evaluateWithLocalClassifier(input: {
           field: "media",
           severity: "review",
           message: "Одно из вложений находится на неподтверждённом сервере.",
-          legalBasis: "Правила публикации Строва.ру",
+          legalBasis: "Правила публикации Строва",
         },
       ],
     };
@@ -440,7 +440,7 @@ async function evaluateWithOpenAI(input: {
         severity: "critical",
         message: `Автопроверка обнаружила признаки ${detectedHardCategories.map(key => categoryLabels[key]).join(", ")}. Удалите соответствующий текст или вложения перед повторной отправкой.`,
         legalBasis:
-          "149-ФЗ «Об информации, информационных технологиях и о защите информации»; Правила публикации Строва.ру",
+          "149-ФЗ «Об информации, информационных технологиях и о защите информации»; Правила публикации Строва",
       });
     } else if (flagged) {
       flags.push({
@@ -448,7 +448,7 @@ async function evaluateWithOpenAI(input: {
         field: "content",
         severity: "review",
         message: "Содержание требует проверки модератором.",
-        legalBasis: "Правила публикации Строва.ру",
+        legalBasis: "Правила публикации Строва",
       });
     }
     if (videoFailed) {
@@ -458,7 +458,7 @@ async function evaluateWithOpenAI(input: {
         severity: "review",
         message:
           "Видео или недоступное вложение требует полной проверки модератором.",
-        legalBasis: "Правила публикации Строва.ру",
+        legalBasis: "Правила публикации Строва",
       });
     }
     return {
@@ -498,7 +498,7 @@ export async function evaluateWithExternalClassifier(input: {
               severity: "review",
               message:
                 "Публикация ожидает проверки соответствия каталогу: локальная модель пока не настроена.",
-              legalBasis: "Правила публикации Строва.ру",
+              legalBasis: "Правила публикации Строва",
             },
           ]
         : [],

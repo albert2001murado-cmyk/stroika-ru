@@ -72,7 +72,7 @@ export default function ReportDialog({
 
   return (
     <>
-      <button type="button" onClick={() => { setOpen(true); setDone(false); }} className={buttonClassName || "inline-flex items-center gap-2 rounded-2xl bg-red-50 px-4 py-3 text-sm font-black text-red-600 ring-1 ring-red-100 hover:bg-red-100"}>
+      <button type="button" aria-label="Пожаловаться" title="Пожаловаться" onClick={() => { setOpen(true); setDone(false); }} className={buttonClassName || "inline-flex items-center gap-2 rounded-2xl bg-red-50 px-4 py-3 text-sm font-black text-red-600 ring-1 ring-red-100 hover:bg-red-100"}>
         <Flag size={17} /> {compact ? null : "Пожаловаться"}
       </button>
 

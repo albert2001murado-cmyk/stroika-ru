@@ -86,7 +86,7 @@ export default function PortfolioCasePage() {
 
         <section className="portfolio-case-enter mt-4 overflow-hidden rounded-[34px] bg-white shadow-xl shadow-slate-900/5 ring-1 ring-slate-200/70">
           <div className="relative min-h-[360px] overflow-hidden bg-slate-950 sm:min-h-[520px]">
-            {heroImage ? <img src={heroImage} alt={item.title || "Кейс"} className="absolute inset-0 h-full w-full object-contain"/> : <div className="flex min-h-[420px] items-center justify-center text-3xl font-black text-blue-200">Строва.ру</div>}
+            {heroImage ? <img src={heroImage} alt={item.title || "Кейс"} className="absolute inset-0 h-full w-full object-contain"/> : <div className="flex min-h-[420px] items-center justify-center text-3xl font-black text-blue-200">Строва</div>}
             <div className="pointer-events-none absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-slate-950/80 to-transparent"/>
             <div className="absolute left-4 top-4 flex flex-wrap gap-2 sm:left-6 sm:top-6">
               <span className="rounded-full bg-white/95 px-4 py-2 text-xs font-black text-[#0057ff] shadow-lg">{item.category || "Проект"}</span>

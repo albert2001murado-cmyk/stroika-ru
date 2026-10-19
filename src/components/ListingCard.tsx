@@ -79,7 +79,7 @@ function ListingCard({ listing }: ListingCardProps) {
             />
           ) : (
             <div className="flex h-full w-full items-center justify-center text-3xl font-black text-blue-200">
-              Строва.ру
+              Строва
             </div>
           )}
 

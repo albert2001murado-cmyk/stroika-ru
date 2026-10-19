@@ -206,7 +206,7 @@ export default function NotificationsPage() {
                     </button>
                     <button type="button" onClick={() => openNotification(item)} className="min-w-0 flex-1 text-left">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h2 className="font-black text-slate-950 sm:text-lg">{item.title || "Строва.ру"}</h2>
+                        <h2 className="font-black text-slate-950 sm:text-lg">{item.title || "Строва"}</h2>
                         {!item.read ? <span className="rounded-full bg-[#0057ff] px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.1em] text-white">Новое</span> : null}
                       </div>
                       <p className="mt-1.5 whitespace-pre-line break-words text-sm font-medium leading-6 text-slate-500">{item.body || "Новое событие"}</p>

@@ -328,7 +328,7 @@ export default function PortfolioPage() {
                 const cover=item.coverUrl||item.afterUrl||item.beforeUrl||item.imageUrls?.[0]||"";
                 return <article key={item.id} className="portfolio-case-enter group overflow-hidden rounded-[30px] bg-white shadow-sm ring-1 ring-slate-200/70 transition duration-500 hover:-translate-y-2 hover:shadow-[0_24px_60px_rgba(15,23,42,0.14)]" style={{animationDelay:`${Math.min(index*55,350)}ms`}}>
                   <Link href={`/portfolio/${item.id}`} className="block">
-                    <div className="relative h-56 overflow-hidden bg-blue-50">{cover?<img src={cover} alt={item.title} className="h-full w-full object-cover transition duration-700 group-hover:scale-110"/>:<div className="flex h-full items-center justify-center text-2xl font-black text-blue-200">Строва.ру</div>}
+                    <div className="relative h-56 overflow-hidden bg-blue-50">{cover?<img src={cover} alt={item.title} className="h-full w-full object-cover transition duration-700 group-hover:scale-110"/>:<div className="flex h-full items-center justify-center text-2xl font-black text-blue-200">Строва</div>}
                       <span className="absolute left-3 top-3 rounded-full bg-white/95 px-3 py-1.5 text-xs font-black text-[#0057ff] shadow-sm">{item.category||"Проект"}</span>
                       {item.beforeUrl&&item.afterUrl?<span className="absolute right-3 top-3 rounded-full bg-[#0057ff] px-3 py-1.5 text-xs font-black text-white">До / после</span>:null}
                     </div>

@@ -183,7 +183,7 @@ export default function SupportPage() {
             <div className="relative z-10">
               <div className="inline-flex items-center gap-2 rounded-full bg-white/15 px-5 py-3 text-sm font-black text-[#ffde3d] backdrop-blur">
                 <Headphones size={18} />
-                Поддержка Строва.ру
+                Поддержка Строва
               </div>
 
               <h1 className="mt-5 max-w-3xl text-3xl font-black leading-tight sm:mt-7 sm:text-4xl md:text-6xl">

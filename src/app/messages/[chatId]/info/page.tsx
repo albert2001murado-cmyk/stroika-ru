@@ -435,7 +435,7 @@ export default function GroupInfoPage() {
       if (navigator.share) {
         await navigator.share({
           title: chat?.groupTitle || "Групповой чат",
-          text: `Присоединяйтесь к группе «${chat?.groupTitle || "Строва.ру"}»`,
+          text: `Присоединяйтесь к группе «${chat?.groupTitle || "Строва"}»`,
           url: inviteLink,
         });
       } else {

@@ -1,5 +1,7 @@
 "use client";
 import { uploadAuthHeaders } from "@/lib/uploadAuth";
+import { setChatPinned } from "@/lib/chatPin";
+import styles from "../messages.module.css";
 
 
 import { useAuth } from "@/components/AuthProvider";
@@ -10,53 +12,11 @@ import { getApiUrl } from "@/lib/getApiUrl";
 import { bankDetailsFromProfile, bankDetailsMessageText, formatBankDetailsMessage, isBankDetailsMessage, validatePayment } from "@/lib/payments";
 import { GROUP_INVITE_URL_PATTERN } from "@/lib/brand";
 import type { Timestamp } from "firebase/firestore";
-import {
-  arrayUnion,
-  collection,
-  deleteDoc,
-  doc,
-  getDoc,
-  increment,
-  onSnapshot,
-  orderBy,
-  query,
-  serverTimestamp,
-  updateDoc,
-  writeBatch,
-} from "firebase/firestore";
-import {
-  ArrowLeft,
-  Check,
-  CheckCheck,
-  Edit3,
-  FileText,
-  ImagePlus,
-  Landmark,
-  Loader2,
-  Mic,
-  MoreVertical,
-  Pause,
-  Pin,
-  PinOff,
-  Play,
-  Send,
-  Settings,
-  Trash2,
-  UserRound,
-  UsersRound,
-  X,
-} from "lucide-react";
+import { arrayUnion, collection, deleteDoc, doc, getDoc, increment, onSnapshot, orderBy, query, serverTimestamp, updateDoc, writeBatch } from "firebase/firestore";
+import { ArrowLeft, ArrowDown, ArrowUpRight, MessageCircle, Check, CheckCheck, Edit3, FileText, ImagePlus, Landmark, Loader2, Mic, MoreVertical, Pause, Pin, PinOff, Play, Send, Settings, Trash2, UserRound, UsersRound, X } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import {
-  ChangeEvent,
-  FormEvent,
-  KeyboardEvent,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { ChangeEvent, FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 
 type ChatParticipant = {
   uid?: string;
@@ -68,17 +28,10 @@ type ChatParticipant = {
 
 function BankMessageCard({ text, mine }: { text: string; mine: boolean }) {
   const lines = text.split("\n").slice(1).filter(Boolean);
-  return (
-    <div className={`min-w-[245px] rounded-[20px] p-3 ${mine ? "bg-white/14 ring-1 ring-white/20" : "bg-blue-50 ring-1 ring-blue-100"}`}>
-      <div className="flex items-center gap-2">
-        <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${mine ? "bg-white/15" : "bg-white text-[#0057ff]"}`}><Landmark size={18} /></span>
-        <div><p className="text-[10px] font-black uppercase tracking-[.1em] opacity-75">Оплата</p><p className="text-sm font-black">Реквизиты получателя</p></div>
-      </div>
-      <div className={`mt-3 space-y-1.5 rounded-2xl p-3 text-xs font-bold leading-5 ${mine ? "bg-black/10" : "bg-white"}`}>
-        {lines.map((line) => <p key={line} className="break-all">{line}</p>)}
-      </div>
-    </div>
-  );
+  return <div className={styles.bankCard}>
+    <div className={styles.bankHeading}><Landmark size={18} /><span>Реквизиты получателя</span></div>
+    <div className={styles.bankLines}>{lines.map((line) => <p key={line}>{line}</p>)}</div>
+  </div>;
 }
 
 type Chat = {
@@ -330,53 +283,13 @@ function GroupInviteCard({ token, mine }: { token: string; mine: boolean }) {
     return () => controller.abort();
   }, [token]);
 
-  return (
-    <div
-      className={`mb-2 w-[292px] max-w-full overflow-hidden rounded-[22px] bg-white p-3.5 text-slate-950 shadow-[0_12px_34px_rgba(15,23,42,0.14)] ring-1 ${
-        mine ? "ring-white/40" : "ring-blue-100"
-      }`}
-    >
-      <div className="flex items-center gap-3">
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-[17px] bg-gradient-to-br from-blue-50 to-indigo-100 text-[#0057ff] ring-1 ring-blue-100">
-          {preview?.avatarUrl ? (
-            <img
-              src={preview.avatarUrl}
-              alt="Аватар группы"
-              className="h-full w-full object-cover"
-            />
-          ) : (
-            <UsersRound size={23} strokeWidth={2.7} />
-          )}
-        </div>
-
-        <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-black uppercase tracking-[0.12em] text-[#0057ff]">
-            Приглашение в группу
-          </p>
-          <p className="mt-1 truncate text-sm font-black text-slate-950">
-            {loadingPreview
-              ? "Загружаем группу..."
-              : preview?.title || "Рабочая группа Строва.ру"}
-          </p>
-          <p className="mt-0.5 text-xs font-bold text-slate-500">
-            {preview
-              ? memberCountLabel(preview.memberCount)
-              : previewUnavailable
-              ? "Откройте приглашение для просмотра"
-              : "Проверяем участников..."}
-          </p>
-        </div>
-      </div>
-
-      <Link
-        href={`/join/${token}`}
-        className="mt-3 flex min-h-11 items-center justify-center gap-2 rounded-[16px] bg-[#0057ff] px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-blue-600/20 transition duration-200 hover:-translate-y-0.5 hover:bg-[#004de3]"
-      >
-        <UsersRound size={18} strokeWidth={2.8} />
-        Присоединиться
-      </Link>
+  return <div className={styles.inviteCard}>
+    <div className={styles.inviteHead}>
+      <div className={styles.headerAvatar}>{preview?.avatarUrl ? <img src={preview.avatarUrl} alt="" /> : <UsersRound size={23} />}</div>
+      <span><b>{loadingPreview ? "Загружаем группу…" : preview?.title || "Приглашение в группу"}</b><small>{preview ? memberCountLabel(preview.memberCount) : previewUnavailable ? "Откройте приглашение для просмотра" : "Проверяем участников…"}</small></span>
     </div>
-  );
+    <Link href={`/join/${token}`} className={styles.primaryButton}>Открыть приглашение<ArrowUpRight size={14} /></Link>
+  </div>;
 }
 
 function chooseRecordingMimeType() {
@@ -416,88 +329,18 @@ function VoiceMessage({ url, mine }: { url: string; mine: boolean }) {
 
   const progress = duration > 0 ? Math.min(100, (current / duration) * 100) : 0;
 
-  return (
-    <div className="min-w-[220px] py-0.5 sm:min-w-[260px]">
-      <audio
-        ref={audioRef}
-        src={url}
-        preload="metadata"
-        onLoadedMetadata={(event) =>
-          setDuration(Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0)
-        }
-        onTimeUpdate={(event) => setCurrent(event.currentTarget.currentTime)}
-        onPlay={() => setPlaying(true)}
-        onPause={() => setPlaying(false)}
-        onEnded={() => {
-          setPlaying(false);
-          setCurrent(0);
-        }}
-      />
-
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
-          onClick={togglePlay}
-          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition duration-200 hover:scale-105 ${
-            mine ? "bg-white text-[#0057ff]" : "bg-[#0057ff] text-white"
-          }`}
-          aria-label={playing ? "Пауза" : "Воспроизвести"}
-        >
-          {playing ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" />}
-        </button>
-
-        <div className="min-w-0 flex-1">
-          <div className="flex h-7 items-end gap-[3px] overflow-hidden">
-            {Array.from({ length: 32 }).map((_, index) => {
-              const height = 7 + ((index * 13 + 9) % 18);
-              const active = index / 31 <= progress / 100;
-              return (
-                <span
-                  key={index}
-                  className={`w-[3px] shrink-0 rounded-full transition-colors ${
-                    mine
-                      ? active
-                        ? "bg-white"
-                        : "bg-white/35"
-                      : active
-                      ? "bg-[#0057ff]"
-                      : "bg-blue-100"
-                  }`}
-                  style={{ height }}
-                />
-              );
-            })}
-          </div>
-
-          <input
-            type="range"
-            min={0}
-            max={duration || 0}
-            step={0.05}
-            value={Math.min(current, duration || 0)}
-            onChange={(event) => {
-              const next = Number(event.target.value);
-              setCurrent(next);
-              if (audioRef.current) audioRef.current.currentTime = next;
-            }}
-            className="sr-only"
-            aria-label="Позиция голосового сообщения"
-          />
-
-          <div className={`mt-1 flex items-center justify-between text-[10px] font-black ${mine ? "text-blue-100" : "text-slate-400"}`}>
-            <span>{formatDuration(current || duration)}</span>
-            <button
-              type="button"
-              onClick={changeSpeed}
-              className={`rounded-full px-2 py-0.5 transition ${mine ? "bg-white/15 text-white hover:bg-white/25" : "bg-blue-50 text-[#0057ff] hover:bg-blue-100"}`}
-            >
-              {speed}×
-            </button>
-          </div>
-        </div>
-      </div>
+  return <div className={styles.voice}>
+    <audio ref={audioRef} src={url} preload="metadata"
+      onLoadedMetadata={(event) => setDuration(Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0)}
+      onTimeUpdate={(event) => setCurrent(event.currentTarget.currentTime)}
+      onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={() => { setPlaying(false); setCurrent(0); }} />
+    <button type="button" onClick={togglePlay} aria-label={playing ? "Пауза" : "Воспроизвести"}>{playing ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" />}</button>
+    <div className={styles.voiceBody}>
+      <div className={styles.voiceWaves} aria-hidden="true">{Array.from({ length: 32 }).map((_, index) => <span key={index} data-active={index / 31 <= progress / 100} style={{ height: 7 + ((index * 13 + 9) % 18) }} />)}</div>
+      <input type="range" min={0} max={duration || 0} step={0.05} value={Math.min(current, duration || 0)} onChange={(event) => { const next = Number(event.target.value); setCurrent(next); if (audioRef.current) audioRef.current.currentTime = next; }} aria-label="Позиция голосового сообщения" />
+      <div className={styles.voiceMeta}><span>{formatDuration(current || duration)}</span><button type="button" onClick={changeSpeed} aria-label="Скорость воспроизведения">{speed}×</button></div>
     </div>
-  );
+  </div>;
 }
 
 export default function ChatPage() {
@@ -507,6 +350,9 @@ export default function ChatPage() {
   const { user, profile, loading } = useAuth();
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const threadRef = useRef<HTMLElement | null>(null);
+  const firstScrollRef = useRef(true);
+  const nearBottomRef = useRef(true);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordingStreamRef = useRef<MediaStream | null>(null);
   const recordingChunksRef = useRef<Blob[]>([]);
@@ -529,6 +375,7 @@ export default function ChatPage() {
   const [error, setError] = useState("");
   const [blockedEither, setBlockedEither] = useState(false);
   const [highlightedId, setHighlightedId] = useState("");
+  const [showScrollBottom, setShowScrollBottom] = useState(false);
 
   const participantIds = useMemo(() => getParticipantIds(chat), [chat]);
   const isGroup = chat?.chatType === "group" || chat?.isGroup === true;
@@ -652,8 +499,16 @@ export default function ChatPage() {
   }, [chat, chatId, user]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages.length]);
+    const thread = threadRef.current;
+    if (!thread || !messages.length) return;
+    const ownMessage = messages[messages.length - 1]?.senderId === user?.uid;
+    if (firstScrollRef.current || nearBottomRef.current || ownMessage) {
+      thread.scrollTo({ top: thread.scrollHeight, behavior: firstScrollRef.current ? "auto" : "smooth" });
+      firstScrollRef.current = false;
+    } else {
+      setShowScrollBottom(true);
+    }
+  }, [messages.length, user?.uid]);
 
   useEffect(() => {
     return () => {
@@ -1001,14 +856,8 @@ export default function ChatPage() {
 
   async function toggleChatPin() {
     if (!user || !chat) return;
-    const pinnedUserIds = getPinnedUserIds(chat.pinnedBy);
-    const nextPinnedBy = chatPinned
-      ? pinnedUserIds.filter((uid) => uid !== user.uid)
-      : Array.from(new Set([...pinnedUserIds, user.uid]));
-
-    await updateDoc(doc(db, "chats", chatId), {
-      pinnedBy: nextPinnedBy,
-    }).catch(() => setError("Не получилось закрепить чат."));
+    await setChatPinned(chatId, chat.pinnedBy, user.uid, !chatPinned)
+      .catch(() => setError("Не получилось закрепить чат."));
   }
 
   async function togglePin(message: ChatMessage) {
@@ -1058,741 +907,111 @@ export default function ChatPage() {
   }
 
   function handleComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (event.key === "Enter" && !event.shiftKey) {
+    if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
       event.preventDefault();
       void handleSend();
     }
   }
 
   if (loading || pageLoading) {
-    return (
-      <main className="min-h-[calc(100dvh-64px)] bg-[#f4f7ff] px-3 py-5 sm:px-5 sm:py-8 lg:min-h-[calc(100dvh-82px)]">
-        <div className="mx-auto max-w-6xl animate-pulse rounded-[24px] bg-white p-5 sm:rounded-[36px] sm:p-8 text-slate-400 shadow-sm">
-          Загружаем чат...
-        </div>
-      </main>
-    );
+    return <section className={styles.conversationState} aria-busy="true"><Loader2 size={25} className={styles.spinner} /><p>Открываем переписку…</p></section>;
   }
-
   if (error && !chat) {
-    return (
-      <main className="min-h-[calc(100dvh-64px)] bg-[#f4f7ff] px-3 py-5 sm:px-5 sm:py-8 lg:min-h-[calc(100dvh-82px)]">
-        <div className="empty-card mx-auto max-w-xl">
-          <h1>{error}</h1>
-          <p className="mt-3 text-slate-500">
-            Переписка не удалена. Обновите страницу или вернитесь к списку сообщений.
-          </p>
-          <div className="mt-5 flex flex-wrap justify-center gap-3">
-            <button
-              type="button"
-              onClick={() => window.location.reload()}
-              className="rounded-2xl border border-blue-200 bg-white px-5 py-3 font-black text-[#0057ff] transition hover:bg-blue-50"
-            >
-              Повторить
-            </button>
-            <a href="/messages" className="btn-primary">
-              К сообщениям
-            </a>
-          </div>
-        </div>
-      </main>
-    );
+    return <section className={styles.conversationState}><h1>{error}</h1><p>Обновите страницу или выберите другую переписку.</p><button type="button" className={styles.primaryButton} onClick={() => window.location.reload()}>Повторить</button><Link href="/messages">Все сообщения</Link></section>;
   }
 
   const pinnedMessages = messages.filter((item) => item.pinned);
   const lastPinned = pinnedMessages[pinnedMessages.length - 1];
   const listingImage = chat?.listingImageUrl || chat?.listingImage || "";
 
-  return (
-    <main className="min-h-[calc(100dvh-64px)] overflow-hidden bg-[#eef3ff] p-0 lg:min-h-[calc(100dvh-82px)] lg:px-5 lg:py-5">
-      <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -left-24 top-32 h-80 w-80 rounded-full bg-blue-300/25 blur-3xl" />
-        <div className="absolute -right-28 bottom-10 h-96 w-96 rounded-full bg-indigo-300/20 blur-3xl" />
+  return <section className={styles.conversation} aria-label={`Переписка: ${headerName}`}>
+    <header className={styles.header}>
+      <Link href="/messages" className={styles.back} aria-label="Все чаты"><ArrowLeft size={21} /></Link>
+      <Link href={isGroup ? `/messages/${chatId}/info` : otherId ? `/user/${otherId}` : "/messages"} className={styles.identity}>
+        <span className={styles.headerAvatar}>{headerAvatar ? <img src={headerAvatar} alt="" /> : isGroup ? <UsersRound size={22} /> : <UserRound size={22} />}</span>
+        <div className={styles.headerIdentity}><h1>{headerName}</h1><p>{isGroup ? memberCountLabel(participantIds.length) : "Личная переписка"}</p></div>
+      </Link>
+      <div className={styles.headerActions}>
+        <button type="button" className={styles.iconButton} onClick={toggleChatPin} aria-pressed={chatPinned} aria-label={chatPinned ? "Открепить чат" : "Закрепить чат"} title={chatPinned ? "Открепить чат" : "Закрепить чат"}><Pin size={17} fill={chatPinned ? "currentColor" : "none"} /></button>
+        {isGroup ? <Link href={`/messages/${chatId}/info`} className={styles.iconButton} aria-label="Настройки группы" title="Настройки группы"><Settings size={18} /></Link> : otherId ? <details className={styles.moreMenu}>
+          <summary className={styles.iconButton} aria-label="Действия с перепиской" title="Действия с перепиской"><MoreVertical size={19} /></summary>
+          <div className={styles.menuPanel}>
+            <ReportDialog targetType="chat" targetId={chatId} targetOwnerId={otherId} targetTitle={`Чат с ${otherName}`} buttonClassName={styles.menuItem} />
+            <UserBlockButton targetUserId={otherId} className={styles.menuItem} onChange={() => { if (!user) return; Promise.all([getDoc(doc(db, "users", user.uid, "blocked", otherId)), getDoc(doc(db, "users", otherId, "blocked", user.uid))]).then(([mine, theirs]) => setBlockedEither(mine.exists() || theirs.exists())).catch(() => undefined); }} />
+          </div>
+        </details> : null}
       </div>
+    </header>
 
-      <div className="chat-shell relative mx-auto flex max-w-6xl flex-col overflow-hidden bg-white/95 shadow-[0_30px_90px_rgba(15,23,42,0.16)] backdrop-blur-xl lg:h-[calc(100dvh-122px)] lg:rounded-[36px] lg:ring-1 lg:ring-white">
-        <header className="relative z-30 flex items-center gap-2 overflow-hidden sm:gap-3 bg-gradient-to-r from-[#0057ff] via-[#1266ff] to-[#4c6fff] px-3 py-3 text-white sm:px-5 sm:py-4">
-          <div className="absolute -right-16 -top-24 h-56 w-56 rounded-full bg-white/10 blur-2xl" />
-          <Link
-            href="/messages"
-            className="relative flex h-10 w-10 shrink-0 sm:h-11 sm:w-11 items-center justify-center rounded-2xl bg-white/14 transition duration-200 hover:bg-white/24 hover:scale-105"
-            aria-label="Назад"
-          >
-            <ArrowLeft size={21} />
-          </Link>
+    {chat?.listingTitle ? <Link href={chat.listingId ? `/listing/${chat.listingId}` : "#"} className={styles.context}>
+      {listingImage ? <img src={listingImage} alt="" /> : <span className={styles.contextImage}><ImagePlus size={17} /></span>}
+      <span><small>Обсуждаем объявление</small><strong>{chat.listingTitle}</strong></span><ArrowUpRight size={17} className={styles.contextArrow} />
+    </Link> : null}
+    {lastPinned ? <button type="button" className={styles.pinnedMessage} onClick={() => scrollToMessage(lastPinned.id)}><Pin size={16} /><span><b>Закреплённое сообщение{pinnedMessages.length > 1 ? ` · ${pinnedMessages.length}` : ""}</b><small>{messagePreview(lastPinned)}</small></span></button> : null}
 
-          <Link
-            href={isGroup ? `/messages/${chatId}/info` : otherId ? `/user/${otherId}` : "/messages"}
-            className="relative flex min-w-0 flex-1 items-center gap-3"
-          >
-            <div className="relative flex h-10 w-10 shrink-0 sm:h-12 sm:w-12 items-center justify-center overflow-hidden rounded-[18px] bg-white/18 text-white ring-1 ring-white/25 sm:h-13 sm:w-13">
-              {headerAvatar ? (
-                <img
-                  src={headerAvatar}
-                  alt={headerName}
-                  className="h-full w-full object-cover"
-                />
-              ) : isGroup ? (
-                <UsersRound size={24} />
-              ) : (
-                <UserRound size={24} />
-              )}
-              {!isGroup ? <span className="absolute bottom-1 right-1 h-3 w-3 rounded-full border-2 border-[#1266ff] bg-emerald-400" /> : null}
-            </div>
-            <div className="min-w-0">
-              <h1 className="truncate text-base font-black sm:text-lg">{headerName}</h1>
-              {isGroup ? (
-                <span className="group-member-pill mt-1 inline-flex max-w-full items-center gap-1.5 rounded-full border border-white/20 bg-white/14 px-2.5 py-1 text-[11px] font-black text-white backdrop-blur sm:text-xs">
-                  <UsersRound size={13} className="shrink-0" />
-                  <span className="truncate">{memberCountLabel(participantIds.length)}</span>
-                </span>
-              ) : (
-                <p className="truncate text-xs font-bold text-blue-100 sm:text-sm">
-                  {chat?.listingTitle || "Личная переписка"}
-                </p>
-              )}
-            </div>
-          </Link>
-
-          <div className="relative flex items-center gap-1 sm:gap-2">
-            <button
-              type="button"
-              onClick={toggleChatPin}
-              className={`flex h-9 w-9 items-center sm:h-10 sm:w-10 justify-center rounded-2xl transition duration-200 hover:scale-105 ${
-                chatPinned ? "bg-white text-[#0057ff]" : "bg-white/14 text-white hover:bg-white/24"
-              }`}
-              title={chatPinned ? "Открепить чат" : "Закрепить чат"}
-            >
-              <Pin size={18} fill={chatPinned ? "currentColor" : "none"} />
-            </button>
-
-            {isGroup ? (
-              <Link
-                href={`/messages/${chatId}/info`}
-                className="flex h-9 w-9 items-center justify-center rounded-2xl bg-white/14 text-white transition duration-200 hover:scale-105 hover:bg-white/24 sm:h-10 sm:w-10"
-                title="Настройки группы"
-              >
-                <Settings size={18} />
-              </Link>
-            ) : otherId ? (
-              <>
-                <ReportDialog
-                  targetType="chat"
-                  targetId={chatId}
-                  targetOwnerId={otherId}
-                  targetTitle={`Чат с ${otherName}`}
-                  compact
-                  buttonClassName="flex h-9 w-9 items-center sm:h-10 sm:w-10 justify-center rounded-2xl bg-white/14 text-white transition duration-200 hover:scale-105 hover:bg-red-500"
-                />
-                <UserBlockButton
-                  targetUserId={otherId}
-                  compact
-                  onChange={() => {
-                    if (!user) return;
-                    Promise.all([
-                      getDoc(doc(db, "users", user.uid, "blocked", otherId)),
-                      getDoc(doc(db, "users", otherId, "blocked", user.uid)),
-                    ])
-                      .then(([mine, theirs]) =>
-                        setBlockedEither(mine.exists() || theirs.exists())
-                      )
-                      .catch(() => undefined);
-                  }}
-                />
-              </>
-            ) : null}
-          </div>
-        </header>
-
-        {chat?.listingTitle ? (
-          <Link
-            href={chat.listingId ? `/listing/${chat.listingId}` : "#"}
-            className="relative z-20 flex items-center gap-3 border-b border-blue-100 bg-gradient-to-r from-blue-50 to-white px-4 py-2.5 transition hover:bg-blue-50 sm:px-5"
-          >
-            {listingImage ? (
-              <img
-                src={listingImage}
-                alt=""
-                className="h-11 w-11 rounded-xl object-cover ring-1 ring-blue-100"
-              />
-            ) : (
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-100 text-[#0057ff]">
-                <ImagePlus size={20} />
-              </div>
-            )}
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-black text-slate-950">
-                {chat.listingTitle}
-              </p>
-              <p className="text-xs font-bold text-slate-500">Объявление из Строва.ру</p>
-            </div>
-            <span className="text-xs font-black text-[#0057ff]">Открыть →</span>
-          </Link>
-        ) : null}
-
-        {lastPinned ? (
-          <button
-            type="button"
-            onClick={() => scrollToMessage(lastPinned.id)}
-            className="relative z-20 flex items-center gap-3 border-b border-blue-100 bg-white px-4 py-2.5 text-left transition hover:bg-blue-50 sm:px-5"
-          >
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-[#0057ff]">
-              <Pin size={16} fill="currentColor" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-[11px] font-black uppercase tracking-[0.12em] text-[#0057ff]">
-                Закреплённое сообщение
-              </p>
-              <p className="truncate text-sm font-bold text-slate-700">
-                {messagePreview(lastPinned)}
-              </p>
-            </div>
-            {pinnedMessages.length > 1 ? (
-              <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-black text-[#0057ff]">
-                {pinnedMessages.length}
-              </span>
-            ) : null}
-          </button>
-        ) : null}
-
-        <section
-          onClick={() => openMenuId && setOpenMenuId("")}
-          className="chat-messages relative flex-1 space-y-2 overflow-y-auto bg-[#eef3fb] px-3 py-4 sm:px-6 sm:py-5"
-        >
-          <div className="pointer-events-none absolute inset-0 opacity-40 [background-image:radial-gradient(#b9cdfa_1px,transparent_1px)] [background-size:22px_22px]" />
-
-          {messages.length === 0 ? (
-            <div className="relative mx-auto mt-7 max-w-md rounded-[24px] border border-white bg-white/90 p-6 sm:mt-10 sm:rounded-[30px] sm:p-9 text-center shadow-[0_18px_55px_rgba(15,23,42,0.08)] backdrop-blur">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[24px] bg-blue-50 text-[#0057ff]">
-                <Mic size={30} />
-              </div>
-              <h3 className="mt-5 text-2xl font-black text-slate-950">Начните переписку</h3>
-              <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
-                Отправляйте текст, фотографии, видео и голосовые сообщения.
-              </p>
-            </div>
-          ) : (
-            messages.map((message, index) => {
-              const isMine = message.senderId === user?.uid;
-              const receiptUsers = participantIds.filter((uid) => uid !== user?.uid);
-              const isRead = receiptUsers.length > 0
-                ? receiptUsers.every((uid) => hasUserMarker(message.readBy, uid))
-                : false;
-              const isDelivered = receiptUsers.length > 0
-                ? receiptUsers.every((uid) => hasUserMarker(message.deliveredTo, uid))
-                : false;
-              const showDay =
-                index === 0 ||
-                dayKey(messages[index - 1]?.createdAt) !== dayKey(message.createdAt);
-              const imageUrl =
-                message.type === "image" || message.type === "mixed"
-                  ? message.mediaUrl || message.imageUrl || ""
-                  : message.imageUrl || "";
-              const videoUrl = message.type === "video" ? message.mediaUrl || "" : "";
-              const audioUrl = message.type === "audio" ? message.mediaUrl || "" : "";
-              const documentUrl = message.type === "document" ? message.mediaUrl || "" : "";
-              const groupInviteToken = getGroupInviteToken(message.text);
-              const visibleMessageText = bankDetailsMessageText(groupInviteToken
-                ? withoutGroupInviteUrl(message.text)
-                : message.text?.trim() || "");
-              const bankDetailsMessage = isBankDetailsMessage(visibleMessageText);
-
-              return (
-                <div key={message.id} className="relative">
-                  {showDay ? (
-                    <div className="sticky top-2 z-10 my-4 flex justify-center">
-                      <span className="rounded-full bg-white/90 px-4 py-1.5 text-[11px] font-black text-slate-500 shadow-sm ring-1 ring-slate-100 backdrop-blur">
-                        {formatDay(message.createdAt)}
-                      </span>
-                    </div>
-                  ) : null}
-
-                  <div
-                    id={`chat-message-${message.id}`}
-                    data-message-id={message.id}
-                    className={`message-row group flex ${isMine ? "justify-end" : "justify-start"}`}
-                    style={{ animationDelay: `${Math.min(index * 24, 260)}ms` }}
-                  >
-                    <div className="relative max-w-[88%] sm:max-w-[72%]">
-                      <div
-                        className={`message-bubble relative overflow-hidden rounded-[24px] px-3.5 py-2.5 shadow-[0_7px_22px_rgba(15,23,42,0.08)] ring-1 transition duration-500 sm:px-4 sm:py-3 ${
-                          isMine
-                            ? "rounded-br-[7px] bg-gradient-to-br from-[#0057ff] to-[#2f6fff] text-white ring-blue-400/20"
-                            : "rounded-bl-[7px] bg-white text-slate-950 ring-slate-100"
-                        } ${
-                          highlightedId === message.id
-                            ? "scale-[1.03] ring-4 ring-amber-300/70"
-                            : ""
-                        }`}
-                      >
-                        {message.pinned ? (
-                          <div
-                            className={`mb-2 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] ${
-                              isMine
-                                ? "bg-white/15 text-white"
-                                : "bg-blue-50 text-[#0057ff]"
-                            }`}
-                          >
-                            <Pin size={11} fill="currentColor" /> Закреплено
-                          </div>
-                        ) : null}
-
-                        {isGroup && !isMine ? (
-                          <p className="mb-1.5 text-xs font-black text-[#0057ff]">
-                            {message.senderName || getParticipant(chat, message.senderId)?.displayName || getParticipant(chat, message.senderId)?.name || "Участник"}
-                          </p>
-                        ) : null}
-
-                        {imageUrl ? (
-                          <a href={imageUrl} target="_blank" rel="noreferrer">
-                            <img
-                              src={imageUrl}
-                              alt="Фотография в сообщении"
-                              className="mb-2 max-h-[440px] w-full min-w-[210px] rounded-[18px] object-cover transition duration-300 hover:scale-[1.01]"
-                            />
-                          </a>
-                        ) : null}
-
-                        {videoUrl ? (
-                          <div className="mb-2 min-w-[240px] overflow-hidden rounded-[18px] bg-black/90">
-                            <video
-                              src={videoUrl}
-                              controls
-                              playsInline
-                              preload="metadata"
-                              className="max-h-[420px] w-full"
-                            />
-                          </div>
-                        ) : null}
-
-                        {audioUrl ? <VoiceMessage url={audioUrl} mine={isMine} /> : null}
-
-                        {documentUrl ? (
-                          <a
-                            href={documentUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className={`mb-2 flex min-w-[220px] items-center gap-3 rounded-[18px] p-3 ${isMine ? "bg-white/14" : "bg-blue-50"}`}
-                          >
-                            <span className={`flex h-11 w-11 items-center justify-center rounded-2xl ${isMine ? "bg-white/16 text-white" : "bg-white text-[#0057ff]"}`}>
-                              <FileText size={21} />
-                            </span>
-                            <span className="min-w-0 flex-1">
-                              <span className="block truncate text-sm font-black">{message.fileName || "Документ"}</span>
-                              <span className={`mt-1 block text-xs font-bold ${isMine ? "text-blue-100" : "text-slate-500"}`}>Открыть файл</span>
-                            </span>
-                          </a>
-                        ) : null}
-
-                        {groupInviteToken ? (
-                          <GroupInviteCard token={groupInviteToken} mine={isMine} />
-                        ) : null}
-
-                        {bankDetailsMessage ? <BankMessageCard text={visibleMessageText} mine={isMine} /> : visibleMessageText ? (
-                          <p className="whitespace-pre-wrap break-words text-sm font-medium leading-6 sm:text-[15px]">
-                            {visibleMessageText}
-                          </p>
-                        ) : null}
-
-                        <div
-                          className={`mt-1.5 flex items-center justify-end gap-1 text-[10px] font-bold ${
-                            isMine ? "text-blue-100" : "text-slate-400"
-                          }`}
-                        >
-                          {message.editedAt ? <span>изменено</span> : null}
-                          <span>{formatTime(message.createdAt)}</span>
-                          {isMine ? (
-                            isRead ? (
-                              <CheckCheck size={15} className="text-white" />
-                            ) : isDelivered ? (
-                              <CheckCheck size={15} />
-                            ) : (
-                              <Check size={15} />
-                            )
-                          ) : null}
-                        </div>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setOpenMenuId(openMenuId === message.id ? "" : message.id);
-                        }}
-                        className={`absolute top-1 flex h-8 w-8 items-center justify-center rounded-full bg-white text-slate-500 shadow-lg ring-1 ring-slate-100 transition duration-200 hover:scale-105 hover:text-[#0057ff] ${
-                          isMine ? "-left-9" : "-right-9"
-                        } opacity-100 sm:opacity-0 sm:group-hover:opacity-100`}
-                        aria-label="Действия с сообщением"
-                      >
-                        <MoreVertical size={16} />
-                      </button>
-
-                      {openMenuId === message.id ? (
-                        <div
-                          onClick={(event) => event.stopPropagation()}
-                          className={`message-menu absolute z-40 mt-2 w-56 rounded-[22px] bg-white p-2 shadow-[0_22px_65px_rgba(15,23,42,0.22)] ring-1 ring-slate-100 ${
-                            isMine ? "right-0" : "left-0"
-                          }`}
-                        >
-                          <button
-                            type="button"
-                            onClick={() => togglePin(message)}
-                            className="chat-action"
-                          >
-                            {message.pinned ? <PinOff size={17} /> : <Pin size={17} />}
-                            {message.pinned ? "Открепить" : "Закрепить"}
-                          </button>
-
-                          {isMine && message.type === "text" ? (
-                            <button
-                              type="button"
-                              onClick={() => beginEdit(message)}
-                              className="chat-action"
-                            >
-                              <Edit3 size={17} /> Изменить
-                            </button>
-                          ) : null}
-
-                          {!isMine ? (
-                            <ReportDialog
-                              targetType="message"
-                              targetId={message.id}
-                              targetOwnerId={message.senderId}
-                              targetTitle="Сообщение в чате"
-                              targetSnapshot={{
-                                chatId,
-                                text: message.text || "",
-                                imageUrl: imageUrl || "",
-                                mediaUrl: message.mediaUrl || "",
-                                type: message.type || "text",
-                              }}
-                              buttonClassName="chat-action text-red-600"
-                            />
-                          ) : null}
-
-                          <button
-                            type="button"
-                            onClick={() => hideForMe(message)}
-                            className="chat-action"
-                          >
-                            <Trash2 size={17} /> Удалить у меня
-                          </button>
-
-                          {isMine ? (
-                            <button
-                              type="button"
-                              onClick={() => deleteForEveryone(message)}
-                              className="chat-action text-red-600"
-                            >
-                              <Trash2 size={17} /> Удалить у всех
-                            </button>
-                          ) : null}
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
+    <div className={styles.threadArea}>
+      <section ref={threadRef} className={styles.thread} onClick={() => openMenuId && setOpenMenuId("")} onScroll={(event) => { const thread = event.currentTarget; const near = thread.scrollHeight - thread.scrollTop - thread.clientHeight < 150; nearBottomRef.current = near; setShowScrollBottom(!near); }} aria-label="Сообщения">
+        {messages.length === 0 ? <div className={styles.emptyThread}><MessageCircle size={29} strokeWidth={1.5} /><h3>Начните разговор</h3><p>Можно отправить сообщение, фото или документ.</p></div> : messages.map((message, index) => {
+          const isMine = message.senderId === user?.uid;
+          const receiptUsers = participantIds.filter((uid) => uid !== user?.uid);
+          const isRead = receiptUsers.length > 0 && receiptUsers.every((uid) => hasUserMarker(message.readBy, uid));
+          const isDelivered = receiptUsers.length > 0 && receiptUsers.every((uid) => hasUserMarker(message.deliveredTo, uid));
+          const showDay = index === 0 || dayKey(messages[index - 1]?.createdAt) !== dayKey(message.createdAt);
+          const imageUrl = message.type === "image" || message.type === "mixed" ? message.mediaUrl || message.imageUrl || "" : message.imageUrl || "";
+          const videoUrl = message.type === "video" ? message.mediaUrl || "" : "";
+          const audioUrl = message.type === "audio" ? message.mediaUrl || "" : "";
+          const documentUrl = message.type === "document" ? message.mediaUrl || "" : "";
+          const groupInviteToken = getGroupInviteToken(message.text);
+          const visibleMessageText = bankDetailsMessageText(groupInviteToken ? withoutGroupInviteUrl(message.text) : message.text?.trim() || "");
+          const bankDetailsMessage = isBankDetailsMessage(visibleMessageText);
+          return <div key={message.id}>
+            {showDay ? <div className={styles.day}><span>{formatDay(message.createdAt)}</span></div> : null}
+            <div id={`chat-message-${message.id}`} data-message-id={message.id} data-mine={isMine} className={styles.messageRow}>
+              <div className={styles.messageWrap}>
+                <div className={styles.bubble} data-highlighted={highlightedId === message.id}>
+                  {message.pinned ? <span className={styles.messagePin}><Pin size={10} />Закреплено</span> : null}
+                  {isGroup && !isMine ? <p className={styles.messageSender}>{message.senderName || getParticipant(chat, message.senderId)?.displayName || getParticipant(chat, message.senderId)?.name || "Участник"}</p> : null}
+                  {imageUrl ? <a href={imageUrl} target="_blank" rel="noreferrer"><img src={imageUrl} alt="Фотография в сообщении" className={styles.messagePhoto} onLoad={() => { if (nearBottomRef.current) threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight }); }} /></a> : null}
+                  {videoUrl ? <video src={videoUrl} controls playsInline preload="metadata" className={styles.messageVideo} /> : null}
+                  {audioUrl ? <VoiceMessage url={audioUrl} mine={isMine} /> : null}
+                  {documentUrl ? <a href={documentUrl} target="_blank" rel="noreferrer" className={styles.attachment}><FileText size={23} /><span><b>{message.fileName || "Документ"}</b><small>Открыть файл</small></span><ArrowUpRight size={14} /></a> : null}
+                  {groupInviteToken ? <GroupInviteCard token={groupInviteToken} mine={isMine} /> : null}
+                  {bankDetailsMessage ? <BankMessageCard text={visibleMessageText} mine={isMine} /> : visibleMessageText ? <p className={styles.messageText}>{visibleMessageText}</p> : null}
+                  <div className={styles.receipt} data-read={isRead}>{message.editedAt ? <span>изменено</span> : null}<time>{formatTime(message.createdAt)}</time>{isMine ? isRead || isDelivered ? <CheckCheck size={13} /> : <Check size={13} /> : null}</div>
                 </div>
-              );
-            })
-          )}
-          <div ref={bottomRef} />
-        </section>
-
-        {mediaPreview ? (
-          <div className="relative z-20 border-t border-slate-100 bg-white px-3 py-3 sm:px-5">
-            <div className="media-preview relative w-fit overflow-hidden rounded-[20px] bg-slate-100 p-1 shadow-sm ring-1 ring-slate-200">
-              {mediaKind === "image" ? (
-                <img
-                  src={mediaPreview}
-                  alt="Предпросмотр"
-                  className="h-28 w-32 rounded-[16px] object-cover"
-                />
-              ) : (
-                <video
-                  src={mediaPreview}
-                  muted
-                  className="h-28 w-44 rounded-[16px] bg-black object-cover"
-                />
-              )}
-              <button
-                type="button"
-                onClick={removeMedia}
-                className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/70 text-white transition hover:scale-105"
-                aria-label="Удалить вложение"
-              >
-                <X size={16} />
-              </button>
-              <div className="absolute bottom-2 left-2 rounded-full bg-black/65 px-2.5 py-1 text-[10px] font-black text-white">
-                {mediaKind === "video" ? "Видео" : "Фото"}
+                <button type="button" className={styles.messageMenuButton} aria-label="Действия с сообщением" aria-expanded={openMenuId === message.id} onClick={(event) => { event.stopPropagation(); setOpenMenuId(openMenuId === message.id ? "" : message.id); }}><MoreVertical size={15} /></button>
+                {openMenuId === message.id ? <div className={styles.messageMenu} onClick={event => event.stopPropagation()}>
+                  <button type="button" onClick={() => togglePin(message)}>{message.pinned ? <PinOff size={16} /> : <Pin size={16} />}{message.pinned ? "Открепить" : "Закрепить"}</button>
+                  {isMine && message.type === "text" ? <button type="button" onClick={() => beginEdit(message)}><Edit3 size={16} />Изменить</button> : null}
+                  {!isMine ? <ReportDialog targetType="message" targetId={message.id} targetOwnerId={message.senderId} targetTitle="Сообщение в чате" targetSnapshot={{ chatId, text: message.text || "", imageUrl, mediaUrl: message.mediaUrl || "", type: message.type || "text" }} buttonClassName={styles.menuItem} /> : null}
+                  <button type="button" onClick={() => hideForMe(message)}><Trash2 size={16} />Удалить у меня</button>
+                  {isMine ? <button type="button" data-danger="true" onClick={() => deleteForEveryone(message)}><Trash2 size={16} />Удалить у всех</button> : null}
+                </div> : null}
               </div>
             </div>
-          </div>
-        ) : null}
+          </div>;
+        })}
+        <div ref={bottomRef} />
+      </section>
+      {showScrollBottom ? <button type="button" className={styles.scrollDown} onClick={() => { nearBottomRef.current = true; threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight, behavior: "smooth" }); }} aria-label="К последнему сообщению"><ArrowDown size={19} /></button> : null}
+    </div>
 
-        {mediaFile && mediaKind === "document" ? (
-          <div className="relative z-20 border-t border-slate-100 bg-white px-3 py-3 sm:px-5">
-            <div className="media-preview flex max-w-md items-center gap-3 rounded-[20px] bg-blue-50 p-3 ring-1 ring-blue-100">
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-[#0057ff] shadow-sm"><FileText size={21} /></span>
-              <span className="min-w-0 flex-1"><span className="block truncate text-sm font-black text-slate-950">{mediaFile.name}</span><span className="mt-1 block text-xs font-bold text-slate-500">Документ · до 25 МБ</span></span>
-              <button type="button" onClick={removeMedia} className="flex h-9 w-9 items-center justify-center rounded-2xl bg-white text-slate-500 transition hover:text-red-600" aria-label="Удалить файл"><X size={17} /></button>
-            </div>
-          </div>
-        ) : null}
+    {mediaFile ? <div className={styles.previewBar}>
+      {mediaKind === "image" ? <img src={mediaPreview} alt="Предпросмотр вложения" /> : mediaKind === "video" ? <video src={mediaPreview} muted /> : <FileText size={25} />}
+      <span><b>{mediaFile.name}</b><small>{mediaKind === "image" ? "Фотография" : mediaKind === "video" ? "Видео" : "Документ"}</small></span><button type="button" className={styles.iconButton} onClick={removeMedia} aria-label="Удалить вложение"><X size={18} /></button>
+    </div> : null}
+    {editingId ? <div className={styles.editBar}><Edit3 size={16} /><span>Редактирование сообщения</span><button type="button" className={styles.iconButton} onClick={() => { setEditingId(""); setText(""); }} aria-label="Отменить редактирование"><X size={17} /></button></div> : null}
+    {error ? <div className={styles.errorBar} role="alert"><span>{error}</span><button type="button" className={styles.iconButton} onClick={() => setError("")} aria-label="Скрыть ошибку"><X size={16} /></button></div> : null}
 
-        {editingId ? (
-          <div className="relative z-20 flex items-center justify-between border-t border-blue-100 bg-blue-50 px-4 py-2.5 text-sm font-black text-[#0057ff] sm:px-5">
-            <span className="flex items-center gap-2">
-              <Edit3 size={16} /> Редактирование сообщения
-            </span>
-            <button
-              type="button"
-              onClick={() => {
-                setEditingId("");
-                setText("");
-              }}
-              className="flex h-8 w-8 items-center justify-center rounded-full transition hover:bg-blue-100"
-            >
-              <X size={17} />
-            </button>
-          </div>
-        ) : null}
-
-        {error ? (
-          <div className="relative z-20 flex items-center justify-between border-t border-red-100 bg-red-50 px-4 py-2 text-sm font-black text-red-600 sm:px-5">
-            <span>{error}</span>
-            <button type="button" onClick={() => setError("")}>
-              <X size={16} />
-            </button>
-          </div>
-        ) : null}
-
-        <div className="relative z-20 border-t border-slate-100 bg-white/95 p-3 backdrop-blur-xl sm:p-4">
-          {blockedEither ? (
-            <div className="rounded-[22px] border border-red-100 bg-red-50 px-4 py-4 text-center text-sm font-black text-red-600">
-              Отправка сообщений заблокирована
-            </div>
-          ) : recording ? (
-            <div className="recording-panel flex items-center gap-3 rounded-[24px] border border-red-100 bg-red-50 p-2.5 shadow-inner sm:px-3">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-red-500 text-white shadow-lg shadow-red-200">
-                <Mic size={20} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-red-500" />
-                  <span className="text-sm font-black text-red-600">Идёт запись</span>
-                  <span className="text-sm font-black tabular-nums text-slate-700">
-                    {formatDuration(recordSeconds)}
-                  </span>
-                </div>
-                <div className="mt-2 flex h-5 items-end gap-1 overflow-hidden">
-                  {Array.from({ length: 30 }).map((_, index) => (
-                    <span
-                      key={index}
-                      className="recording-bar w-1 rounded-full bg-red-400"
-                      style={{
-                        height: 5 + ((index * 11 + 7) % 15),
-                        animationDelay: `${index * 35}ms`,
-                      }}
-                    />
-                  ))}
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => stopRecording(false)}
-                className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-slate-500 shadow-sm transition hover:text-red-600"
-                title="Отменить"
-              >
-                <X size={20} />
-              </button>
-              <button
-                type="button"
-                onClick={() => stopRecording(true)}
-                className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#0057ff] text-white shadow-lg shadow-blue-200 transition hover:scale-105"
-                title="Отправить голосовое"
-              >
-                <Send size={19} />
-              </button>
-            </div>
-          ) : (
-            <form
-              onSubmit={handleSend}
-              className="flex items-end gap-2 rounded-[24px] border border-slate-200 bg-slate-50/80 p-2 transition duration-300 focus-within:border-blue-300 focus-within:bg-white focus-within:shadow-[0_0_0_5px_rgba(0,87,255,0.07)]"
-            >
-              {!editingId ? (
-                <label className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-2xl bg-white text-[#0057ff] shadow-sm ring-1 ring-slate-100 transition hover:scale-105 hover:bg-blue-50">
-                  <ImagePlus size={21} />
-                  <input
-                    type="file"
-                    accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.rtf,.csv,.zip,.rar,.7z"
-                    className="hidden"
-                    onChange={handleMediaChange}
-                  />
-                </label>
-              ) : null}
-
-              {!editingId ? (
-                <button
-                  type="button"
-                  onClick={shareBankDetails}
-                  disabled={sending}
-                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-[#0057ff] ring-1 ring-blue-100 transition duration-300 hover:-translate-y-0.5 hover:scale-105 hover:bg-blue-100 disabled:opacity-50"
-                  title="Поделиться расчётным счётом"
-                >
-                  <Landmark size={20} />
-                </button>
-              ) : null}
-
-              <textarea
-                className="max-h-32 min-h-11 flex-1 resize-none bg-transparent px-2 py-2.5 text-sm font-semibold leading-6 text-slate-950 outline-none placeholder:text-slate-400 sm:text-[15px]"
-                rows={1}
-                placeholder={editingId ? "Изменить сообщение" : "Сообщение"}
-                value={text}
-                onChange={(event) => setText(event.target.value)}
-                onKeyDown={handleComposerKeyDown}
-              />
-
-              {text.trim() || mediaFile || editingId ? (
-                <button
-                  disabled={sending || voiceUploading}
-                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#0057ff] text-white shadow-lg shadow-blue-200 transition hover:scale-105 disabled:cursor-wait disabled:opacity-60"
-                  title={editingId ? "Сохранить" : "Отправить"}
-                >
-                  {sending ? (
-                    <Loader2 className="animate-spin" size={20} />
-                  ) : editingId ? (
-                    <Check size={21} />
-                  ) : (
-                    <Send size={20} />
-                  )}
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={startRecording}
-                  disabled={voiceUploading}
-                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#0057ff] text-white shadow-lg shadow-blue-200 transition hover:scale-105 disabled:opacity-60"
-                  title="Записать голосовое"
-                >
-                  {voiceUploading ? (
-                    <Loader2 className="animate-spin" size={20} />
-                  ) : (
-                    <Mic size={21} />
-                  )}
-                </button>
-              )}
-            </form>
-          )}
-        </div>
-      </div>
-
-      <style jsx>{`
-        .chat-shell {
-          animation: shellIn 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
-        }
-        .message-row {
-          animation: messageIn 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
-        }
-        .group-member-pill {
-          animation: memberPillIn 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
-        }
-        .message-menu {
-          animation: menuIn 170ms cubic-bezier(0.22, 1, 0.36, 1) both;
-          transform-origin: top right;
-        }
-        .media-preview {
-          animation: previewIn 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
-        }
-        .recording-panel {
-          animation: previewIn 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
-        }
-        .recording-bar {
-          animation: recordingWave 700ms ease-in-out infinite alternate;
-        }
-        .chat-messages {
-          scroll-behavior: smooth;
-          scrollbar-width: thin;
-          scrollbar-color: #bfd0f5 transparent;
-        }
-        .chat-messages::-webkit-scrollbar {
-          width: 7px;
-        }
-        .chat-messages::-webkit-scrollbar-thumb {
-          border-radius: 999px;
-          background: #bfd0f5;
-        }
-        @keyframes shellIn {
-          from {
-            opacity: 0;
-            transform: translateY(16px) scale(0.992);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0) scale(1);
-          }
-        }
-        @keyframes messageIn {
-          from {
-            opacity: 0;
-            transform: translateY(10px) scale(0.98);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0) scale(1);
-          }
-        }
-        @keyframes memberPillIn {
-          from {
-            opacity: 0;
-            transform: translateY(5px) scale(0.96);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0) scale(1);
-          }
-        }
-        @keyframes menuIn {
-          from {
-            opacity: 0;
-            transform: translateY(-5px) scale(0.96);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0) scale(1);
-          }
-        }
-        @keyframes previewIn {
-          from {
-            opacity: 0;
-            transform: translateY(8px) scale(0.97);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0) scale(1);
-          }
-        }
-        @keyframes recordingWave {
-          from {
-            transform: scaleY(0.45);
-            opacity: 0.55;
-          }
-          to {
-            transform: scaleY(1);
-            opacity: 1;
-          }
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .chat-shell,
-          .message-row,
-          .group-member-pill,
-          .message-menu,
-          .media-preview,
-          .recording-panel,
-          .recording-bar {
-            animation: none;
-          }
-        }
-      `}</style>
-    </main>
-  );
+    <div className={styles.composerArea}>
+      {blockedEither ? <div className={styles.errorBar}>Отправка сообщений заблокирована</div> : recording ? <div className={styles.recording}>
+        <span><i />Идёт запись<time>{formatDuration(recordSeconds)}</time></span><button type="button" className={styles.iconButton} onClick={() => stopRecording(false)} aria-label="Отменить запись"><X size={20} /></button><button type="button" className={styles.send} onClick={() => stopRecording(true)} aria-label="Отправить голосовое"><Send size={18} /></button>
+      </div> : <form onSubmit={handleSend} className={styles.composer}>
+        {!editingId ? <><label className={styles.composerControl} title="Прикрепить файл"><ImagePlus size={20} /><input type="file" accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.rtf,.csv,.zip,.rar,.7z" hidden onChange={handleMediaChange} aria-label="Прикрепить файл" /></label><button type="button" className={styles.composerControl} onClick={shareBankDetails} disabled={sending} title="Поделиться реквизитами" aria-label="Поделиться реквизитами"><Landmark size={19} /></button></> : null}
+        <textarea rows={1} placeholder={editingId ? "Изменить сообщение" : "Напишите сообщение…"} aria-label="Сообщение" value={text} onChange={(event) => { setText(event.target.value); event.currentTarget.style.height = "auto"; event.currentTarget.style.height = `${Math.min(event.currentTarget.scrollHeight, 120)}px`; }} onKeyDown={handleComposerKeyDown} />
+        {text.trim() || mediaFile || editingId ? <button type="submit" className={styles.send} disabled={sending || voiceUploading} aria-label={editingId ? "Сохранить сообщение" : "Отправить сообщение"}>{sending ? <Loader2 size={19} className={styles.spinner} /> : editingId ? <Check size={20} /> : <Send size={18} />}</button> : <button type="button" className={styles.send} onClick={startRecording} disabled={voiceUploading} aria-label="Записать голосовое сообщение">{voiceUploading ? <Loader2 size={19} className={styles.spinner} /> : <Mic size={19} />}</button>}
+      </form>}
+      {!blockedEither && !recording ? <div className={styles.composerNote}><span>Enter — отправить · Shift + Enter — новая строка</span><span>Строва</span></div> : null}
+    </div>
+  </section>;
 }

@@ -1,5 +1,7 @@
 "use client";
 import { getPublicProfile } from "@/lib/publicProfiles";
+import { getProfilePhone } from "@/lib/profilePhone";
+import { contactAllowsCalls } from "@/lib/contactPreference";
 
 
 import { useAuth } from "@/components/AuthProvider";
@@ -51,8 +53,8 @@ import {
   where,
 } from "firebase/firestore";
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { type CSSProperties, useEffect, useMemo, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 
 type PortfolioItem = {
   id: string;
@@ -142,6 +144,7 @@ function formatPhone(value?: string) {
 
 export default function PublicUserPage() {
   const params = useParams();
+  const router = useRouter();
   const uid = String(params?.uid || "");
   const { user } = useAuth();
 
@@ -157,6 +160,22 @@ export default function PublicUserPage() {
   const [loading, setLoading] = useState(true);
   const [profileMissing, setProfileMissing] = useState(false);
   const [compareLoading, setCompareLoading] = useState(false);
+  const [phoneLoading, setPhoneLoading] = useState(false);
+  const [phoneError, setPhoneError] = useState("");
+  const [revealedContact, setRevealedContact] = useState<{
+    ownerId: string;
+    viewerId: string;
+    phone: string;
+  } | null>(null);
+  const phoneRequestId = useRef(0);
+
+  useEffect(() => {
+    phoneRequestId.current += 1;
+    setRevealedContact(null);
+    setPhoneError("");
+    setPhoneLoading(false);
+    return () => { phoneRequestId.current += 1; };
+  }, [uid, user?.uid]);
 
   useEffect(() => {
     if (!uid) {
@@ -316,6 +335,36 @@ export default function PublicUserPage() {
     profile?.companyName ||
     "";
   const registryStatus = registryStatusMeta(profile?.companyRegistryStatus);
+  const canCall = profile?.hasPhone !== false && contactAllowsCalls(profile?.contactPreference);
+  const phone = revealedContact?.ownerId === uid && revealedContact?.viewerId === user?.uid
+    ? revealedContact.phone
+    : "";
+
+  async function callUser() {
+    if (!user) {
+      router.push("/auth");
+      return;
+    }
+    if (!canCall || phoneLoading) return;
+
+    const requestId = ++phoneRequestId.current;
+    setPhoneLoading(true);
+    setPhoneError("");
+    try {
+      const number = await getProfilePhone(uid);
+      if (requestId !== phoneRequestId.current) return;
+      setRevealedContact({ ownerId: uid, viewerId: user.uid, phone: number });
+      window.location.assign(`tel:${number}`);
+    } catch (error) {
+      if (requestId === phoneRequestId.current) {
+        setPhoneError(error instanceof Error && error.name !== "AbortError"
+          ? error.message
+          : "Не удалось получить номер телефона. Повторите попытку позже.");
+      }
+    } finally {
+      if (requestId === phoneRequestId.current) setPhoneLoading(false);
+    }
+  }
 
   const companyDetails = [
     {
@@ -415,7 +464,7 @@ export default function PublicUserPage() {
         @keyframes public-profile-reveal {
           from {
             opacity: 0;
-            transform: translateY(22px);
+            transform: translateY(10px);
           }
           to {
             opacity: 1;
@@ -438,7 +487,7 @@ export default function PublicUserPage() {
         }
 
         .public-profile-reveal {
-          animation: public-profile-reveal 0.65s cubic-bezier(0.22, 1, 0.36, 1) both;
+          animation: public-profile-reveal 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
         }
 
         .public-profile-tool {
@@ -462,7 +511,7 @@ export default function PublicUserPage() {
 
       <div className="app-container max-w-7xl">
         <section className="public-profile-reveal relative overflow-hidden rounded-[38px] bg-white shadow-[0_26px_80px_rgba(15,23,42,0.10)] ring-1 ring-slate-200/70">
-          <div className="relative min-h-[250px] overflow-hidden bg-gradient-to-br from-[#0048dc] via-[#0057ff] to-[#3482ff] px-5 pb-24 pt-7 text-white sm:px-10 sm:pb-28 sm:pt-10">
+          <div className="relative min-h-[220px] overflow-hidden bg-gradient-to-br from-[#0048dc] via-[#0057ff] to-[#3482ff] px-5 pb-24 pt-7 text-white sm:px-10 sm:pb-28 sm:pt-10">
             <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-blue-950/10 via-transparent to-white/5" />
 
             <span className="public-profile-corner pointer-events-none absolute left-6 top-24 h-14 w-14 border-l-2 border-t-2 border-[#ffd233]/80 sm:left-10" />
@@ -511,15 +560,15 @@ export default function PublicUserPage() {
             </div>
           </div>
 
-          <div className="relative -mt-20 px-5 pb-7 sm:-mt-24 sm:px-10 sm:pb-10">
-            <div className="flex flex-col gap-6 lg:flex-row lg:items-end">
-              <div className="group relative h-36 w-36 shrink-0 overflow-hidden rounded-[34px] bg-white p-1.5 shadow-[0_20px_45px_rgba(15,23,42,0.22)] ring-1 ring-white sm:h-44 sm:w-44">
+          <div className="relative px-5 pb-7 sm:px-10 sm:pb-9">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:gap-6">
+              <div className="group relative -mt-16 h-36 w-36 shrink-0 overflow-hidden rounded-[34px] sm:-mt-20 bg-white p-1.5 shadow-[0_20px_45px_rgba(15,23,42,0.22)] ring-1 ring-white sm:h-44 sm:w-44">
                 <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-[28px] bg-blue-50 text-[#0057ff]">
                   {avatarUrl ? (
                     <img
                       src={avatarUrl}
                       alt={profile.displayName || "Пользователь"}
-                      className="h-full w-full object-cover transition duration-700 group-hover:scale-110"
+                      className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
                     />
                   ) : (
                     <UserRound size={58} />
@@ -527,7 +576,7 @@ export default function PublicUserPage() {
                 </div>
               </div>
 
-              <div className="min-w-0 flex-1 pb-1">
+              <div className="min-w-0 flex-1 pb-1 lg:pt-6">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1.5 text-xs font-black text-[#0057ff] ring-1 ring-blue-100">
                     <BriefcaseBusiness size={15} />
@@ -544,12 +593,12 @@ export default function PublicUserPage() {
                   ) : null}
                 </div>
 
-                <h1 className="mt-4 break-words text-4xl font-black tracking-[-0.04em] text-slate-950 sm:text-5xl">
+                <h1 className="mt-3 break-words text-4xl font-extrabold leading-[1.12] tracking-[-0.035em] text-[#1457b9] [overflow-wrap:anywhere] sm:text-5xl">
                   {profile.displayName || profile.name || "Пользователь"}
                 </h1>
 
                 {isBusiness && businessName ? (
-                  <p className="mt-2 max-w-3xl text-lg font-extrabold leading-7 text-slate-600">
+                  <p className="mt-3 max-w-3xl text-base font-semibold leading-7 text-slate-600 sm:text-lg">
                     {businessName}
                   </p>
                 ) : (
@@ -561,7 +610,7 @@ export default function PublicUserPage() {
               </div>
 
               {!isOwner ? (
-                <div className="grid w-full gap-3 sm:w-auto sm:grid-cols-2 lg:min-w-[360px]">
+                <div className="grid w-full gap-3 sm:w-auto sm:grid-cols-2 lg:min-w-[330px] lg:self-center">
                   <Link
                     href={user ? `/messages/${uid}` : "/auth"}
                     className="group inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-[#0057ff] px-5 text-sm font-black text-white shadow-lg shadow-blue-600/25 transition duration-300 hover:-translate-y-1 hover:bg-[#004de6] hover:shadow-[0_18px_40px_rgba(0,87,255,0.30)] active:scale-[0.97]"
@@ -573,17 +622,23 @@ export default function PublicUserPage() {
                     {user ? "Написать" : "Войти и написать"}
                   </Link>
 
-                  {profile.phone ? (
-                    <a
-                      href={`tel:${profile.phone.replace(/[^\d+]/g, "")}`}
-                      className="group inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-[#ffd233] px-5 text-sm font-black text-slate-950 shadow-lg shadow-amber-400/20 transition duration-300 hover:-translate-y-1 hover:bg-[#ffca0a] hover:shadow-[0_18px_40px_rgba(245,158,11,0.22)] active:scale-[0.97]"
+                  {canCall ? (
+                    <button
+                      type="button"
+                      onClick={callUser}
+                      disabled={phoneLoading}
+                      aria-busy={phoneLoading}
+                      className="group inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-[#ffd233] px-5 text-sm font-black text-slate-950 shadow-lg shadow-amber-400/20 transition duration-300 hover:-translate-y-1 hover:bg-[#ffca0a] hover:shadow-[0_18px_40px_rgba(245,158,11,0.22)] active:scale-[0.97] disabled:opacity-60"
                     >
                       <Phone
                         size={20}
                         className="transition duration-300 group-hover:rotate-[-8deg] group-hover:scale-110"
                       />
-                      Позвонить
-                    </a>
+                      {phoneLoading ? "Получаем номер…" : user ? "Позвонить" : "Войти и позвонить"}
+                    </button>
+                  ) : null}
+                  {phoneError ? (
+                    <p role="alert" className="text-sm font-bold text-red-600 sm:col-span-2">{phoneError}</p>
                   ) : null}
                 </div>
               ) : null}
@@ -613,9 +668,9 @@ export default function PublicUserPage() {
                 </div>
               ) : null}
 
-              {profile.phone ? (
+              {phone ? (
                 <a
-                  href={`tel:${profile.phone.replace(/[^\d+]/g, "")}`}
+                  href={`tel:${phone}`}
                   className="group flex min-h-20 items-center gap-3 rounded-[22px] bg-slate-50 px-4 py-3 ring-1 ring-slate-100 transition duration-300 hover:-translate-y-1 hover:bg-blue-50 hover:shadow-lg"
                 >
                   <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-[#0057ff] shadow-sm transition duration-300 group-hover:scale-110">
@@ -626,7 +681,7 @@ export default function PublicUserPage() {
                       Телефон
                     </span>
                     <span className="mt-1 block truncate font-black text-slate-950">
-                      {formatPhone(profile.phone)}
+                      {formatPhone(phone)}
                     </span>
                   </span>
                 </a>
@@ -957,11 +1012,11 @@ export default function PublicUserPage() {
                         <img
                           src={cover}
                           alt={item.title}
-                          className="h-full w-full object-cover transition duration-700 group-hover:scale-110"
+                          className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
                         />
                       ) : (
                         <div className="flex h-full items-center justify-center text-2xl font-black text-blue-200">
-                          Строва.ру
+                          Строва
                         </div>
                       )}
 
@@ -1156,14 +1211,20 @@ export default function PublicUserPage() {
                   Написать
                 </Link>
 
-                {profile.phone ? (
-                  <a
-                    href={`tel:${profile.phone.replace(/[^\d+]/g, "")}`}
-                    className="inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-[#ffd233] px-6 font-black text-slate-950 shadow-lg transition duration-300 hover:-translate-y-1 hover:bg-[#ffca0a] active:scale-[0.97]"
+                {canCall ? (
+                  <button
+                    type="button"
+                    onClick={callUser}
+                    disabled={phoneLoading}
+                    aria-busy={phoneLoading}
+                    className="inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-[#ffd233] px-6 font-black text-slate-950 shadow-lg transition duration-300 hover:-translate-y-1 hover:bg-[#ffca0a] active:scale-[0.97] disabled:opacity-60"
                   >
                     <Phone size={20} />
-                    Позвонить
-                  </a>
+                    {phoneLoading ? "Получаем номер…" : user ? "Позвонить" : "Войти и позвонить"}
+                  </button>
+                ) : null}
+                {phoneError ? (
+                  <p role="alert" className="text-sm font-bold text-white sm:col-span-2">{phoneError}</p>
                 ) : null}
               </div>
             </div>

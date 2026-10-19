@@ -120,10 +120,10 @@ export async function POST(request: NextRequest) {
     });
 
     const requestId = `SUP-${Date.now()}`;
-    const subject = `[Строва.ру] ${priority}: ${topic}`;
+    const subject = `[Строва] ${priority}: ${topic}`;
 
     const text = [
-      `Новое обращение в поддержку Строва.ру`,
+      `Новое обращение в поддержку Строва`,
       ``,
       textLine("Номер", requestId),
       textLine("Имя", name),
@@ -144,7 +144,7 @@ export async function POST(request: NextRequest) {
         <div style="max-width:720px;margin:0 auto;padding:32px 16px;">
           <div style="background:#0057ff;color:white;border-radius:28px;padding:28px;">
             <div style="display:inline-block;background:#ffde3d;color:#0057ff;border-radius:14px;padding:10px 14px;font-weight:900;">
-              Строва.ру
+              Строва
             </div>
             <h1 style="margin:22px 0 0;font-size:28px;line-height:1.2;">Новое обращение в поддержку</h1>
             <p style="margin:10px 0 0;color:rgba(255,255,255,.82);font-weight:700;">${escapeHtml(requestId)}</p>
@@ -173,7 +173,7 @@ export async function POST(request: NextRequest) {
     `;
 
     await transporter.sendMail({
-      from: `"Строва.ру Поддержка" <${supportEmailFrom}>`,
+      from: `"Строва Поддержка" <${supportEmailFrom}>`,
       to: supportEmailTo,
       replyTo: email,
       subject,

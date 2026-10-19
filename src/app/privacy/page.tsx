@@ -3,9 +3,9 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 export const metadata: Metadata = {
-  title: "Политика конфиденциальности — Строва.ру",
+  title: "Политика конфиденциальности — Строва",
   description:
-    "Политика обработки персональных данных сайта и мобильного приложения Строва.ру.",
+    "Политика обработки персональных данных сайта и мобильного приложения Строва.",
 };
 
 const EFFECTIVE_DATE = "23 июля 2026 года";
@@ -38,7 +38,7 @@ export default function PrivacyPolicyPage() {
             <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-xl text-[#0057ff]">
               С
             </span>
-            <span className="text-2xl">Строва.ру</span>
+            <span className="text-2xl">Строва</span>
           </Link>
 
           <h1 className="mt-8 max-w-3xl text-4xl font-black leading-tight tracking-tight sm:text-6xl">
@@ -46,7 +46,7 @@ export default function PrivacyPolicyPage() {
           </h1>
           <p className="mt-5 max-w-3xl text-base font-bold leading-7 text-blue-100">
             Документ действует для сайта strovaru.ru и мобильного приложения
-            «Строва.ру» на iOS и Android.
+            «Строва» на iOS и Android.
           </p>
           <p className="mt-4 text-sm font-black text-[#ffd43b]">
             Дата вступления в силу: {EFFECTIVE_DATE}
@@ -63,7 +63,7 @@ export default function PrivacyPolicyPage() {
           <Section title="1. Общие положения">
             <p>
               Настоящая Политика описывает, какие сведения обрабатывает сервис
-              «Строва.ру» (далее — «Сервис»), для каких целей они используются,
+              «Строва» (далее — «Сервис»), для каких целей они используются,
               кому могут передаваться, как защищаются и какими правами обладает
               пользователь.
             </p>

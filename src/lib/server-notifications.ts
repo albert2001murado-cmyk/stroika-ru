@@ -98,7 +98,7 @@ export async function deliverServerNotification(
 ) {
   const recipientId = clean(raw.recipientId, 160);
   const actorId = clean(raw.actorId || "system", 160) || "system";
-  const title = clean(raw.title || "Строва.ру", 80) || "Строва.ру";
+  const title = clean(raw.title || "Строва", 80) || "Строва";
   const body = clean(raw.body || "Новое уведомление", 240) || "Новое уведомление";
   const url = safeUrl(raw.url);
   const type = clean(raw.type || "system", 32) || "system";
@@ -130,7 +130,7 @@ export async function deliverServerNotification(
     transaction.create(reference, {
       userId: recipientId,
       actorId,
-      actorName: clean(raw.actorName || (actorId === "system" ? "Строва.ру" : "Пользователь"), 120),
+      actorName: clean(raw.actorName || (actorId === "system" ? "Строва" : "Пользователь"), 120),
       title,
       body,
       url,

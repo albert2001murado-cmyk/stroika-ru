@@ -1,1033 +1,824 @@
 "use client";
-import { uploadAuthHeaders } from "@/lib/uploadAuth";
+import { getPublicProfile } from "@/lib/publicProfiles";
 
-
-import PublicationLocationPicker, { type PublicationLocation } from "@/components/PublicationLocationPicker";
-import { EMPTY_BANK_DETAILS, bankDetailsFromProfile, normalizeBankDetails, normalizePaymentChoice, paymentLabel, validatePayment, validateBankOwner, type BankDetails } from "@/lib/payments";
-import { formatRussianPhoneInput, normalizeRussianPhone, russianPhoneError } from "@/lib/phone";
-import PaymentFields from "@/components/PaymentFields";
-import { checkCatalogConsistency, type CatalogConsistencyInput } from "@/lib/catalogConsistency";
-import CatalogConsistencyHint from "@/components/CatalogConsistencyHint";
+import BankDetailsCard from "@/components/BankDetailsCard";
+import { paymentLabel, normalizePaymentChoice } from "@/lib/payments";
+import SharePublicationButton from "@/components/SharePublicationButton";
+import { catalogLabel } from "@/data/catalogLabels";
 
 import { useAuth } from "@/components/AuthProvider";
-import CatalogPathPicker from "@/components/CatalogPathPicker";
-import {
-  getCatalogSectionTitle,
-  getDefaultCatalogPath,
-  resolveCatalogPath,
-} from "@/data/catalogForm";
-import type { CatalogPathValue } from "@/data/catalogForm";
+import ReportDialog from "@/components/ReportDialog";
 import { db } from "@/lib/firebase";
-import { getApiUrl } from "@/lib/getApiUrl";
-import { requestPublicationModeration } from "@/lib/publicationModerationClient";
-import { geocodePublicationLocation } from "@/lib/publication-location-client";
 import {
-  buildListingSearchTags,
-  getOfferActions,
-  getOfferFeatures,
+  getEnabledOfferFeatures,
+  getOfferAction,
   getOfferGroup,
   getOfferGroupInfo,
-  inferOfferFromLegacy,
-  legacyCapabilitiesFromOffer,
+  type OfferGroup,
 } from "@/lib/listingOffer";
-import type { ListingMedia, PaymentMethod } from "@/types";
-import { doc, getDoc, serverTimestamp, updateDoc } from "firebase/firestore";
+import { isPublicationApproved, isReviewApproved } from "@/lib/moderation";
+import { requestReviewModeration } from "@/lib/reviewModeration";
+import type { Listing, Review, UserProfile } from "@/types";
 import {
-  ArrowLeft,
   Banknote,
-  Camera,
-  Check,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   CreditCard,
+  ImageIcon,
   Loader2,
   MapPin,
+  MessageCircle,
   Phone,
-  Plus,
-  Save,
-  Trash2,
-  Video,
+  PlayCircle,
+  Star,
+  Sparkles,
+  UserRound,
   X,
 } from "lucide-react";
+import {
+  addDoc,
+  collection,
+  doc,
+  getDoc,
+  onSnapshot,
+  query,
+  serverTimestamp,
+  setDoc,
+  where,
+} from "firebase/firestore";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import {
-  ChangeEvent,
-  FormEvent,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
-type LocalMediaFile = {
-  id: string;
-  file: File;
-  type: "image" | "video";
-  previewUrl: string;
-  isExisting?: false;
-};
+function paymentText(listing: Listing) { return paymentLabel(listing.paymentMethods); }
 
-type ExistingMediaFile = ListingMedia & {
-  id: string;
-  isExisting: true;
-};
+function paymentIcon(listing: Listing) {
+  const methods = listing.paymentMethods || [];
 
-type MediaItem = LocalMediaFile | ExistingMediaFile;
-
-const MAX_IMAGES = 15;
-const MAX_VIDEOS = 3;
-const DEFAULT_CATALOG_PATH = getDefaultCatalogPath("services");
-
-function createLocalId() {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-    return crypto.randomUUID();
+  if (normalizePaymentChoice(methods) === "bank_account") {
+    return <CreditCard size={20} />;
   }
 
-  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return <Banknote size={20} />;
 }
 
-function getFileType(file: File): "image" | "video" | null {
-  if (file.type.startsWith("image/")) return "image";
-  if (file.type.startsWith("video/")) return "video";
-
-  return null;
+function getChatId(listingId: string, ownerId: string, clientId: string) {
+  return `${listingId}_${[ownerId, clientId].sort().join("_")}`;
 }
 
-function isExistingMedia(item: MediaItem): item is ExistingMediaFile {
-  return item.isExisting === true;
-}
-
-function isLocalMedia(item: MediaItem): item is LocalMediaFile {
-  return item.isExisting !== true;
-}
-
-function normalizeExistingMedia(data: any): ExistingMediaFile[] {
-  const result: ExistingMediaFile[] = [];
-  const usedUrls = new Set<string>();
-
-  if (Array.isArray(data?.media)) {
-    data.media.forEach((item: ListingMedia, index: number) => {
-      if (!item?.url || !item?.type) return;
-
-      usedUrls.add(item.url);
-
-      result.push({
-        id: item.path || item.url || `existing-media-${index}`,
-        type: item.type,
-        url: item.url,
-        path: item.path || "",
-        name: item.name || (item.type === "image" ? "Фото" : "Видео"),
-        size: item.size,
-        isExisting: true,
-      });
-    });
-  }
-
-  if (Array.isArray(data?.imageUrls)) {
-    data.imageUrls.forEach((url: string, index: number) => {
-      if (!url || usedUrls.has(url)) return;
-
-      usedUrls.add(url);
-
-      result.push({
-        id: `existing-image-${index}-${url}`,
-        type: "image",
-        url,
-        path: "",
-        name: "Фото",
-        isExisting: true,
-      });
-    });
-  }
-
-  if (Array.isArray(data?.videoUrls)) {
-    data.videoUrls.forEach((url: string, index: number) => {
-      if (!url || usedUrls.has(url)) return;
-
-      usedUrls.add(url);
-
-      result.push({
-        id: `existing-video-${index}-${url}`,
-        type: "video",
-        url,
-        path: "",
-        name: "Видео",
-        isExisting: true,
-      });
-    });
-  }
-
-  return result;
-}
-
-function existingMediaToListingMedia(item: ExistingMediaFile): ListingMedia {
-  return {
-    type: item.type,
-    url: item.url,
-    path: item.path || "",
-    name: item.name || (item.type === "image" ? "Фото" : "Видео"),
-    size: item.size,
-  };
-}
-
-async function uploadOneFile(item: LocalMediaFile): Promise<ListingMedia> {
-  const formData = new FormData();
-  formData.append("file", item.file);
-
-  const response = await fetch(getApiUrl("/api/upload"), { headers: await uploadAuthHeaders(),
-    method: "POST",
-    body: formData,
-  });
-
-  const text = await response.text();
-
-  let data: any = null;
-
-  try {
-    data = text ? JSON.parse(text) : null;
-  } catch {
-    throw new Error(
-      "API /api/upload не вернул JSON. Проверь src/app/api/upload/route.ts"
-    );
-  }
-
-  if (!response.ok) {
-    throw new Error(data?.error || "Не получилось загрузить файл.");
-  }
-
-  if (!data?.url) {
-    throw new Error("API /api/upload не вернул ссылку на файл.");
-  }
-
-  return data as ListingMedia;
-}
-
-export default function EditListingPage() {
-  const router = useRouter();
+export default function ListingPage() {
   const params = useParams();
+  const router = useRouter();
+  const id = params.id as string;
+
   const { user, profile } = useAuth();
 
-  const listingId =
-    typeof params?.id === "string"
-      ? params.id
-      : Array.isArray(params?.id)
-      ? params.id[0]
-      : "";
-
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [catalogPath, setCatalogPath] = useState(DEFAULT_CATALOG_PATH);
-  const category = catalogPath.category;
-  const subcategory = catalogPath.subcategory;
-  const [city, setCity] = useState("");
-  const [address, setAddress] = useState("");
-  const [pickedLocation, setPickedLocation] = useState<PublicationLocation | null>(null);
-  const [locationBusy, setLocationBusy] = useState(false);
-  const [phone, setPhone] = useState("");
-  const [priceFrom, setPriceFrom] = useState("");
-  const [minimumWorkAmount, setMinimumWorkAmount] = useState("");
-  const [minimumWorkUnit, setMinimumWorkUnit] = useState("м²");
-  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>(["cash_or_transfer"]);
-  const [bankDetails, setBankDetails] = useState<BankDetails>({ ...EMPTY_BANK_DETAILS });
-  const [bankConfirmed, setBankConfirmed] = useState(false);
-  const initialOfferGroup = getOfferGroup(DEFAULT_CATALOG_PATH.category);
-  const [offerAction, setOfferAction] = useState(
-    getOfferActions(initialOfferGroup)[0]?.id || ""
-  );
-  const [offerActionIds, setOfferActionIds] = useState<string[]>([
-    getOfferActions(initialOfferGroup)[0]?.id || "",
-  ].filter(Boolean));
-  const [offerFeatures, setOfferFeatures] = useState<Record<string, boolean>>({});
-
-  const [mediaFiles, setMediaFiles] = useState<MediaItem[]>([]);
-  const [authorId, setAuthorId] = useState("");
-
-  const [error, setError] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
-
-  const offerGroup = useMemo(() => getOfferGroup(category, catalogPath.catalogSection), [category, catalogPath.catalogSection]);
-  const offerGroupInfo = useMemo(
-    () => getOfferGroupInfo(offerGroup),
-    [offerGroup]
-  );
-  const offerActions = useMemo(
-    () => getOfferActions(offerGroup),
-    [offerGroup]
-  );
-  const offerFeatureOptions = useMemo(
-    () => getOfferFeatures(offerGroup),
-    [offerGroup]
-  );
-  const selectedOfferAction = useMemo(
-    () => offerActions.find((item) => item.id === offerAction),
-    [offerAction, offerActions]
-  );
-
-  const imageCount = mediaFiles.filter((item) => item.type === "image").length;
-  const videoCount = mediaFiles.filter((item) => item.type === "video").length;
+  const [listing, setListing] = useState<Listing | null>(null);
+  const [authorProfile, setAuthorProfile] = useState<UserProfile | null>(null);
+  const [authorAvatar, setAuthorAvatar] = useState("");
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [rating, setRating] = useState(5);
+  const [reviewText, setReviewText] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [activeMediaUrl, setActiveMediaUrl] = useState("");
+  const [galleryOpen, setGalleryOpen] = useState(false);
+  const [galleryImageIndex, setGalleryImageIndex] = useState(0);
+  const [chatLoading, setChatLoading] = useState(false);
+  const [chatError, setChatError] = useState("");
 
   useEffect(() => {
     async function loadListing() {
-      if (!listingId) {
-        setError("Объявление не найдено.");
-        setIsLoading(false);
-        return;
-      }
+      const snap = await getDoc(doc(db, "listings", id));
 
-      try {
-        const listingSnap = await getDoc(doc(db, "listings", listingId));
+      if (snap.exists()) {
+        const data = {
+          id: snap.id,
+          ...snap.data(),
+        } as Listing;
 
-        if (!listingSnap.exists()) {
-          setError("Объявление не найдено.");
-          setIsLoading(false);
+        const moderator = profile?.role === "moderator" || profile?.role === "admin" || profile?.isModerator === true || profile?.isAdmin === true;
+        const canPreview = user?.uid === data.authorId || moderator;
+        if (!isPublicationApproved(data) && !canPreview) {
+          setListing(null);
+          setLoading(false);
           return;
         }
 
-        const data = listingSnap.data() as any;
+        setListing(data);
+        setAuthorAvatar(data.authorAvatarUrl || "");
 
-        setTitle(data.title || "");
-        setDescription(data.description || "");
-        const loadedCategory = data.category || DEFAULT_CATALOG_PATH.category;
-        const loadedSubcategory =
-          data.subcategory || DEFAULT_CATALOG_PATH.subcategory;
-        setCatalogPath(
-          { ...resolveCatalogPath({
-            catalogSection: data.catalogSection,
-            catalogGroupId: data.catalogGroupId,
-            category: loadedCategory,
-            subcategory: loadedSubcategory,
-          }), category: String(data.category || ""), subcategory: String(data.subcategory || "") }
-        );
-        const loadedGroup = getOfferGroup(loadedCategory, data.catalogSection);
-        const legacyOffer = inferOfferFromLegacy({
-          category: loadedCategory,
-          capabilities: Array.isArray(data.capabilities)
-            ? data.capabilities
-            : [],
-        });
-        const availableActions = getOfferActions(loadedGroup);
-        const loadedAction = availableActions.some(
-          (item) => item.id === data.offerAction
-        )
-          ? data.offerAction
-          : legacyOffer.actionId;
-        const loadedFeatures: Record<string, boolean> = {};
-        getOfferFeatures(loadedGroup).forEach((feature) => {
-          loadedFeatures[feature.id] = Boolean(
-            data.offerFeatures?.[feature.id] ??
-              legacyOffer.features[feature.id]
-          );
-        });
-        const legacyActionIds = [
-          data.offerAction,
-          ...(Array.isArray(data.offerActions) ? data.offerActions : []),
-        ].map(String);
-        if (legacyActionIds.includes("equipment_work")) {
-          loadedFeatures.operatorIncluded = true;
+        if (data.imageUrls?.[0]) {
+          setActiveMediaUrl(data.imageUrls[0]);
+        } else if (data.videoUrls?.[0]) {
+          setActiveMediaUrl(data.videoUrls[0]);
         }
-        if (legacyActionIds.includes("equipment_transport")) {
-          loadedFeatures.deliveryAvailable = true;
+
+        if (data.authorId) {
+          const userSnap = await getPublicProfile(data.authorId);
+
+          if (userSnap.exists()) {
+            const userData = {
+              uid: userSnap.id,
+              ...userSnap.data(),
+            } as UserProfile;
+
+            setAuthorProfile(userData);
+            setAuthorAvatar(userData.avatarUrl || data.authorAvatarUrl || "");
+          }
         }
-        const loadedActionIds = Array.isArray(data.offerActions)
-          ? data.offerActions.filter(
-              (id: unknown) =>
-                typeof id === "string" &&
-                availableActions.some((item) => item.id === id)
-            )
-          : [];
-        setOfferAction(loadedAction);
-        setOfferActionIds(loadedActionIds.length ? loadedActionIds : [loadedAction]);
-        setOfferFeatures(loadedFeatures);
-        setCity(data.city || "");
-        setAddress(String(data.address || ""));
-        setPhone(formatRussianPhoneInput(data.phone || ""));
-        setMinimumWorkAmount(data.minimumWorkAmount == null ? "" : String(data.minimumWorkAmount));
-        setMinimumWorkUnit(data.minimumWorkUnit || "м²");
-        setPriceFrom(
-          data.priceFrom === null || data.priceFrom === undefined
-            ? ""
-            : String(data.priceFrom)
-        );
-        setPaymentMethods([normalizePaymentChoice(data.paymentMethods)]);
-        setBankDetails(normalizeBankDetails(data.bankDetails || bankDetailsFromProfile(profile)));
-        setBankConfirmed(false);
-        setAuthorId(data.authorId || "");
-        setMediaFiles(normalizeExistingMedia(data));
-      } catch (loadError) {
-        console.error(loadError);
-        setError("Не получилось загрузить объявление.");
-      } finally {
-        setIsLoading(false);
       }
+
+      setLoading(false);
     }
 
     loadListing();
-  }, [listingId]);
+  }, [id, profile, user?.uid]);
 
   useEffect(() => {
-    if (authorId && user?.uid && authorId !== user.uid) {
-      setError("У тебя нет доступа к редактированию этого объявления.");
-    }
-  }, [authorId, user?.uid]);
+    const q = query(collection(db, "reviews"), where("listingId", "==", id));
 
-  function handleCatalogPathChange(next: CatalogPathValue) {
-    const categoryChanged = next.category !== category;
-    setCatalogPath(next);
+    const unsub = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map((docItem) => ({
+        id: docItem.id,
+        ...docItem.data(),
+      })) as Review[];
 
-    if (categoryChanged) {
-      const nextGroup = getOfferGroup(next.category, next.catalogSection);
-      const firstAction = getOfferActions(nextGroup)[0]?.id || "";
-      setOfferAction(firstAction);
-      setOfferActionIds([firstAction].filter(Boolean));
-      setOfferFeatures({});
-    }
-  }
-
-  function toggleOfferAction(actionId: string) {
-    setOfferActionIds((current) => {
-      const next = current.includes(actionId) ? current.filter((id) => id !== actionId) : [...current, actionId];
-      const safe = next.length ? next : [actionId];
-      setOfferAction(safe[0]);
-      return safe;
-    });
-  }
-
-  function toggleOfferFeature(featureId: string) {
-    setOfferFeatures((current) => ({
-      ...current,
-      [featureId]: !current[featureId],
-    }));
-  }
-
-  function togglePaymentMethod(method: PaymentMethod) {
-    setPaymentMethods([method]); setBankConfirmed(false);
-    if (method === "bank_account") {
-      const defaults = bankDetailsFromProfile(profile);
-      setBankDetails(current => ({ ...current, recipientName: current.recipientName || defaults.recipientName, inn: current.inn || defaults.inn, kpp: current.kpp || defaults.kpp }));
-    }
-  }
-
-  function handleMediaSelect(event: ChangeEvent<HTMLInputElement>) {
-    setError("");
-
-    const files = Array.from(event.target.files || []);
-
-    if (!files.length) {
-      return;
-    }
-
-    const preparedFiles: LocalMediaFile[] = [];
-
-    let nextImageCount = imageCount;
-    let nextVideoCount = videoCount;
-
-    for (const file of files) {
-      const fileType = getFileType(file);
-
-      if (!fileType) {
-        setError("Можно добавлять только фото и видео.");
-        continue;
-      }
-
-      if (fileType === "image" && nextImageCount >= MAX_IMAGES) {
-        setError(`Можно добавить максимум ${MAX_IMAGES} фото.`);
-        continue;
-      }
-
-      if (fileType === "video" && nextVideoCount >= MAX_VIDEOS) {
-        setError(`Можно добавить максимум ${MAX_VIDEOS} видео.`);
-        continue;
-      }
-
-      if (fileType === "image" && file.size > 10 * 1024 * 1024) {
-        setError("Фото слишком большое. Максимум 10 МБ.");
-        continue;
-      }
-
-      if (fileType === "video" && file.size > 80 * 1024 * 1024) {
-        setError("Видео слишком большое. Максимум 80 МБ.");
-        continue;
-      }
-
-      preparedFiles.push({
-        id: createLocalId(),
-        file,
-        type: fileType,
-        previewUrl: URL.createObjectURL(file),
+      data.sort((a, b) => {
+        const aTime = a.createdAt?.toMillis?.() || 0;
+        const bTime = b.createdAt?.toMillis?.() || 0;
+        return bTime - aTime;
       });
 
-      if (fileType === "image") nextImageCount += 1;
-      if (fileType === "video") nextVideoCount += 1;
-    }
-
-    if (preparedFiles.length) {
-      setMediaFiles((current) => [...current, ...preparedFiles]);
-    }
-
-    event.target.value = "";
-  }
-
-  function removeMediaFile(id: string) {
-    setMediaFiles((current) => {
-      const found = current.find((item) => item.id === id);
-
-      if (found && isLocalMedia(found)) {
-        URL.revokeObjectURL(found.previewUrl);
-      }
-
-      return current.filter((item) => item.id !== id);
+      setReviews(data.filter(isReviewApproved));
     });
+
+    return () => unsub();
+  }, [id]);
+
+  const averageRating = useMemo(() => {
+    if (!reviews.length) return 0;
+
+    const total = reviews.reduce((sum, review) => sum + review.rating, 0);
+    return total / reviews.length;
+  }, [reviews]);
+
+  const offerPresentation = useMemo(() => {
+    if (!listing) return null;
+
+    const groups: OfferGroup[] = ["materials", "services", "equipment", "complex"];
+    const group = groups.includes(listing.searchGroup as OfferGroup)
+      ? (listing.searchGroup as OfferGroup)
+      : getOfferGroup(listing.category || "");
+    const actionIds = Array.isArray(listing.offerActions) && listing.offerActions.length
+      ? listing.offerActions
+      : listing.offerAction ? [listing.offerAction] : [];
+    const actions = actionIds.map((actionId) => getOfferAction(group, actionId)).filter(Boolean);
+    const action = actions[0] || getOfferAction(group, listing.offerAction);
+    const features = getEnabledOfferFeatures(group, listing.offerFeatures);
+    const actionLabel = actions.length ? actions.map((item) => item?.label).filter(Boolean).join(" · ") : listing.offerActionLabel || action?.label || "";
+
+    if (!actionLabel && features.length === 0) return null;
+
+    return {
+      group: getOfferGroupInfo(group),
+      actionLabel,
+      actionDescription: action?.description || "",
+      features,
+    };
+  }, [listing]);
+
+  const allMedia = useMemo(() => {
+    if (!listing) return [];
+
+    if (listing.media?.length) {
+      return listing.media.map((item) => ({
+        type: item.type,
+        url: item.url,
+      }));
+    }
+
+    const images =
+      listing.imageUrls?.map((url) => ({
+        type: "image" as const,
+        url,
+      })) || [];
+
+    const videos =
+      listing.videoUrls?.map((url) => ({
+        type: "video" as const,
+        url,
+      })) || [];
+
+    return [...images, ...videos];
+  }, [listing]);
+
+  const activeMedia =
+    allMedia.find((item) => item.url === activeMediaUrl) || allMedia[0];
+
+  const listingImages = useMemo(
+    () => allMedia.filter((item) => item.type === "image"),
+    [allMedia]
+  );
+
+  const galleryImage = listingImages[galleryImageIndex]?.url || "";
+
+  useEffect(() => {
+    if (galleryImageIndex >= listingImages.length) {
+      setGalleryImageIndex(0);
+    }
+  }, [galleryImageIndex, listingImages.length]);
+
+  useEffect(() => {
+    if (!galleryOpen) return;
+
+    function handleGalleryKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setGalleryOpen(false);
+      if (event.key === "ArrowLeft") {
+        setGalleryImageIndex((current) =>
+          listingImages.length
+            ? (current - 1 + listingImages.length) % listingImages.length
+            : 0
+        );
+      }
+      if (event.key === "ArrowRight") {
+        setGalleryImageIndex((current) =>
+          listingImages.length ? (current + 1) % listingImages.length : 0
+        );
+      }
+    }
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleGalleryKeyDown);
+
+    return () => {
+      document.body.style.overflow = "";
+      window.removeEventListener("keydown", handleGalleryKeyDown);
+    };
+  }, [galleryOpen, listingImages.length]);
+
+  function openImageGallery(imageUrl: string) {
+    const index = listingImages.findIndex((item) => item.url === imageUrl);
+    setGalleryImageIndex(index >= 0 ? index : 0);
+    setGalleryOpen(true);
   }
 
-  const catalogCheckValue: CatalogConsistencyInput = { ...catalogPath, title, description };
+  function showPreviousGalleryImage() {
+    setGalleryImageIndex((current) =>
+      listingImages.length
+        ? (current - 1 + listingImages.length) % listingImages.length
+        : 0
+    );
+  }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (locationBusy) return;
-    const catalogIssue = checkCatalogConsistency(catalogCheckValue);
-    if (catalogIssue) { setError(catalogIssue.message); return; }
+  function showNextGalleryImage() {
+    setGalleryImageIndex((current) =>
+      listingImages.length ? (current + 1) % listingImages.length : 0
+    );
+  }
 
+  async function handleStartChat() {
+    setChatError("");
 
     if (!user) {
       router.push("/auth");
       return;
     }
 
-    if (authorId && authorId !== user.uid) {
-      setError("У тебя нет доступа к редактированию этого объявления.");
+    if (!listing) return;
+
+    if (!listing.authorId) {
+      setChatError("У объявления не указан исполнитель.");
       return;
     }
 
-    if (!listingId) {
-      setError("Объявление не найдено.");
+    const ownerId = listing.authorId;
+
+    if (user.uid === ownerId) {
+      router.push("/messages");
       return;
     }
 
-    if (title.trim().length < 5 || description.trim().length < 20 || !category || !subcategory) {
-      setError("Название — от 5 символов, описание — от 20; выбери категорию и подкатегорию.");
-      return;
-    }
-
-    if (city.trim().length < 2) {
-      setError("Укажи корректный город.");
-      return;
-    }
-
-    const phoneError = russianPhoneError(phone);
-    if (phoneError) {
-      setError(phoneError);
-      return;
-    }
-
-    if (!offerActionIds.length || !selectedOfferAction) {
-      setError("Выбери, что именно ты предлагаешь.");
-      return;
-    }
-    if (offerGroup === "services" && minimumWorkAmount && Number(minimumWorkAmount) <= 0) {
-      setError("Минимальный объём работы должен быть больше нуля.");
-      return;
-    }
-
-    const savedBankDetails = bankDetailsFromProfile(profile);
-    const profileBankError = paymentMethods[0] === "bank_account"
-      ? validatePayment(paymentMethods, savedBankDetails, profile?.accountType, profile?.bankDetailsConfirmed)
-      : null;
-    if (profileBankError) { setError(`Сначала сохраните расчётный счёт в профиле: ${profileBankError}`); return; }
-    const paymentError = paymentMethods[0] === "bank_account" ? validateBankOwner(paymentMethods, savedBankDetails, profile) : validatePayment(paymentMethods, bankDetails, profile?.accountType, bankConfirmed);
-    if (paymentError) { setError(paymentError); return; }
-    setIsSaving(true);
-    setError("");
+    setChatLoading(true);
 
     try {
-      const finalMedia: ListingMedia[] = mediaFiles
-        .filter(isExistingMedia)
-        .map(existingMediaToListingMedia);
+      const chatId = getChatId(listing.id, ownerId, user.uid);
+      const chatRef = doc(db, "chats", chatId);
 
-      const newFiles = mediaFiles.filter(isLocalMedia);
+      const currentUserName =
+        profile?.displayName || user.displayName || user.email || "Пользователь";
 
-      for (const item of newFiles) {
-        const uploaded = await uploadOneFile(item);
-        finalMedia.push(uploaded);
-      }
+      const currentAvatar = profile?.avatarUrl || user.photoURL || "";
 
-      const imageUrls = finalMedia
-        .filter((item) => item.type === "image")
-        .map((item) => item.url);
+      const ownerName =
+        authorProfile?.displayName || listing.authorName || "Исполнитель";
 
-      const videoUrls = finalMedia
-        .filter((item) => item.type === "video")
-        .map((item) => item.url);
+      const ownerAvatar = authorProfile?.avatarUrl || authorAvatar || "";
 
-      const enabledFeatureIds = Object.entries(offerFeatures)
-        .filter(([, enabled]) => enabled)
-        .map(([featureId]) => featureId);
-      const searchTags = buildListingSearchTags({
-        title: title.trim(),
-        description: description.trim(),
-        category,
-        subcategory,
-        city: city.trim(),
-        group: offerGroup,
-        actionId: offerAction,
-        actionIds: offerActionIds,
-        enabledFeatureIds,
-      });
-      const capabilities = Array.from(new Set(offerActionIds.flatMap((actionId) => legacyCapabilitiesFromOffer(offerGroup, actionId, offerFeatures))));
-      const geo = pickedLocation || await geocodePublicationLocation(city, address);
-      await updateDoc(doc(db, "listings", listingId), {
-        title: title.trim(),
-        description: description.trim(),
-        category,
-        subcategory,
-        city: city.trim(),
-        address: address.trim(),
-        location: geo,
-        lat: geo?.lat ?? null,
-        lng: geo?.lng ?? null,
-        geocodedAddress: geo?.address || "",
-        phone: normalizeRussianPhone(phone),
-        priceFrom: priceFrom.trim() ? Number(priceFrom) : null,
-        paymentMethods,
-        paymentSchemaVersion: 2,
-        bankDetails: paymentMethods[0] === "bank_account" ? normalizeBankDetails(savedBankDetails) : null,
-        bankDetailsConfirmed: paymentMethods[0] === "bank_account" && bankConfirmed,
-        bankDetailsConfirmedAt: paymentMethods[0] === "bank_account" ? serverTimestamp() : null,
+      await setDoc(
+        chatRef,
+        {
+          listingId: listing.id,
+          listingTitle: listing.title,
+          listingImageUrl: listing.imageUrls?.[0] || listing.media?.find((item) => item.type === "image")?.url || "",
+          participantIds: [ownerId, user.uid],
+          participants: {
+            [ownerId]: {
+              uid: ownerId,
+              displayName: ownerName,
+              avatarUrl: ownerAvatar,
+            },
+            [user.uid]: {
+              uid: user.uid,
+              displayName: currentUserName,
+              avatarUrl: currentAvatar,
+            },
+          },
+          ownerId,
+          clientId: user.uid,
+          lastMessageText: "Чат создан",
+          updatedAt: serverTimestamp(),
+          createdAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
 
-        catalogSection: catalogPath.catalogSection,
-        catalogCategoryId: catalogPath.catalogCategoryId,
-        catalogCategoryTitle: catalogPath.catalogCategoryTitle,
-        catalogGroupId: catalogPath.catalogGroupId || null,
-        catalogGroupTitle: catalogPath.catalogGroupId
-          ? catalogPath.catalogCategoryTitle
-          : "",
-        catalogPath: [
-          getCatalogSectionTitle(catalogPath.catalogSection),
-          catalogPath.catalogCategoryTitle,
-          catalogPath.subcategory,
-        ].filter(Boolean),
-        capabilities,
-        searchGroup: offerGroup,
-        offerAction,
-        offerActions: offerActionIds,
-        offerActionLabel: offerActions.filter(action => offerActionIds.includes(action.id)).map(action => action.label).join(" · "),
-        offerFeatures,
-        minimumWorkAmount: offerGroup === "services" && minimumWorkAmount ? Number(minimumWorkAmount) : null,
-        minimumWorkUnit: offerGroup === "services" && minimumWorkAmount ? minimumWorkUnit : "",
-        searchTags,
-        searchText: searchTags.join(" "),
-        searchVersion: 1,
-
-        media: finalMedia,
-        imageUrls,
-        videoUrls,
-        moderationStatus: "pending",
-        moderationReason: "",
-        moderationSubmittedAt: serverTimestamp(),
-        moderationSource: "web",
-        updatedAt: serverTimestamp(),
-      });
-
-      void requestPublicationModeration("listing", listingId);
-
-      mediaFiles.forEach((item) => {
-        if (isLocalMedia(item)) {
-          URL.revokeObjectURL(item.previewUrl);
-        }
-      });
-
-      alert("Изменения проверяются автоматически. Обычно это занимает до 5 минут.");
-      router.push("/profile");
-    } catch (saveError) {
-      console.error(saveError);
-
-      setError(
-        saveError instanceof Error
-          ? saveError.message
-          : "Не получилось сохранить объявление."
+      router.push(`/messages/${chatId}`);
+    } catch (err) {
+      console.error(err);
+      setChatError(
+        err instanceof Error
+          ? err.message
+          : "Не получилось открыть чат. Проверь правила Firestore."
       );
     } finally {
-      setIsSaving(false);
+      setChatLoading(false);
     }
   }
 
-  if (isLoading) {
+  async function handleReview(e: FormEvent) {
+    e.preventDefault();
+
+    if (!user) {
+      router.push("/auth");
+      return;
+    }
+
+    if (!reviewText.trim()) return;
+
+    const reviewRef = await addDoc(collection(db, "reviews"), {
+      listingId: id,
+      listingTitle: listing?.title || "",
+      listingAuthorId: listing?.authorId || "",
+      targetUserId: listing?.authorId || "",
+      targetUserName: listing?.authorName || authorProfile?.displayName || "",
+      publicationId: id,
+      publicationKind: "listing",
+      publicationTitle: listing?.title || "",
+      authorId: user.uid,
+      authorName: profile?.displayName || user.displayName || user.email,
+      authorAvatarUrl: profile?.avatarUrl || user.photoURL || "",
+      rating,
+      text: reviewText.trim(),
+      moderationStatus: "pending",
+      moderationStage: "queued",
+      moderationReason: "",
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    void requestReviewModeration(reviewRef.id);
+
+    setReviewText("");
+    setRating(5);
+  }
+
+  if (loading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#f5f7fb] px-3 sm:px-5">
-        <div className="rounded-[32px] bg-white p-8 text-center shadow-sm ring-1 ring-gray-100">
-          <Loader2 className="mx-auto animate-spin text-[#0057ff]" size={36} />
-          <p className="mt-4 font-black text-gray-950">
-            Загружаем объявление...
-          </p>
+      <main className="min-h-screen bg-[#f5f7fb] px-3 py-6 sm:px-5 sm:py-10">
+        <div className="mx-auto max-w-6xl">Загрузка...</div>
+      </main>
+    );
+  }
+
+  if (!listing) {
+    return (
+      <main className="min-h-screen bg-[#f5f7fb] px-3 py-6 sm:px-5 sm:py-10">
+        <div className="mx-auto max-w-6xl rounded-[30px] bg-white p-8 text-center shadow-sm">
+          <h1 className="text-3xl font-black text-gray-950">
+            Объявление не найдено
+          </h1>
+
+          <button
+            type="button"
+            onClick={() => router.push("/")}
+            className="btn-primary mt-6"
+          >
+            На главную
+          </button>
         </div>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen bg-[#f5f7fb] px-3 py-6 sm:px-5 sm:py-10">
-      <div className="mx-auto max-w-7xl">
-        <Link
-          href={listingId ? `/listing/${listingId}` : "/profile"}
-          className="inline-flex items-center gap-2 rounded-2xl bg-white px-5 py-3 font-black text-[#0057ff] shadow-sm"
-        >
-          <ArrowLeft size={18} />
-          Назад
-        </Link>
+    <main className="min-h-screen bg-[#f5f7fb] px-3 py-5 sm:px-5 sm:py-8">
+      <div className="mx-auto max-w-6xl">
+        <div className="grid gap-5 sm:gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+          <section className="space-y-6">
+            <div className="overflow-hidden rounded-[24px] bg-white shadow-sm sm:rounded-[34px]">
+              {allMedia.length > 0 ? (
+                <>
+                  <div className="relative flex min-h-[240px] items-center justify-center bg-gray-100 sm:min-h-[420px]">
+                    {activeMedia?.type === "video" ? (
+                      <video
+                        src={activeMedia.url}
+                        className="max-h-[620px] max-w-full object-contain"
+                        controls
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          activeMedia?.url && openImageGallery(activeMedia.url)
+                        }
+                        className="group relative flex min-h-[240px] w-full sm:min-h-[420px] cursor-zoom-in items-center justify-center overflow-hidden"
+                        aria-label="Открыть фотографию на весь экран"
+                      >
+                        <img
+                          src={activeMedia?.url}
+                          alt={listing.title}
+                          className="max-h-[620px] max-w-full object-contain transition duration-700 ease-out group-hover:scale-[1.015]"
+                        />
+                        <span className="pointer-events-none absolute bottom-4 left-4 inline-flex items-center gap-2 rounded-2xl bg-slate-950/65 px-3.5 py-2 text-xs font-black text-white opacity-0 shadow-lg backdrop-blur-md transition duration-300 group-hover:opacity-100">
+                          <ImageIcon size={15} />
+                          Открыть фото
+                        </span>
+                      </button>
+                    )}
+                  </div>
 
-        <div className="mt-5 grid gap-5 sm:mt-8 sm:gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
-          <form
-            onSubmit={handleSubmit}
-            className="rounded-[26px] bg-white p-4 shadow-sm ring-1 ring-gray-100 sm:rounded-[36px] sm:p-6 md:p-8"
-          >
-            <div>
-              <p className="text-sm font-black uppercase tracking-[0.2em] text-[#0057ff]">
-                Редактирование
+                  {allMedia.length > 1 && (
+                    <div className="grid grid-cols-4 gap-2 p-3 sm:grid-cols-6 sm:gap-3 sm:p-4">
+                      {allMedia.map((item) => (
+                        <button
+                          key={item.url}
+                          type="button"
+                          onClick={() => setActiveMediaUrl(item.url)}
+                          className={`relative h-20 overflow-hidden rounded-2xl border ${
+                            activeMedia?.url === item.url
+                              ? "border-[#0057ff]"
+                              : "border-gray-200"
+                          }`}
+                        >
+                          {item.type === "video" ? (
+                            <div className="flex h-full w-full items-center justify-center bg-blue-50 text-[#0057ff]">
+                              <PlayCircle size={28} />
+                            </div>
+                          ) : (
+                            <img
+                              src={item.url}
+                              alt=""
+                              className="h-full w-full object-cover"
+                            />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="flex h-72 items-center justify-center bg-blue-50 text-5xl font-black text-blue-200">
+                  Строва
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-[24px] bg-white p-4 shadow-sm sm:rounded-[34px] sm:p-8">
+              <p className="font-black text-[#0057ff]">
+                {listing.category} · {catalogLabel(listing.subcategory)}
               </p>
 
               <h1 className="mt-3 text-3xl font-black text-gray-950 sm:text-4xl">
-                Изменить объявление
+                {listing.title}
               </h1>
+              {isPublicationApproved(listing) ? <SharePublicationButton kind="listing" id={listing.id} title={listing.title || "Объявление"} /> : null}
 
-              <p className="mt-3 text-gray-500">
-                Фото появляется сразу после выбора. На сервер загружается после
-                кнопки “Сохранить”.
+              <p className="mt-4 whitespace-pre-wrap text-base leading-7 text-gray-600 sm:mt-5 sm:text-lg sm:leading-8">
+                {listing.description}
               </p>
-            </div>
 
-            {error && (
-              <div className="mt-6 rounded-2xl bg-red-50 px-5 py-4 font-bold text-red-700">
-                {error}
-              </div>
-            )}
-
-            <section className="mt-8 grid gap-5">
-              <input
-                value={title}
-                onChange={(event) => setTitle(event.target.value)}
-                placeholder="Название услуги"
-                className="input"
-              />
-
-              <textarea
-                value={description}
-                onChange={(event) => setDescription(event.target.value)}
-                placeholder="Описание услуги"
-                className="input min-h-40 resize-none"
-              />
-          <CatalogConsistencyHint value={catalogCheckValue} />
-
-              <div className="grid gap-5 md:grid-cols-2">
-                <div className="md:col-span-2">
-                  <div className="rounded-2xl bg-blue-50 p-4 text-sm font-bold text-blue-800">
-                    {[catalogPath.category, catalogPath.subcategory].filter(Boolean).join(" · ")}
-                    <p className="mt-1 text-xs font-medium">Категория после публикации не изменяется.</p>
-                  </div>
-                </div>
-
-              <PublicationLocationPicker city={city} address={address} onCity={setCity} onAddress={setAddress} onLocation={setPickedLocation} onBusy={setLocationBusy} />
-
-
-                <div className="relative">
-                  <Phone
-                    size={19}
-                    className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400"
-                  />
-                  <input
-                    value={phone}
-                    onChange={(event) => setPhone(formatRussianPhoneInput(event.target.value))}
-                    placeholder="+7 (999) 123-45-67"
-                    className="input"
-                    style={{ paddingLeft: "52px" }}
-                  />
-                </div>
-              </div>
-            </section>
-
-            <section className="mt-6 rounded-[24px] border border-blue-100 bg-[linear-gradient(135deg,#eff6ff_0%,#ffffff_58%,#f8fbff_100%)] p-5 sm:mt-8 sm:rounded-[30px] md:p-6">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <p className="text-xs font-black uppercase tracking-[0.18em] text-[#0057ff]">
-                    Точная фильтрация
-                  </p>
-                  <h2 className="mt-2 text-2xl font-black text-gray-950">
-                    Что вы предлагаете?
-                  </h2>
-                  <p className="mt-2 max-w-2xl text-sm font-medium leading-6 text-gray-500">
-                    {offerActions.length > 1
-                      ? "Эти параметры одинаково отображаются и фильтруются на сайте и в приложении. Можно выбрать несколько вариантов."
-                      : "Основной вариант уже выбран. Доставку и работу с оператором отметьте ниже в дополнительных возможностях."}
-                  </p>
-                </div>
-
-                <div className="inline-flex shrink-0 items-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-black text-[#0057ff] shadow-sm ring-1 ring-blue-100">
-                  <span className="text-xl">{offerGroupInfo.emoji}</span>
-                  {offerGroupInfo.title}
-                </div>
-              </div>
-
-              <div className="mt-5 grid gap-3 md:grid-cols-3">
-                {offerActions.map((action) => {
-                  const active = offerActionIds.includes(action.id);
-
-                  return (
-                    <button
-                      key={action.id}
-                      type="button"
-                      onClick={() => toggleOfferAction(action.id)}
-                      className={[
-                        "group relative min-h-[128px] rounded-[24px] border p-4 text-left transition duration-300",
-                        active
-                          ? "border-[#0057ff] bg-[#0057ff] text-white shadow-xl shadow-blue-600/20"
-                          : "border-white bg-white text-gray-950 shadow-sm hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-lg",
-                      ].join(" ")}
-                    >
-                      <div
-                        className={[
-                          "flex h-9 w-9 items-center justify-center rounded-2xl transition",
-                          active
-                            ? "bg-white text-[#0057ff]"
-                            : "bg-blue-50 text-[#0057ff]",
-                        ].join(" ")}
-                      >
-                        {active ? (
-                          <Check size={19} strokeWidth={3} />
-                        ) : (
-                          <span className="h-2.5 w-2.5 rounded-full bg-[#0057ff]" />
-                        )}
-                      </div>
-                      <p className={`mt-4 text-base font-black ${active ? "text-white" : "text-gray-950"}`}>
-                        {action.label}
+              {offerPresentation ? (
+                <div className="mt-6 overflow-hidden rounded-[24px] border border-blue-100 bg-[linear-gradient(135deg,#eff6ff_0%,#ffffff_66%,#f8fbff_100%)] p-4 sm:mt-8 sm:p-5">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.14em] text-[#0057ff]">
+                        <Sparkles size={15} />
+                        Что предлагает исполнитель
                       </p>
-                      <p className={`mt-1 text-xs font-bold leading-5 ${active ? "text-blue-100" : "text-gray-500"}`}>
-                        {action.description}
-                      </p>
-                    </button>
-                  );
-                })}
-              </div>
+                      {offerPresentation.actionLabel ? (
+                        <h2 className="mt-2 text-xl font-black text-gray-950 sm:text-2xl">
+                          {offerPresentation.actionLabel}
+                        </h2>
+                      ) : null}
+                      {offerPresentation.actionDescription ? (
+                        <p className="mt-1 text-sm font-bold leading-5 text-gray-500">
+                          {offerPresentation.actionDescription}
+                        </p>
+                      ) : null}
+                    </div>
 
-              {offerGroup === "services" ? (
-                <div className="mt-6 rounded-[22px] border border-blue-100 bg-white p-4 sm:p-5">
-                  <h3 className="font-black text-slate-950">Минимальный объём заказа</h3>
-                  <p className="mt-1 text-sm font-medium text-slate-500">Минимальный объём, с которого вы готовы приступить к работе.</p>
-                  <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_180px]">
-                    <input value={minimumWorkAmount} onChange={(event) => setMinimumWorkAmount(event.target.value.replace(/[^\d.,]/g, "").replace(",", "."))} inputMode="decimal" placeholder="Например, 100" className="input" />
-                    <select value={minimumWorkUnit} onChange={(event) => setMinimumWorkUnit(event.target.value)} className="input">
-                      {["м²", "м³", "пог. м", "шт.", "часов", "смен"].map((unit) => <option key={unit}>{unit}</option>)}
-                    </select>
+                    <span className="inline-flex w-fit shrink-0 items-center gap-2 rounded-2xl bg-white px-3.5 py-2 text-sm font-black text-[#0057ff] shadow-sm ring-1 ring-blue-100">
+                      <span className="text-lg">{offerPresentation.group.emoji}</span>
+                      {offerPresentation.group.title}
+                    </span>
                   </div>
+
+                  {offerPresentation.features.length > 0 ? (
+                    <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                      {offerPresentation.features.map((feature) => (
+                        <div
+                          key={feature.id}
+                          className="flex items-start gap-3 rounded-2xl bg-white p-3.5 shadow-sm ring-1 ring-blue-100"
+                        >
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#0057ff] text-white">
+                            <CheckCircle2 size={19} strokeWidth={2.7} />
+                          </span>
+                          <span>
+                            <span className="block text-sm font-black text-gray-950">
+                              {feature.label}
+                            </span>
+                            <span className="mt-0.5 block text-xs font-bold leading-4 text-gray-500">
+                              {feature.description}
+                            </span>
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
 
-              <div className="mt-6">
-                <h3 className="text-base font-black text-gray-950">Дополнительные возможности</h3>
-                <p className="mt-1 text-sm font-medium text-gray-500">
-                  Отметьте только те возможности, которые действительно доступны клиенту.
-                </p>
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  {offerFeatureOptions.map((feature) => {
-                    const active = Boolean(offerFeatures[feature.id]);
+              <div className="mt-6 grid gap-4 rounded-[22px] bg-[#f5f7fb] p-4 sm:mt-8 sm:rounded-[28px] sm:p-5 md:grid-cols-2">
+                <div>
+                  <p className="text-sm font-bold text-gray-500">Город</p>
+                  <p className="mt-1 flex items-center gap-2 font-black text-gray-950">
+                    <MapPin size={18} className="text-[#0057ff]" />
+                    {listing.city}
+                  </p>
+                </div>
 
-                    return (
-                      <button
-                        key={feature.id}
-                        type="button"
-                        onClick={() => toggleOfferFeature(feature.id)}
-                        className={[
-                          "flex min-h-[76px] items-center gap-3 rounded-[22px] border px-4 py-3 text-left transition duration-300",
-                          active
-                            ? "border-[#0057ff] bg-white shadow-md shadow-blue-500/10"
-                            : "border-white bg-white/75 hover:border-blue-200 hover:bg-white",
-                        ].join(" ")}
-                      >
-                        <span
-                          className={[
-                            "flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border transition",
-                            active
-                              ? "border-[#0057ff] bg-[#0057ff] text-white"
-                              : "border-gray-200 bg-gray-50 text-gray-300",
-                          ].join(" ")}
-                        >
-                          <Check size={19} strokeWidth={3} />
-                        </span>
-                        <span>
-                          <span className="block text-sm font-black text-gray-950">{feature.label}</span>
-                          <span className="mt-1 block text-xs font-bold leading-5 text-gray-500">
-                            {feature.description}
-                          </span>
-                        </span>
-                      </button>
-                    );
-                  })}
+                <div>
+                  <p className="text-sm font-bold text-gray-500">Телефон</p>
+                  <p className="mt-1 flex items-center gap-2 font-black text-gray-950">
+                    <Phone size={18} className="text-[#0057ff]" />
+                    {listing.phone}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-sm font-bold text-gray-500">Исполнитель</p>
+
+                  <Link
+                    href={`/user/${listing.authorId}`}
+                    className="mt-2 flex w-fit items-center gap-3 rounded-2xl transition hover:bg-blue-50"
+                  >
+                    <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-blue-50 text-[#0057ff]">
+                      {authorAvatar ? (
+                        <img
+                          src={authorAvatar}
+                          alt={listing.authorName}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <UserRound size={24} />
+                      )}
+                    </div>
+
+                    <p className="font-black text-gray-950">
+                      {authorProfile?.displayName || listing.authorName}
+                    </p>
+                  </Link>
+                </div>
+
+                <div>
+                  <p className="text-sm font-bold text-gray-500">Цена от</p>
+                  <p className="mt-1 font-black text-gray-950">
+                    {listing.priceFrom
+                      ? `${listing.priceFrom.toLocaleString("ru-RU")} ₽`
+                      : "Договорная"}
+                  </p>
+                  {listing.minimumWorkAmount ? (
+                    <p className="mt-2 text-sm font-black text-[#0057ff]">
+                      Минимальный объём: {listing.minimumWorkAmount.toLocaleString("ru-RU")} {listing.minimumWorkUnit || "ед."}
+                    </p>
+                  ) : null}
                 </div>
               </div>
-            </section>
+            </div>
 
-            <section className="mt-6 rounded-[24px] sm:mt-8 sm:rounded-[28px] border border-gray-100 bg-gray-50 p-5">
-              <h2 className="text-2xl font-black text-gray-950">Фото и видео</h2>
+            <div className="rounded-[24px] bg-white p-4 shadow-sm sm:rounded-[34px] sm:p-8">
+              <h2 className="text-2xl font-black text-gray-950 sm:text-3xl">Отзывы</h2>
 
-              <p className="mt-2 text-sm font-medium text-gray-500">
-                Можно оставить старые фото, удалить их или добавить новые.
-              </p>
+              <form onSubmit={handleReview} className="mt-5 space-y-4">
+                <select
+                  className="input bg-white font-bold text-gray-950"
+                  value={rating}
+                  onChange={(e) => setRating(Number(e.target.value))}
+                >
+                  <option value={5}>5 — отлично</option>
+                  <option value={4}>4 — хорошо</option>
+                  <option value={3}>3 — нормально</option>
+                  <option value={2}>2 — плохо</option>
+                  <option value={1}>1 — ужасно</option>
+                </select>
 
-              <input
-                id="listing-edit-media-input"
-                type="file"
-                accept="image/*,video/*"
-                multiple
-                onChange={handleMediaSelect}
-                className="hidden"
-              />
-
-              <label
-                htmlFor="listing-edit-media-input"
-                className="mt-5 flex w-full cursor-pointer items-center justify-center gap-2 rounded-2xl bg-[#0057ff] px-5 py-3 sm:inline-flex sm:w-auto font-black text-white shadow-lg shadow-blue-500/20 transition hover:-translate-y-0.5"
-              >
-                <Plus size={18} />
-                Добавить фото/видео
-              </label>
-
-              <div className="mt-5 flex flex-wrap gap-4 text-sm font-black text-gray-500">
-                <span className="inline-flex items-center gap-2">
-                  <Camera size={17} className="text-[#0057ff]" />
-                  Фото: {imageCount}/{MAX_IMAGES}
-                </span>
-
-                <span className="inline-flex items-center gap-2">
-                  <Video size={17} className="text-[#0057ff]" />
-                  Видео: {videoCount}/{MAX_VIDEOS}
-                </span>
-              </div>
-
-              {mediaFiles.length > 0 && (
-                <div className="mt-6 grid grid-cols-2 gap-4 md:grid-cols-4">
-                  {mediaFiles.map((item) => {
-                    const previewUrl = isExistingMedia(item)
-                      ? item.url
-                      : item.previewUrl;
-
-                    return (
-                      <div
-                        key={item.id}
-                        className="relative overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-gray-100"
-                      >
-                        {item.type === "image" ? (
-                          <img
-                            src={previewUrl}
-                            alt="Фото объявления"
-                            className="h-36 w-full object-cover"
-                          />
-                        ) : (
-                          <video
-                            src={previewUrl}
-                            className="h-36 w-full object-cover"
-                            controls
-                          />
-                        )}
-
-                        {isExistingMedia(item) && (
-                          <span className="absolute left-2 top-2 rounded-full bg-white/95 px-2 py-1 text-[11px] font-black text-[#0057ff] shadow-sm">
-                            Уже было
-                          </span>
-                        )}
-
-                        <button
-                          type="button"
-                          onClick={() => removeMediaFile(item.id)}
-                          className="absolute right-2 top-2 flex h-9 w-9 items-center justify-center rounded-full bg-red-500 text-white shadow-lg"
-                        >
-                          <X size={18} />
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </section>
-
-            <section className="mt-6 rounded-[24px] sm:mt-8 sm:rounded-[28px] border border-gray-100 bg-white p-5">
-              <h2 className="text-2xl font-black text-gray-950">Цена и оплата</h2>
-
-              <div className="mt-5 grid gap-5 md:grid-cols-2">
-                <input
-                  value={priceFrom}
-                  onChange={(event) => setPriceFrom(event.target.value)}
-                  type="number"
-                  min="0"
-                  placeholder="Цена от, ₽"
-                  className="input"
+                <textarea
+                  className="input min-h-28 resize-none"
+                  placeholder="Написать отзыв"
+                  value={reviewText}
+                  onChange={(e) => setReviewText(e.target.value)}
                 />
 
-                <div className="md:col-span-2"><PaymentFields methods={paymentMethods} onMethod={togglePaymentMethod}
-                  bank={bankDetails} onBank={setBankDetails} confirmed={bankConfirmed} onConfirm={setBankConfirmed} accountType={profile?.accountType} useProfileBank /></div>
+                <button className="btn-primary">Оставить отзыв</button>
+              </form>
+
+              <div className="mt-6 space-y-4">
+                {reviews.length === 0 ? (
+                  <p className="text-gray-500">Отзывов пока нет.</p>
+                ) : (
+                  reviews.map((review) => (
+                    <div
+                      key={review.id}
+                      className="rounded-2xl border border-gray-100 bg-gray-50 p-4 sm:rounded-3xl sm:p-5"
+                    >
+                      <div className="flex items-center justify-between gap-4">
+                        <p className="font-black text-gray-950">
+                          {review.authorName}
+                        </p>
+
+                        <p className="flex items-center gap-1 font-black text-yellow-500">
+                          <Star size={18} className="fill-yellow-400" />
+                          {review.rating}
+                        </p>
+                      </div>
+
+                      <p className="mt-3 text-gray-600">{review.text}</p>
+                    </div>
+                  ))
+                )}
               </div>
-            </section>
+            </div>
+          </section>
+
+          <aside className="h-fit rounded-[24px] bg-white p-4 shadow-sm sm:rounded-[34px] sm:p-6 lg:sticky lg:top-24">
+            <Link
+              href={`/user/${listing.authorId}`}
+              className="flex items-center gap-4 rounded-3xl transition hover:bg-blue-50"
+            >
+              <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-full bg-blue-50 text-[#0057ff] ring-4 ring-blue-50">
+                {authorAvatar ? (
+                  <img
+                    src={authorAvatar}
+                    alt={listing.authorName}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <UserRound size={30} />
+                )}
+              </div>
+
+              <div>
+                <h2 className="text-xl font-black text-gray-950 sm:text-2xl">
+                  {authorProfile?.displayName || listing.authorName}
+                </h2>
+
+                <p className="mt-1 text-gray-500">
+                  {listing.accountType === "ip"
+                    ? "ИП"
+                    : listing.accountType === "ooo"
+                    ? "ООО"
+                    : "Физлицо"}
+                </p>
+              </div>
+            </Link>
+
+            <div className="mt-6 rounded-3xl bg-[#f5f7fb] p-5">
+              <p className="text-sm font-bold text-gray-500">Рейтинг</p>
+
+              <p className="mt-2 flex items-center gap-2 text-2xl font-black text-gray-950">
+                <Star size={24} className="fill-[#ffd233] text-[#ffd233]" />
+                {averageRating ? averageRating.toFixed(1) : "—"}
+              </p>
+
+              <p className="mt-1 text-sm text-gray-500">
+                Отзывов: {reviews.length}
+              </p>
+            </div>
+
+            <div className="mt-4 rounded-3xl bg-blue-50 p-5 text-[#0057ff]">
+              <p className="flex items-center gap-2 font-black">
+                {paymentIcon(listing)}
+                Оплата
+              </p>
+
+              <p className="mt-2 font-bold">{paymentText(listing)}</p>
+              {listing.paymentMethods?.includes("bank_account") ? <BankDetailsCard value={listing.bankDetails} /> : null}
+            </div>
+
+            {user?.uid === listing.authorId && (
+              <Link
+                href={`/listing/${listing.id}/edit`}
+                className="mt-5 inline-flex w-full items-center justify-center rounded-2xl bg-[#0057ff] px-5 py-4 text-lg font-black text-white transition hover:-translate-y-0.5 hover:shadow-xl hover:shadow-blue-600/25"
+              >
+                Редактировать объявление
+              </Link>
+            )}
 
             <button
-              type="submit"
-              disabled={isSaving || locationBusy}
-              className="mt-6 flex w-full items-center justify-center gap-3 rounded-2xl sm:mt-8 sm:rounded-3xl bg-[#0057ff] px-6 py-5 text-lg font-black text-white shadow-xl shadow-blue-500/20 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+              type="button"
+              onClick={handleStartChat}
+              disabled={chatLoading}
+              className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#0057ff] px-5 py-4 text-lg font-black text-white transition hover:-translate-y-0.5 hover:shadow-xl hover:shadow-blue-600/25 disabled:opacity-70"
             >
-              {isSaving ? (
-                <>
-                  <Loader2 size={22} className="animate-spin" />
-                  Загружаем и сохраняем...
-                </>
+              {chatLoading ? (
+                <Loader2 className="animate-spin" size={21} />
               ) : (
-                <>
-                  <Save size={22} />
-                  Сохранить изменения
-                </>
+                <MessageCircle size={21} />
               )}
+              {user?.uid === listing.authorId ? "Мои сообщения" : "Написать"}
             </button>
-          </form>
 
-          <aside className="h-fit rounded-[26px] bg-white p-4 shadow-sm ring-1 ring-gray-100 sm:rounded-[36px] sm:p-6 lg:sticky lg:top-[102px]">
-            <h2 className="text-2xl font-black text-gray-950">Медиа</h2>
-
-            <div className="mt-6 space-y-4 text-sm font-bold text-gray-500">
-              <div className="flex items-center justify-between">
-                <span>Фото</span>
-                <span className="text-gray-950">{imageCount}/{MAX_IMAGES}</span>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <span>Видео</span>
-                <span className="text-gray-950">{videoCount}/{MAX_VIDEOS}</span>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <span>Новых файлов</span>
-                <span className="text-gray-950">
-                  {mediaFiles.filter(isLocalMedia).length}
-                </span>
-              </div>
-            </div>
-
-            <div className="mt-6 rounded-3xl bg-blue-50 p-5 text-sm font-bold leading-6 text-[#0057ff]">
-              Этот файл использует тот же рабочий загрузчик, что и создание
-              нового объявления: /api/upload.
-            </div>
-
-            {mediaFiles.length > 0 && (
-              <button
-                type="button"
-                onClick={() => {
-                  mediaFiles.forEach((item) => {
-                    if (isLocalMedia(item)) {
-                      URL.revokeObjectURL(item.previewUrl);
-                    }
-                  });
-                  setMediaFiles([]);
-                }}
-                className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-red-50 px-5 py-3 font-black text-red-600"
-              >
-                <Trash2 size={18} />
-                Удалить все фото
-              </button>
+            {chatError && (
+              <p className="mt-3 rounded-2xl bg-red-50 p-3 text-sm font-black text-red-600">
+                {chatError}
+              </p>
             )}
+
+            <a
+              href={`tel:${listing.phone}`}
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#ffd233] px-5 py-4 text-lg font-black text-[#003b95] transition hover:-translate-y-0.5 hover:shadow-xl hover:shadow-yellow-300/30"
+            >
+              <Phone size={21} />
+              Позвонить
+            </a>
+
+            {user?.uid !== listing.authorId ? (
+              <div className="mt-3">
+                <ReportDialog targetType="listing" targetId={listing.id} targetOwnerId={listing.authorId || ""} targetTitle={listing.title || "Объявление"} buttonClassName="flex w-full items-center justify-center gap-2 rounded-2xl bg-red-50 px-5 py-4 text-sm font-black text-red-600 ring-1 ring-red-100 transition hover:bg-red-100" />
+              </div>
+            ) : null}
           </aside>
         </div>
       </div>
+      {galleryOpen && galleryImage ? (
+        <div
+          className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-950/95 p-4 backdrop-blur-sm"
+          onMouseDown={(event) => {
+            if (event.currentTarget === event.target) setGalleryOpen(false);
+          }}
+        >
+          <div className="absolute left-4 top-4 rounded-2xl bg-white/10 px-4 py-2 text-sm font-black text-white ring-1 ring-white/15 backdrop-blur-md sm:left-6 sm:top-6">
+            {galleryImageIndex + 1} из {listingImages.length}
+          </div>
+
+          <button
+            type="button"
+            aria-label="Закрыть галерею"
+            onClick={() => setGalleryOpen(false)}
+            className="absolute right-4 top-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 text-white ring-1 ring-white/20 transition duration-300 hover:rotate-90 hover:bg-white/20 active:scale-90 sm:right-6 sm:top-6"
+          >
+            <X size={25} />
+          </button>
+
+          {listingImages.length > 1 ? (
+            <button
+              type="button"
+              aria-label="Предыдущее фото"
+              onClick={showPreviousGalleryImage}
+              className="absolute left-3 top-1/2 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-2xl bg-white/10 text-white ring-1 ring-white/20 transition duration-300 hover:bg-white hover:text-slate-950 active:scale-90 sm:left-6 sm:h-14 sm:w-14"
+            >
+              <ChevronLeft size={28} />
+            </button>
+          ) : null}
+
+          <img
+            src={galleryImage}
+            alt={`Фотография объявления ${galleryImageIndex + 1}`}
+            className="max-h-[88vh] max-w-[88vw] rounded-[24px] object-contain shadow-2xl"
+          />
+
+          {listingImages.length > 1 ? (
+            <button
+              type="button"
+              aria-label="Следующее фото"
+              onClick={showNextGalleryImage}
+              className="absolute right-3 top-1/2 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-2xl bg-white/10 text-white ring-1 ring-white/20 transition duration-300 hover:bg-white hover:text-slate-950 active:scale-90 sm:right-6 sm:h-14 sm:w-14"
+            >
+              <ChevronRight size={28} />
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </main>
   );
 }

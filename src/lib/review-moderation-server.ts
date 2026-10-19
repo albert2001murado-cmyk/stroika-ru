@@ -204,7 +204,7 @@ export async function processReview(reviewIdValue: string) {
     await deliverServerNotification({
       recipientId: authorId,
       actorId: "system",
-      actorName: "Строва.ру",
+      actorName: "Строва",
       title: result.decision === "approved" ? "Отзыв опубликован" : "Отзыв отклонён",
       body:
         result.decision === "approved"
