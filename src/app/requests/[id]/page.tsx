@@ -1,4 +1,7 @@
 "use client";
+import { isPublicationExpired } from "@/lib/publication-lifetime";
+import { usePublicationClock } from "@/lib/usePublicationExpiry";
+import PublicationTerm from "@/components/PublicationTerm";
 import { getPublicProfile } from "@/lib/publicProfiles";
 
 import SharePublicationButton from "@/components/SharePublicationButton";
@@ -90,6 +93,7 @@ export default function CustomerRequestPage() {
         : "";
 
   const [request, setRequest] = useState<CustomerRequest | null>(null);
+  usePublicationClock([request]);
   const [loading, setLoading] = useState(true);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [galleryOpen, setGalleryOpen] = useState(false);
@@ -212,6 +216,7 @@ export default function CustomerRequestPage() {
   }, [request?.contactPreference, request?.customerId, request?.customerPhone]);
 
   async function openCustomerChat() {
+    if (isPublicationExpired(request)) return;
     if (!contactAllowsMessages(request?.contactPreference)) return;
 
     if (!user) {
@@ -356,7 +361,7 @@ export default function CustomerRequestPage() {
     );
   }
 
-  if (!request) {
+  if (!request || (isPublicationExpired(request) && user?.uid !== request.customerId && !(profile?.role === "moderator" || profile?.role === "admin" || profile?.isModerator === true || profile?.isAdmin === true))) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#f2f6fd] px-3 sm:px-5">
         <div className="w-full max-w-lg rounded-[24px] bg-white p-6 sm:rounded-[34px] sm:p-9 text-center shadow-[0_24px_80px_rgba(15,23,42,0.10)] ring-1 ring-slate-200/70">
@@ -378,7 +383,7 @@ export default function CustomerRequestPage() {
   }
 
   const isOwner = user?.uid === request.customerId;
-  const isActive = request.status === "active";
+  const isActive = request.status === "active" && !isPublicationExpired(request);
   const allowMessages = contactAllowsMessages(request.contactPreference);
   const allowCalls = contactAllowsCalls(request.contactPreference);
   const currentImage = images[activeImageIndex] || "";
@@ -431,13 +436,14 @@ export default function CustomerRequestPage() {
                     isActive ? "bg-emerald-500 text-white" : "bg-slate-900/25 text-white"
                   }`}
                 >
-                  {isActive ? "Открыта" : "Закрыта"}
+                  {isPublicationExpired(request) ? "Срок истёк" : isActive ? "Открыта" : "Закрыта"}
                 </span>
               </div>
 
               <h1 className="mt-5 max-w-4xl text-3xl font-black leading-[1.06] tracking-[-0.035em] sm:mt-6 sm:text-5xl lg:text-6xl">
                 {request.title}
               </h1>
+                <PublicationTerm publication={request} />
               {isPublicationApproved(request) ? <SharePublicationButton kind="request" id={requestId} title={request.title || "Объявление"} /> : null}
 
               <div className="mt-7 flex flex-wrap gap-3 text-sm font-bold text-blue-50">

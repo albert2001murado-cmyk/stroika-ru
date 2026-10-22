@@ -1,4 +1,5 @@
 "use client";
+import { usePublicationExpiry } from "../lib/usePublicationExpiry";
 import {
   catalogSearchRelevanceScore,
   publicationSearchRelevanceScore,
@@ -389,6 +390,8 @@ function PriceRangeSlider({
 export default function HomePage() {
   const [listings, setListings] = useState<SearchableListing[]>([]);
   const [requests, setRequests] = useState<CustomerRequest[]>([]);
+  usePublicationExpiry(listings, setListings);
+  usePublicationExpiry(requests, setRequests);
   const [feedMode, setFeedMode] = useState<FeedMode>("contractors");
   const [search, setSearch] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);

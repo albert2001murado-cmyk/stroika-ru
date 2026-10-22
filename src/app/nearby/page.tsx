@@ -1,4 +1,5 @@
 "use client";
+import { usePublicationClock } from "@/lib/usePublicationExpiry";
 import { getPublicProfile } from "@/lib/publicProfiles";
 
 
@@ -167,6 +168,7 @@ export default function NearbyPage() {
   const [mapRetry, setMapRetry] = useState(0);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const items = useMemo(() => SOURCES.flatMap(source => sources[source] || []), [sources]);
+  const publicationNow = usePublicationClock(items);
   const isLoading = !SOURCES.every(source => loaded[source]);
   const limited = SOURCES.some(source => sourceLimited[source]);
 
@@ -305,7 +307,7 @@ export default function NearbyPage() {
     audience, section: catalogSection, categoryId, subcategory, search: deferredSearch, city,
     radius, hasOrigin: Boolean(userCoords), mainActions, features, priceMin, priceMax,
     onlyVerified, onlyUrgent, withPhoto, sort,
-  }), [indexedItems, audience, catalogSection, categoryId, subcategory, deferredSearch, city, radius, userCoords, mainActions, features, priceMin, priceMax, onlyVerified, onlyUrgent, withPhoto, sort]);
+  }), [publicationNow, indexedItems, audience, catalogSection, categoryId, subcategory, deferredSearch, city, radius, userCoords, mainActions, features, priceMin, priceMax, onlyVerified, onlyUrgent, withPhoto, sort]);
   const mapItems = useMemo(() => filteredItems.filter(entry => entry.coords), [filteredItems]);
   const activeItem = filteredItems.find(entry => entry.key === activeKey) || null;
   const clusterItems = filteredItems.filter(entry => clusterKeys.includes(entry.key));

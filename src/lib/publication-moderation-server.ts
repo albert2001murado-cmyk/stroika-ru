@@ -1,4 +1,5 @@
 import { validatePayment, validateBankOwner } from "./payments";
+import { isPublicationExpired, publicationExpiryMillis } from "./publication-lifetime";
 import { moderationReasonDetails, publicationModerationReason, publicationModerationNotice, validateManualModerationReason } from "./publication-moderation-feedback";
 import { createHash, randomUUID } from "crypto";
 import {
@@ -111,6 +112,7 @@ function moderationInputFingerprint(data: Record<string, unknown>) {
       category: data.category, subcategory: data.subcategory, catalogSection: data.catalogSection,
       catalogCategoryId: data.catalogCategoryId, catalogGroupId: data.catalogGroupId,
       authorId: data.authorId, customerId: data.customerId, status: data.status,
+      placementDate: timestampMillis(data.createdAt), renewalCount: data.renewalCount || 0,
       priceFrom: data.priceFrom, budgetFrom: data.budgetFrom, budgetTo: data.budgetTo,
       paymentMethods: data.paymentMethods, bankDetails: data.bankDetails, bankDetailsConfirmed: data.bankDetailsConfirmed,
       media,
@@ -151,7 +153,7 @@ async function duplicateFlag(
     if (document.id === id) return false;
     const candidate = dataObject(document.data());
     const status = safeText(candidate.moderationStatus, 32);
-    if (status === "rejected") return false;
+    if (status === "rejected" || isPublicationExpired(candidate)) return false;
     if (kind === "request" && candidate.status === "closed") return false;
     const candidateFingerprint =
       fingerprint(candidate);
@@ -204,6 +206,10 @@ async function notifyOwner(input: {
     actorId: "system",
     actorName: "Строва",
     ...notice,
+    ...(input.decision === "approved" && isPublicationExpired(input.data) ? {
+      title: "Срок размещения истёк",
+      body: "Объявление проверено, но месяц размещения уже закончился. Оно доступно в вашем профиле; для нового срока создайте новое объявление.",
+    } : {}),
     type: "moderation",
     entityId: input.id,
     dedupeKey: temporaryFailure
@@ -342,6 +348,8 @@ export async function processPublication(kind: PublicationKind, idValue: string)
       });
       transaction.update(reference, {
         moderationStatus: decision,
+        ...(decision === "approved" && publicationExpiryMillis(latestData)
+          ? { expiresAt: Timestamp.fromMillis(publicationExpiryMillis(latestData)) } : {}),
         moderationStage: decision === "manual_review" ? "manual_review" : "complete",
         moderationReason: decision === "approved" ? "" : reason,
         moderationReasonCode: flags[0]?.code || "",
@@ -553,6 +561,8 @@ export async function applyManualModerationDecision(input: {
     });
     transaction.update(reference, {
     moderationRunId: runId,
+    ...(input.status === "approved" && publicationExpiryMillis(latest.data())
+      ? { expiresAt: Timestamp.fromMillis(publicationExpiryMillis(latest.data())) } : {}),
     moderationStatus: input.status,
     moderationStage: "complete",
     moderationReason: reason,

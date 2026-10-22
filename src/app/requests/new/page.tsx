@@ -1,4 +1,5 @@
 "use client";
+import PublicationTerm from "@/components/PublicationTerm";
 import { uploadAuthHeaders } from "@/lib/uploadAuth";
 
 
@@ -456,6 +457,7 @@ export default function NewRequestPage() {
             </p>
           ) : null}
 
+          <PublicationTerm />
           <button
             disabled={saving || locationBusy}
             className="btn-primary w-full justify-center py-4 text-base disabled:opacity-70"

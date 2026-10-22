@@ -1,6 +1,8 @@
 "use client";
+import { usePublicationClock } from "../../lib/usePublicationExpiry";
 
 import CustomerRequestCard from "@/components/CustomerRequestCard";
+import PublicationTerm from "@/components/PublicationTerm";
 import { useAuth } from "@/components/AuthProvider";
 import { db } from "@/lib/firebase";
 import { isPublicationApproved } from "@/lib/moderation";
@@ -15,6 +17,7 @@ export default function RequestsPage() {
   const { user, loading } = useAuth();
   const [requests, setRequests] = useState<CustomerRequest[]>([]);
   const [tab, setTab] = useState<"all" | "mine">("all");
+  const publicationNow = usePublicationClock(requests);
 
   useEffect(() => {
     return onSnapshot(collection(db, "customerRequests"), (snapshot) => {
@@ -35,11 +38,9 @@ export default function RequestsPage() {
     () =>
       requests.filter(
         (item) =>
-          item.status === "active" &&
-          (item.customerId === user?.uid || isPublicationApproved(item)) &&
-          (tab === "all" || item.customerId === user?.uid)
+          (tab === "mine" ? item.customerId === user?.uid : item.status === "active" && isPublicationApproved(item))
       ),
-    [requests, tab, user?.uid]
+    [publicationNow, requests, tab, user?.uid]
   );
 
   if (loading) return <main className="app-page">Загрузка...</main>;
@@ -100,7 +101,10 @@ export default function RequestsPage() {
         ) : (
           <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
             {shown.map((item) => (
-              <CustomerRequestCard key={item.id} request={item} />
+              <div key={item.id}>
+                <CustomerRequestCard request={item} />
+                {tab === "mine" ? <PublicationTerm publication={item} /> : null}
+              </div>
             ))}
           </div>
         )}

@@ -176,6 +176,10 @@ export type Listing = {
   moderationReviewedAt?: FirestoreDate;
   moderationReviewedBy?: string;
   createdAt?: FirestoreDate;
+  expiresAt?: FirestoreDate;
+  firstCreatedAt?: FirestoreDate;
+  renewedAt?: FirestoreDate;
+  renewalCount?: number;
   updatedAt?: FirestoreDate;
   [key: string]: unknown;
 };
@@ -218,6 +222,10 @@ export type CustomerRequest = {
   moderationReviewedAt?: FirestoreDate;
   moderationReviewedBy?: string;
   createdAt?: FirestoreDate;
+  expiresAt?: FirestoreDate;
+  firstCreatedAt?: FirestoreDate;
+  renewedAt?: FirestoreDate;
+  renewalCount?: number;
   updatedAt?: FirestoreDate;
   [key: string]: unknown;
 };

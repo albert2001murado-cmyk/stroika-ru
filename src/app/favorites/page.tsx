@@ -1,4 +1,5 @@
 "use client";
+import { usePublicationExpiry } from "@/lib/usePublicationExpiry";
 
 import { useAuth } from "@/components/AuthProvider";
 import { db } from "@/lib/firebase";
@@ -16,6 +17,7 @@ type FavoriteItem = {
   city?: string;
   priceFrom?: number | null;
   imageUrl?: string;
+  publication?: unknown;
   createdAt?: Timestamp;
 };
 
@@ -27,6 +29,7 @@ export default function FavoritesPage() {
   const { user, loading } = useAuth();
 
   const [favorites, setFavorites] = useState<FavoriteItem[]>([]);
+  usePublicationExpiry(favorites, setFavorites, false, item => item.publication);
   const [search, setSearch] = useState("");
 
   useEffect(() => {
@@ -47,7 +50,7 @@ export default function FavoritesPage() {
         candidates.map(async (item) => {
           const listingSnap = await getDoc(doc(db, "listings", item.listingId));
           if (!listingSnap.exists() || !isPublicationApproved(listingSnap.data())) return null;
-          return item;
+          return { ...item, publication: listingSnap.data() };
         })
       );
 

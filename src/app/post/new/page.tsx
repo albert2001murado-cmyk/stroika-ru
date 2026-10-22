@@ -1,4 +1,5 @@
 "use client";
+import PublicationTerm from "@/components/PublicationTerm";
 import { uploadAuthHeaders } from "@/lib/uploadAuth";
 
 
@@ -838,6 +839,7 @@ export default function NewListingPage() {
               </div>
             </section>
 
+          <PublicationTerm />
             <button
               type="submit"
               disabled={isSaving || locationBusy}

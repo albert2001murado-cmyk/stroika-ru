@@ -1,13 +1,19 @@
+import { isPublicationExpired } from "./publication-lifetime";
+
 export type PublicationModerationStatus =
   | "pending"
   | "manual_review"
   | "approved"
   | "rejected";
 
-export function isPublicationApproved(item: { moderationStatus?: unknown } | null | undefined) {
+export function isPublicationModerationApproved(item: { moderationStatus?: unknown } | null | undefined) {
   if (!item) return false;
   const status = String(item.moderationStatus || "");
   return status === "" || status === "approved";
+}
+
+export function isPublicationApproved(item: { moderationStatus?: unknown } | null | undefined) {
+  return isPublicationModerationApproved(item) && !isPublicationExpired(item);
 }
 
 export function isReviewApproved(item: { moderationStatus?: unknown } | null | undefined) {

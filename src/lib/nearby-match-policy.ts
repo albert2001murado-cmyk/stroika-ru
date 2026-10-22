@@ -1,3 +1,4 @@
+import { isPublicationExpired } from "./publication-lifetime";
 import { normalizePublicationCatalog } from "./publication-policy";
 import { CATALOG_FORM_SECTIONS, getCatalogFormCategories } from "../data/catalogForm";
 
@@ -24,6 +25,7 @@ export function distanceKm(a: MatchPoint, b: MatchPoint): number {
 }
 
 export function eligiblePublication(data: MatchPublication, kind: "request" | "listing") {
+  if (isPublicationExpired(data)) return false;
   // Legacy published listings may predate moderation. Pending/rejected/private
   // publications must never be advertised to another user.
   if (data.moderationStatus && data.moderationStatus !== "approved") return false;

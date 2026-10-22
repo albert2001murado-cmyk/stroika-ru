@@ -1,4 +1,5 @@
 "use client";
+import { usePublicationClock } from "@/lib/usePublicationExpiry";
 import { getPublicProfile } from "@/lib/publicProfiles";
 import { getProfilePhone } from "@/lib/profilePhone";
 import { contactAllowsCalls } from "@/lib/contactPreference";
@@ -13,7 +14,7 @@ import VerifiedBadge from "@/components/VerifiedBadge";
 import BankDetailsCard from "@/components/BankDetailsCard";
 import ProfileReviews from "@/components/ProfileReviews";
 import { db } from "@/lib/firebase";
-import { isPublicationApproved } from "@/lib/moderation";
+import { isPublicationApproved, isPublicationModerationApproved } from "@/lib/moderation";
 import { firestoreDateToMillis } from "@/types";
 import type { CustomerRequest, Listing, UserProfile } from "@/types";
 import {
@@ -149,8 +150,11 @@ export default function PublicUserPage() {
   const { user } = useAuth();
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [listings, setListings] = useState<Listing[]>([]);
-  const [requests, setRequests] = useState<CustomerRequest[]>([]);
+  const [allListings, setListings] = useState<Listing[]>([]);
+  const [allRequests, setRequests] = useState<CustomerRequest[]>([]);
+  usePublicationClock([...allListings, ...allRequests]);
+  const listings = allListings.filter(isPublicationApproved);
+  const requests = allRequests.filter(isPublicationApproved);
   const [publicationTab, setPublicationTab] = useState<"listings" | "requests">(
     "listings"
   );
@@ -221,7 +225,7 @@ export default function PublicUserPage() {
             firestoreDateToMillis(first.createdAt)
         );
 
-        setListings(data.filter(isPublicationApproved));
+        setListings(data.filter(isPublicationModerationApproved));
       },
       (error) => {
         console.error("Не получилось загрузить объявления:", error);
@@ -242,7 +246,7 @@ export default function PublicUserPage() {
             firestoreDateToMillis(first.createdAt)
         );
 
-        setRequests(data.filter(isPublicationApproved));
+        setRequests(data.filter(isPublicationModerationApproved));
       },
       (error) => {
         console.error("Не получилось загрузить заявки заказчика:", error);
@@ -878,8 +882,8 @@ export default function PublicUserPage() {
 
         <ProfileReviews
           userId={uid}
-          listingIds={listings.map((item) => item.id)}
-          requestIds={requests.map((item) => item.id)}
+          listingIds={allListings.map((item) => item.id)}
+          requestIds={allRequests.map((item) => item.id)}
         />
 
         <section

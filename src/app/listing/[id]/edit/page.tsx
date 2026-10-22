@@ -1,4 +1,7 @@
 "use client";
+import { isPublicationExpired } from "@/lib/publication-lifetime";
+import { usePublicationClock } from "@/lib/usePublicationExpiry";
+import PublicationTerm from "@/components/PublicationTerm";
 import { getPublicProfile } from "@/lib/publicProfiles";
 
 import BankDetailsCard from "@/components/BankDetailsCard";
@@ -75,6 +78,7 @@ export default function ListingPage() {
   const { user, profile } = useAuth();
 
   const [listing, setListing] = useState<Listing | null>(null);
+  usePublicationClock([listing]);
   const [authorProfile, setAuthorProfile] = useState<UserProfile | null>(null);
   const [authorAvatar, setAuthorAvatar] = useState("");
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -278,6 +282,7 @@ export default function ListingPage() {
   }
 
   async function handleStartChat() {
+    if (isPublicationExpired(listing)) return;
     setChatError("");
 
     if (!user) {
@@ -400,7 +405,7 @@ export default function ListingPage() {
     );
   }
 
-  if (!listing) {
+  if (!listing || (isPublicationExpired(listing) && user?.uid !== listing.authorId && !(profile?.role === "moderator" || profile?.role === "admin" || profile?.isModerator === true || profile?.isAdmin === true))) {
     return (
       <main className="min-h-screen bg-[#f5f7fb] px-3 py-6 sm:px-5 sm:py-10">
         <div className="mx-auto max-w-6xl rounded-[30px] bg-white p-8 text-center shadow-sm">
@@ -501,6 +506,7 @@ export default function ListingPage() {
               <h1 className="mt-3 text-3xl font-black text-gray-950 sm:text-4xl">
                 {listing.title}
               </h1>
+                <PublicationTerm publication={listing} />
               {isPublicationApproved(listing) ? <SharePublicationButton kind="listing" id={listing.id} title={listing.title || "Объявление"} /> : null}
 
               <p className="mt-4 whitespace-pre-wrap text-base leading-7 text-gray-600 sm:mt-5 sm:text-lg sm:leading-8">

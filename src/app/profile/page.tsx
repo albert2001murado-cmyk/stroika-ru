@@ -1,4 +1,7 @@
 "use client";
+import PublicationPlacementCard from "@/components/PublicationPlacementCard";
+import { isPublicationExpired } from "@/lib/publication-lifetime";
+import { usePublicationClock } from "@/lib/usePublicationExpiry";
 import { uploadAuthHeaders } from "@/lib/uploadAuth";
 import { syncSavedProfileAvatar } from "@/lib/profileAvatarSync";
 
@@ -75,6 +78,7 @@ export default function ProfilePage() {
 
   const [listings, setListings] = useState<Listing[]>([]);
   const [requests, setRequests] = useState<CustomerRequest[]>([]);
+  usePublicationClock([...listings, ...requests]);
   const [publicationTab, setPublicationTab] = useState<"listings" | "requests">("listings");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -651,11 +655,11 @@ export default function ProfilePage() {
               ) : (
                 <div className="mt-8 grid gap-5 xl:grid-cols-2">
                   {listings.map((listing) => (
-                    <div key={listing.id} className="relative">
+                    <div key={listing.id} className="relative overflow-hidden rounded-[28px] border border-slate-200 bg-white p-2.5 shadow-sm sm:p-3">
                       <ListingCard listing={listing} />
-                      <div className="mt-3 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3">
+                      <div className="mt-3 px-1 py-1">
                         <p className="text-sm font-black text-[#0057ff]">
-                          {moderationLabel(listing.moderationStatus)}
+                          {isPublicationExpired(listing) ? "Срок истёк" : moderationLabel(listing.moderationStatus)}
                         </p>
                         {listing.moderationReason ? (
                           <p className="mt-1 text-sm font-semibold text-gray-600">
@@ -663,6 +667,7 @@ export default function ProfilePage() {
                           </p>
                         ) : null}
                       </div>
+                      <PublicationPlacementCard kind="listing" publicationId={listing.id} publication={listing} />
                       <div className="mt-3 flex gap-2">
                         <Link
                           href={`/listing/${listing.id}/edit`}
@@ -695,18 +700,20 @@ export default function ProfilePage() {
             ) : (
               <div className="mt-8 grid gap-5 xl:grid-cols-2">
                 {requests.map((request) => (
-                  <div key={request.id}>
+                  <div key={request.id} className="overflow-hidden rounded-[28px] border border-slate-200 bg-white p-2.5 shadow-sm sm:p-3">
                     <CustomerRequestCard request={request} />
-                    <div className="mt-3 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3">
+                    <div className="mt-3 px-1 py-1">
                       <p className="text-sm font-black text-[#0057ff]">
-                        {moderationLabel(request.moderationStatus)}
+                        {isPublicationExpired(request) ? "Срок истёк" : moderationLabel(request.moderationStatus)}
                       </p>
+                      
                       {request.moderationReason ? (
                         <p className="mt-1 text-sm font-semibold text-gray-600">
                           Причина: {request.moderationReason}
                         </p>
                       ) : null}
                     </div>
+                    <PublicationPlacementCard kind="request" publicationId={request.id} publication={request} />
                     <div className="mt-3 flex gap-2">
                       <Link
                         href={`/requests/${request.id}/edit`}
