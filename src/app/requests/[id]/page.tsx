@@ -443,7 +443,7 @@ export default function CustomerRequestPage() {
               <h1 className="mt-5 max-w-4xl text-3xl font-black leading-[1.06] tracking-[-0.035em] sm:mt-6 sm:text-5xl lg:text-6xl">
                 {request.title}
               </h1>
-                <PublicationTerm publication={request} />
+                <PublicationTerm kind="request" publication={request} />
               {isPublicationApproved(request) ? <SharePublicationButton kind="request" id={requestId} title={request.title || "Объявление"} /> : null}
 
               <div className="mt-7 flex flex-wrap gap-3 text-sm font-bold text-blue-50">

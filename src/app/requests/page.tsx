@@ -103,7 +103,7 @@ export default function RequestsPage() {
             {shown.map((item) => (
               <div key={item.id}>
                 <CustomerRequestCard request={item} />
-                {tab === "mine" ? <PublicationTerm publication={item} /> : null}
+                {tab === "mine" ? <PublicationTerm kind="request" publication={item} /> : null}
               </div>
             ))}
           </div>

@@ -1,13 +1,23 @@
 "use client";
 import { CalendarDays, Clock3, Loader2, RotateCcw } from "lucide-react";
+import { useAuth } from "@/components/AuthProvider";
 import { publicationTermDisplay } from "@/lib/publication-lifetime";
+import { isPublicationOwner } from "@/lib/publication-owner";
 import { usePublicationClock } from "@/lib/usePublicationExpiry";
 import { usePublicationRenewal } from "@/lib/usePublicationRenewal";
 import type { PublicationKind } from "@/lib/renewPublication";
 
-export default function PublicationPlacementCard({ kind, publicationId, publication }: {
+type Props = {
   kind: PublicationKind; publicationId: string; publication: unknown;
-}) {
+};
+
+export default function PublicationPlacementCard(props: Props) {
+  const { user } = useAuth();
+  if (!isPublicationOwner(props.publication, user?.uid, props.kind)) return null;
+  return <OwnedPublicationPlacementCard {...props} />;
+}
+
+function OwnedPublicationPlacementCard({ kind, publicationId, publication }: Props) {
   const renewal = usePublicationRenewal(kind, publicationId, publication);
   usePublicationClock([renewal.publication], 60_000);
   const term = publicationTermDisplay(renewal.publication);
