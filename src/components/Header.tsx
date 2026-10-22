@@ -30,6 +30,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "./AuthProvider";
 import VerifiedBadge from "./VerifiedBadge";
 import { useNotifications } from "@/lib/useNotifications";
+import s from "./Header.module.css";
 
 const menuItems = [
   { href: "/favorites", label: "Избранное", icon: Heart },
@@ -180,43 +181,43 @@ export default function Header() {
     <>
       <header className="sticky top-0 z-50 border-b border-white/10 bg-[#0057ff] text-white shadow-xl shadow-blue-950/10">
         {/* Полная шапка для компьютера */}
-        <div className="hidden h-[82px] w-full items-center justify-between gap-4 px-4 min-[1800px]:flex">
+        <div className={s.desktopRow}>
           <Link
             href="/"
             onClick={handleHomeLogoClick}
-            className="flex min-w-[300px] shrink-0 items-center gap-3"
+            className={s.desktopBrand}
             aria-label="Строва — обновить главную"
           >
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white text-[#0057ff] shadow-lg shadow-blue-500/20">
-              <HardHat size={30} strokeWidth={2.8} />
+            <div className={s.desktopLogo}>
+              <HardHat size={28} strokeWidth={2.8} />
             </div>
 
-            <div className="flex min-w-0 flex-col">
-              <span className="whitespace-nowrap text-3xl font-black leading-none tracking-tight text-white">
+            <div className={s.desktopBrandCopy}>
+              <span className={s.desktopTitle}>
                 Строва
               </span>
-              <span className="mt-1 whitespace-nowrap text-sm font-extrabold leading-none text-blue-100">
-                все для стройки в одном месте
+              <span className={s.desktopTagline}>
+                Всё для стройки в одном месте
               </span>
             </div>
           </Link>
 
-          <nav className="flex flex-1 items-center justify-end gap-2">
+          <nav className={s.desktopNav}>
             <button
               type="button"
               onClick={() => setPublicationMenuOpen(true)}
-              className="inline-flex h-12 items-center gap-2 rounded-2xl bg-white px-5 text-sm font-black text-[#0057ff] shadow-lg shadow-blue-950/10 transition duration-300 hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-blue-50 active:scale-[0.97]"
+              className={`${s.navItem} inline-flex h-12 items-center gap-2 rounded-2xl bg-white px-5 text-sm font-black text-[#0057ff] shadow-lg shadow-blue-950/10 transition duration-300 hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-blue-50 active:scale-[0.97]`}
             >
               <Plus size={18} strokeWidth={2.8} />
               Разместить
             </button>
 
-            <Link href="/favorites" className="header-desktop-link">
+            <Link href="/favorites" className={`header-desktop-link ${s.navItem}`}>
               <Heart size={18} strokeWidth={2.8} />
               Избранное
             </Link>
 
-            <Link href="/messages" className="header-desktop-link relative">
+            <Link href="/messages" className={`header-desktop-link relative ${s.navItem}`}>
               <MessageCircle size={18} strokeWidth={2.8} />
               Сообщения
               {unreadTotal > 0 ? (
@@ -226,12 +227,12 @@ export default function Header() {
               ) : null}
             </Link>
 
-            <Link href="/portfolio" className="header-desktop-link px-4">
+            <Link href="/portfolio" className={`header-desktop-link px-4 ${s.navItem}`}>
               <BriefcaseBusiness size={18} />
               Портфолио
             </Link>
 
-            <Link href="/notifications" className="header-desktop-link relative px-4" aria-label={`Уведомления${unreadNotifications ? `, непрочитанных: ${unreadNotifications}` : ""}`}>
+            <Link href="/notifications" className={`header-desktop-link relative px-4 ${s.navItem}`} aria-label={`Уведомления${unreadNotifications ? `, непрочитанных: ${unreadNotifications}` : ""}`}>
               <Bell size={18} />
               Уведомления
               {unreadNotifications > 0 && (
@@ -241,49 +242,49 @@ export default function Header() {
               )}
             </Link>
 
-            <Link href="/verification" className="header-desktop-link">
+            <Link href="/verification" className={`header-desktop-link ${s.navItem}`}>
               <BadgeCheck size={18} strokeWidth={2.8} />
               Проверка
             </Link>
 
             <Link
               href="/support"
-              className="inline-flex h-12 items-center gap-2 rounded-2xl bg-white px-5 text-sm font-black text-[#0057ff] shadow-lg shadow-blue-950/10 transition hover:-translate-y-0.5 hover:bg-blue-50"
+              className={`${s.navItem} inline-flex h-12 items-center gap-2 rounded-2xl bg-white px-5 text-sm font-black text-[#0057ff] shadow-lg shadow-blue-950/10 transition hover:-translate-y-0.5 hover:bg-blue-50`}
             >
               <Headphones size={18} strokeWidth={2.8} />
               Поддержка
             </Link>
           </nav>
 
-          <div className="flex shrink-0 items-center gap-2">
+          <div className={s.accountActions}>
             {user ? (
               <>
                 <Link
                   href="/profile"
                   onClick={handleProfileClick}
-                  className="flex h-14 max-w-[220px] items-center gap-3 rounded-2xl bg-white/10 px-3 text-white ring-1 ring-white/10 transition hover:bg-white/20"
+                  className={s.profileLink}
                 >
                   {avatarUrl ? (
                     <img
                       src={avatarUrl}
                       alt={displayName}
-                      className="h-10 w-10 shrink-0 rounded-full object-cover ring-2 ring-white/20"
+                      className={s.profileAvatar}
                     />
                   ) : (
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/15">
+                    <span className={s.profileAvatar}>
                       <UserRound size={20} />
                     </span>
                   )}
 
-                  <span className="hidden min-w-0 text-left leading-tight xl:block">
-                    <span className="flex min-w-0 items-center gap-1.5">
-                      <span className="truncate text-sm font-black">{displayName}</span>
-                      {isVerified ? <ShieldCheck className="shrink-0 text-white" size={16} /> : null}
+                  <span className={s.profileCopy}>
+                    <span className={s.profileNameRow}>
+                      <span className={s.profileName}>{displayName}</span>
+                      {isVerified ? <ShieldCheck className="shrink-0 text-white" size={14} /> : null}
                     </span>
 
-                    <span className="mt-0.5 flex items-center gap-1.5">
-                      <span className="truncate text-xs font-bold text-blue-100">{accountLabel}</span>
-                      {isVerified ? <VerifiedBadge size="sm" className="hidden 2xl:inline-flex" /> : null}
+                    <span className={s.profileMeta}>
+                      <span className={s.accountLabel}>{accountLabel}</span>
+                      {isVerified ? <VerifiedBadge size="sm" className={s.profileBadge} /> : null}
                     </span>
                   </span>
                 </Link>
@@ -291,7 +292,7 @@ export default function Header() {
                 <button
                   type="button"
                   onClick={handleLogout}
-                  className="hidden h-12 items-center gap-2 rounded-2xl bg-white/10 px-4 text-sm font-black text-white ring-1 ring-white/10 transition hover:bg-white/20 2xl:inline-flex"
+                  className={`${s.accountButton} hidden h-12 items-center gap-2 rounded-2xl bg-white/10 px-4 text-sm font-black text-white ring-1 ring-white/10 transition hover:bg-white/20 2xl:inline-flex`}
                 >
                   <LogOut size={18} />
                   Выйти
@@ -300,7 +301,7 @@ export default function Header() {
             ) : (
               <Link
                 href="/auth"
-                className="inline-flex h-12 items-center rounded-2xl bg-white px-5 text-sm font-black text-[#0057ff] shadow-lg shadow-blue-950/10 transition hover:-translate-y-0.5 hover:bg-blue-50"
+                className={`${s.accountButton} inline-flex h-12 items-center rounded-2xl bg-white px-5 text-sm font-black text-[#0057ff] shadow-lg shadow-blue-950/10 transition hover:-translate-y-0.5 hover:bg-blue-50`}
               >
                 Войти
               </Link>
@@ -309,27 +310,27 @@ export default function Header() {
         </div>
 
         {/* Компактная шапка для телефона и планшета */}
-        <div className="flex h-16 items-center justify-between gap-3 px-3 min-[1800px]:hidden">
+        <div className={s.compactRow}>
           <Link
             href="/"
             onClick={handleHomeLogoClick}
-            className="flex min-w-0 items-center gap-2.5"
+            className={s.compactBrand}
             aria-label="Строва — обновить главную"
           >
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] bg-white text-[#0057ff] shadow-lg shadow-blue-950/10">
+            <span className={s.compactLogo}>
               <HardHat size={23} strokeWidth={2.8} />
             </span>
-            <span className="min-w-0">
-              <span className="block truncate text-xl font-black leading-none tracking-tight max-[360px]:text-base">Строва</span>
-              <span className="mt-1 block truncate text-[10px] font-extrabold leading-none text-blue-100 sm:text-xs">
-                всё для стройки
+            <span className={s.compactBrandCopy}>
+              <span className={s.compactTitle}>Строва</span>
+              <span className={s.compactTagline}>
+                <span>Всё для стройки</span>{" "}<span>в одном месте</span>
               </span>
             </span>
           </Link>
 
-          <div className="flex shrink-0 items-center gap-2">
+          <div className={s.compactActions}>
             <span className="hidden lg:block">
-              <Link href="/notifications" aria-label={`Уведомления, непрочитанных: ${unreadNotifications}`} className="mobile-header-button relative bg-white/12 text-white">
+              <Link href="/notifications" aria-label={`Уведомления, непрочитанных: ${unreadNotifications}`} className={`mobile-header-button relative bg-white/12 text-white ${s.compactButton}`}>
                 <Bell size={20} />
                 {unreadNotifications > 0 && <span className="absolute -right-1 -top-1 rounded-full bg-white px-1.5 py-0.5 text-[10px] font-black text-[#0057ff]">{unreadNotifications > 99 ? "99+" : unreadNotifications}</span>}
               </Link>
@@ -337,7 +338,7 @@ export default function Header() {
             <Link
               href="/messages"
               aria-label="Сообщения"
-              className={`mobile-header-button relative ${isActive("/messages") ? "bg-white text-[#0057ff]" : "bg-white/12 text-white"}`}
+              className={`mobile-header-button relative ${s.compactButton} ${isActive("/messages") ? "bg-white text-[#0057ff]" : "bg-white/12 text-white"}`}
             >
               <MessageCircle size={20} strokeWidth={2.5} />
               {unreadTotal > 0 ? (
@@ -351,7 +352,7 @@ export default function Header() {
               href={user ? "/profile" : "/auth"}
               onClick={handleProfileClick}
               aria-label={user ? "Профиль" : "Войти"}
-              className="mobile-header-button overflow-hidden bg-white/12 text-white"
+              className={`mobile-header-button overflow-hidden bg-white/12 text-white ${s.compactButton}`}
             >
               {avatarUrl ? (
                 <img src={avatarUrl} alt={displayName} className="h-full w-full object-cover" />
@@ -365,7 +366,7 @@ export default function Header() {
               onClick={() => setMobileMenuOpen(true)}
               aria-label="Открыть меню"
               aria-expanded={mobileMenuOpen}
-              className="mobile-header-button bg-white text-[#0057ff]"
+              className={`mobile-header-button bg-white text-[#0057ff] ${s.compactButton}`}
             >
               <Menu size={22} strokeWidth={2.7} />
             </button>

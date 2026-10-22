@@ -1,0 +1,262 @@
+.desktopRow {
+  display: none;
+  width: 100%;
+  height: 76px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 0 20px;
+}
+
+.desktopBrand {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 11px;
+}
+
+.desktopLogo {
+  display: flex;
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 15px;
+  background: white;
+  color: #0057ff;
+}
+
+.desktopBrandCopy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.desktopTitle {
+  color: white;
+  font-size: 28px;
+  font-weight: 900;
+  line-height: 29px;
+  letter-spacing: -.6px;
+}
+
+.desktopTagline {
+  color: #dbeafe;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 14px;
+  white-space: nowrap;
+}
+
+.desktopNav {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.desktopNav .navItem,
+.accountActions .accountButton {
+  display: inline-flex;
+  height: 44px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border-radius: 14px;
+  padding: 0 15px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.desktopNav .navItem > svg,
+.accountActions .accountButton > svg {
+  width: 17px;
+  height: 17px;
+  flex-shrink: 0;
+}
+
+.accountActions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.profileLink {
+  display: flex;
+  min-width: 210px;
+  max-width: 240px;
+  height: 52px;
+  align-items: center;
+  gap: 9px;
+  border-radius: 15px;
+  padding: 0 11px;
+  background: rgb(255 255 255 / 10%);
+  color: white;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 10%);
+  transition: background-color .2s ease;
+}
+
+.profileLink:hover {
+  background: rgb(255 255 255 / 20%);
+}
+
+.profileAvatar {
+  display: flex;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 15%);
+  object-fit: cover;
+  box-shadow: 0 0 0 2px rgb(255 255 255 / 20%);
+}
+
+.profileCopy {
+  min-width: 0;
+  flex: 1;
+  text-align: left;
+}
+
+.profileNameRow {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+}
+
+.profileName {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profileMeta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 1px;
+}
+
+.accountLabel {
+  flex-shrink: 0;
+  color: #dbeafe;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.profileMeta .profileBadge {
+  gap: 3px;
+  padding: 2px 6px;
+  font-size: 10px;
+  line-height: 14px;
+}
+
+.profileBadge > svg {
+  width: 11px;
+  height: 11px;
+}
+
+.compactRow {
+  display: flex;
+  height: 72px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 12px;
+}
+
+.compactBrand {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 9px;
+}
+
+.compactLogo {
+  display: flex;
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  background: white;
+  color: #0057ff;
+}
+
+.compactBrandCopy {
+  min-width: 0;
+}
+
+.compactTitle {
+  display: block;
+  color: white;
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 24px;
+  letter-spacing: -.4px;
+}
+
+.compactTagline {
+  display: block;
+  margin-top: 3px;
+  color: #dbeafe;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 12px;
+}
+
+.compactTagline > span {
+  display: inline-block;
+  white-space: nowrap;
+}
+
+.compactActions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.compactActions .compactButton {
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+}
+
+@media (min-width: 1800px) {
+  .desktopRow { display: flex; }
+  .compactRow { display: none; }
+}
+
+@media (max-width: 359px) {
+  .compactRow { gap: 8px; }
+  .compactBrand { gap: 8px; }
+  .compactLogo { width: 40px; height: 40px; border-radius: 12px; }
+  .compactLogo > svg { width: 22px; height: 22px; }
+  .compactTitle { font-size: 21px; line-height: 23px; }
+}
+
+@media (min-width: 600px) and (max-width: 1799px) {
+  .compactRow { padding-right: 20px; padding-left: 20px; }
+  .compactBrand { gap: 11px; }
+  .compactTitle { font-size: 24px; line-height: 26px; }
+  .compactTagline { font-size: 11px; line-height: 14px; }
+}
