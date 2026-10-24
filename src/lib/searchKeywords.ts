@@ -44,7 +44,7 @@ const stopWords = new Set([
   "нужные", "об", "около", "он", "она", "они", "от", "по", "под", "пожалуйста", "при", "про", "рядом", "с",
   "работа", "работы", "работу", "работ", "сам", "сама", "себе", "со", "там", "тебе", "только", "требуется", "требуются", "у", "хочу", "хотим", "чтобы",
   "это", "этот", "эту", "я", "ищу", "ищем", "найти", "найдите", "купить", "куплю", "заказать", "закажу",
-  "сделать", "сделайте", "выполнить", "нуждается", "нуждаюсь",
+  "сделать", "сделайте", "выполнить", "нуждается", "нуждаюсь", "надо", "можете", "помогите",
 ]);
 
 type SearchConcept = {
@@ -134,7 +134,10 @@ const concepts: SearchConcept[] = [
   { key: "timber", roots: ["брус"], primaryRequired: true },
   { key: "plywood", roots: ["фанер"], primaryRequired: true },
   { key: "tool", roots: ["инструмент", "оборудован"] },
+  { key: "trencher", roots: ["траншеекоп", "грунторез", "баров"], primaryRequired: true },
   { key: "excavator", roots: ["экскаватор"], primaryRequired: true },
+  { key: "bulldozer", roots: ["бульдозер"], primaryRequired: true },
+  { key: "grader", roots: ["автогрейдер", "грейдер"], primaryRequired: true },
   { key: "loader", roots: ["погрузчик", "погрузоч"], primaryRequired: true },
   { key: "roller", roots: ["каток", "катк", "виброкат"], primaryRequired: true },
   { key: "crane", roots: ["автокран", "башеннкран"], primaryRequired: true },
@@ -143,14 +146,15 @@ const concepts: SearchConcept[] = [
   { key: "warehouse", roots: ["склад"], primaryRequired: true },
   { key: "hangar", roots: ["ангар"], primaryRequired: true },
   { key: "geodesy", roots: ["геодез", "межеван", "топограф", "кадастр"], primaryRequired: true },
-  { key: "welding", roots: ["сварк", "свароч"], primaryRequired: true },
+  { key: "welding", roots: ["сварк", "свароч", "сварит", "сварим", "сварю"], primaryRequired: true },
   { key: "metal-structures", roots: ["металлоконструкц"], primaryRequired: true },
-  { key: "drilling", roots: ["бурен", "сверлен"], primaryRequired: true },
-  { key: "excavation", roots: ["землян", "котлован", "транше"], primaryRequired: true },
+  { key: "drilling", roots: ["бурен", "сверлен", "бурит", "бурим", "пробур", "сверлит", "просверл"], primaryRequired: true },
+  { key: "excavation", roots: ["землян", "землерой", "землекоп", "котлован", "транше", "канав", "ямк"], primaryRequired: true },
+  { key: "dig", roots: ["копа", "копк", "копан", "выкоп", "выкапы", "раскоп", "раскапы", "вскоп", "вскапы", "прокоп", "прокапы", "откоп", "откапы", "рыт", "выры", "разры", "проры"], optionalWithSubject: true, primaryRequired: true },
   { key: "lay", roots: ["уклад", "уклады", "улож", "полож", "класть", "постел", "настел"], optionalWithSubject: true },
-  { key: "install", roots: ["установ", "монтаж", "монтир", "смонтир", "подключ"], optionalWithSubject: true },
+  { key: "install", roots: ["установ", "монтаж", "монтир", "смонтир", "подключ", "обшит", "обшив"], optionalWithSubject: true },
   { key: "provider", roots: ["мастер", "специалист", "исполнител", "работник", "бригад", "подрядчик"], optionalWithSubject: true },
-  { key: "repair", roots: ["ремонт", "отремонт"] },
+  { key: "repair", roots: ["ремонт", "отремонт", "почин", "чинит", "чиню"] },
   { key: "rent", roots: ["аренд", "прокат", "напрокат"] },
   { key: "delivery", roots: ["достав", "привез", "привоз", "перевоз"] },
   { key: "build", roots: ["строител", "строит", "постро", "возвед"] },
@@ -167,6 +171,9 @@ const concepts: SearchConcept[] = [
 function concept(word: string) {
   if (/^пол(?:ы|а|у|ом|ах|ов)?$/u.test(word)) return concepts.find((entry) => entry.key === "floor");
   if (/^сва(?:я|и|ю|е|ей|й|ям|ями|ях)$/u.test(word)) return concepts.find((entry) => entry.key === "pile");
+  if (/^ям(?:а|ы|у|е|ой|ам|ами|ах)?$/u.test(word)) return concepts.find((entry) => entry.key === "excavation");
+  if (/^(?:рыл[аи]?|ро(?:ем|ешь|ет|ют|йте|й|я))$/u.test(word)) return concepts.find((entry) => entry.key === "dig");
+  if (/^бар(?:а|у|ом|ы|ой)?$/u.test(word)) return concepts.find((entry) => entry.key === "trencher");
   return concepts.find((entry) => entry.roots.some((root) => word.startsWith(root)));
 }
 
@@ -178,7 +185,21 @@ function auxiliaryAction(word: string) {
   return /^(?:укат|зал|отсып|засып|выкоп|пролож|пробур|просверл|постел|настел|подключ|замен|помен|собра|разобра|убра|сня|постав|сдел|выполн|заказ|куп|найд|ищ).*/u.test(word);
 }
 
-type SearchIntent = "material" | "service" | "any";
+type SearchIntent = "material" | "service" | "equipment" | "any";
+
+const EQUIPMENT_CONCEPTS = new Set([
+  "trencher", "excavator", "bulldozer", "grader", "loader", "roller", "crane", "manipulator", "lift",
+]);
+const EQUIPMENT_CONTEXT = /^(?:спецтехник|техник|машин(?:а|ы|у|ой|е|ам|ами|ах)?$|оборудован|механиз(?:м|ации)|агрегат)/u;
+const RENTAL_WORD = /^(?:аренд|прокат|напрокат)/u;
+const MAINTENANCE_WORD = /^(?:ремонт|отремонт|почин|чинит|чиню|обслужив|диагностик)/u;
+const SERVICE_VERB = /^(?:пролож|замен|помен|пробур|просверл|обшит|обшив|сварит|сварим|сварю)/u;
+
+/** Section/transaction words route the search instead of becoming extra subjects. */
+function routingWord(word: string, intent: SearchIntent) {
+  return RENTAL_WORD.test(word) || (intent === "equipment" && EQUIPMENT_CONTEXT.test(word)) ||
+    /^(?:услуг(?:а|и|у|ой|ами|ах)?|материал(?:ы|ов|ами)?|товар(?:ы|ов)?)$/u.test(word);
+}
 
 const MATERIAL_PRODUCT_ROOTS = [
   "керамич",
@@ -231,69 +252,77 @@ const MATERIAL_PRODUCT_ROOTS = [
   "раствор",
 ] as const;
 
+const queryIntentCache = new Map<string, SearchIntent>();
+
 function querySearchIntent(query: unknown): SearchIntent {
   const value = normalizeSearchKeywords(query);
-  if (!value) return "any";
+  const cached = queryIntentCache.get(value);
+  if (cached) return cached;
+  const words = value.split(" ").filter(Boolean);
+  const meanings = words.map(word => concept(word)?.key);
+  const transactionIndex = words.findIndex(word => RENTAL_WORD.test(word) || /^(?:купить|куплю|покупка|продажа|продам)$/u.test(word));
+  const serviceActionIndex = words.findIndex(word => MAINTENANCE_WORD.test(word) || concept(word)?.key === "install");
+  const machineIndex = words.findIndex(word => EQUIPMENT_CONTEXT.test(word) || EQUIPMENT_CONCEPTS.has(concept(word)?.key || ""));
+  const machinePurpose = machineIndex >= 0 && machineIndex < serviceActionIndex &&
+    words.slice(machineIndex + 1, serviceActionIndex).includes("для");
+  let intent: SearchIntent = "any";
 
-  if (
-    /(?:^| )(?:купить|куплю|покупка|продажа|продам|материал(?:ы|ов|ами)?|товар(?:ы|ов)?|поставка)(?: |$)/u.test(
-      value
-    )
+  // Servicing a machine is a service; hiring the machine (even with an
+  // operator) belongs to equipment. Incidental description text never routes a query.
+  if (words.some(word => /^(?:материал(?:ы|ов|ами)?|товар(?:ы|ов)?)$/u.test(word))) {
+    intent = "material";
+  } else if (serviceActionIndex >= 0 && !machinePurpose && (transactionIndex < 0 || serviceActionIndex < transactionIndex)) {
+    intent = "service";
+  } else if (words.some(word => /^(?:запчаст|запасн)/u.test(word))) {
+    intent = "material";
+  } else if (
+    words.some(word => RENTAL_WORD.test(word) || EQUIPMENT_CONTEXT.test(word)) ||
+    meanings.some(key => Boolean(key && EQUIPMENT_CONCEPTS.has(key)))
   ) {
-    return "material";
-  }
-
-  if (
-    /(?:^| )(?:работа|работы|работу|услуга|услуги|мастер|мастера|исполнитель|бригада|подрядчик|укладка|укладывать|уложить|положить|постелить|настелить|монтаж|монтировать|смонтировать|установка|установить|ремонт|отремонтировать|строительство|построить|возведение|покраска|окраска|покрасить|штукатурка|шпаклевка|кладка|сборка|собрать|залить|отсыпать|засыпать|укатать|бетонирование|асфальтирование)(?: |$)/u.test(
-      value
-    )
+    const diggingByMachine = meanings.includes("dig") &&
+      words.some(word => EQUIPMENT_CONCEPTS.has(concept(word)?.key || "") && /(?:ом|ами)$/u.test(word));
+    intent = diggingByMachine && !words.some(word => RENTAL_WORD.test(word) || EQUIPMENT_CONTEXT.test(word))
+      ? "service" : "equipment";
+  } else if (/(?:^| )(?:купить|куплю|покупка|продажа|продам|материал(?:ы|ов|ами)?|товар(?:ы|ов)?|поставка)(?: |$)/u.test(value)) {
+    intent = "material";
+  } else if (
+    /(?:^| )(?:работа|работы|работу|услуга|услуги|мастер|мастера|исполнитель|бригада|подрядчик|укладка|укладывать|уложить|положить|постелить|настелить|монтаж|монтировать|смонтировать|установка|установить|ремонт|отремонтировать|строительство|построить|возведение|покраска|окраска|покрасить|штукатурка|шпаклевка|кладка|сборка|собрать|залить|отсыпать|засыпать|укатать|бетонирование|асфальтирование|сварка|бурение|сверление)(?: |$)/u.test(value) ||
+    meanings.includes("dig") || words.some(word => SERVICE_VERB.test(word)) ||
+    words.some(word => /^(?:землян|землерой|землекоп)/u.test(word))
   ) {
-    return "service";
+    intent = "service";
+  } else if (words.some(word => MATERIAL_PRODUCT_ROOTS.some(root => word.startsWith(root)))) {
+    intent = "material";
   }
-
-  if (
-    value
-      .split(" ")
-      .some((word) => MATERIAL_PRODUCT_ROOTS.some((root) => word.startsWith(root)))
-  ) {
-    return "material";
-  }
-
-  return "any";
+  return cacheSearchValue(queryIntentCache, value, intent);
 }
 
 function valueMatchesIntent(value: string, intent: SearchIntent) {
   if (intent === "any") return true;
 
-  const markedAsMaterial =
-    value.includes("разделматериалы") || /(?:^| )материалы(?: |$)/u.test(value);
-  const markedAsService =
-    value.includes("разделуслуги") ||
-    value.includes("разделрешения") ||
-    /(?:^| )услуги(?: |$)/u.test(value) ||
-    value.includes("комплексные решения");
-  const markedAsEquipment =
-    value.includes("разделтехника") || /(?:^| )техника(?: |$)/u.test(value);
+  // Explicit section markers take precedence over words such as “услуги” or
+  // “техника” inside a title/description. Catalog paths start with their section.
+  if (value.includes("разделтехника")) return intent === "equipment";
+  if (value.includes("разделматериалы")) return intent === "material";
+  if (value.includes("разделуслуги") || value.includes("разделрешения")) return intent === "service";
+  if (/^(?:техника|спецтехника)(?: |$)/u.test(value)) return intent === "equipment";
+  if (/^материалы(?: |$)/u.test(value)) return intent === "material";
+  if (/^(?:услуги|комплексные решения)(?: |$)/u.test(value)) return intent === "service";
 
-  if (markedAsMaterial || markedAsService || markedAsEquipment) {
-    return intent === "material" ? markedAsMaterial : markedAsService;
-  }
-
-  const looksLikeMaterial =
-    /(?:^| )(?:материал(?:ы|ов|ами)?|товар(?:ы|ов)?|продажа|продам|поставка)(?: |$)/u.test(
-      value
-    ) ||
-    value
-      .split(" ")
-      .some((word) => MATERIAL_PRODUCT_ROOTS.some((root) => word.startsWith(root)));
+  const words = value.split(" ");
+  const looksLikeEquipment = words.some(word =>
+    EQUIPMENT_CONCEPTS.has(concept(word)?.key || "") || EQUIPMENT_CONTEXT.test(word)
+  );
   const looksLikeService =
-    /(?:^| )(?:услуга|услуги|работа|работы|мастер|бригада|подрядчик|укладка|настил|монтаж|установка|ремонт|строительство|возведение|покраска|окраска|штукатурка|шпаклевка|кладка|сборка|отсыпка|засыпка|укатка|бетонирование|асфальтирование)(?: |$)/u.test(
-      value
-    );
+    /(?:^| )(?:услуга|услуги|работа|работы|мастер|бригада|подрядчик|укладка|настил|монтаж|установка|ремонт|строительство|возведение|покраска|окраска|штукатурка|шпаклевка|кладка|сборка|отсыпка|засыпка|укатка|бетонирование|асфальтирование)(?: |$)/u.test(value) ||
+    words.some(word => MAINTENANCE_WORD.test(word) || concept(word)?.key === "dig" || /^(?:землян|землерой|землекоп)/u.test(word));
+  const looksLikeMaterial =
+    /(?:^| )(?:материал(?:ы|ов|ами)?|товар(?:ы|ов)?|продажа|продам|поставка)(?: |$)/u.test(value) ||
+    words.some(word => MATERIAL_PRODUCT_ROOTS.some(root => word.startsWith(root)));
 
-  return intent === "material"
-    ? looksLikeMaterial && !looksLikeService
-    : looksLikeService;
+  if (intent === "equipment") return looksLikeEquipment && !words.some(word => MAINTENANCE_WORD.test(word));
+  if (intent === "material") return looksLikeMaterial && !looksLikeService && !looksLikeEquipment;
+  return looksLikeService;
 }
 
 function removeFirstMatchingSuffix(value: string, suffixes: readonly string[]) {
@@ -397,6 +426,7 @@ type SearchToken = {
   root: string;
   concept?: string;
   primaryRequired?: boolean;
+  relatedConcepts?: readonly string[];
 };
 
 const searchTokensCache = new Map<string, SearchToken[]>();
@@ -454,9 +484,10 @@ function queryRequirements(query: unknown): SearchToken[] {
   const cached = queryRequirementsCache.get(normalized);
   if (cached) return cached;
 
+  const intent = querySearchIntent(query);
   const words = normalized
     .split(" ")
-    .filter((word) => word && !stopWords.has(word));
+    .filter((word) => word && !stopWords.has(word) && !routingWord(word, intent));
   if (!words.length) {
     return cacheSearchValue(queryRequirementsCache, normalized, []);
   }
@@ -468,17 +499,25 @@ function queryRequirements(query: unknown): SearchToken[] {
     (word) => concept(word)?.key === "ceramic"
   );
 
+  const hasExcavationSubject = required.some(word => concept(word)?.key === "excavation");
   for (const word of required) {
     const detectedMeaning = concept(word);
     const meaning =
       ceramicSlabMeansTile && detectedMeaning?.key === "slab"
         ? concepts.find((entry) => entry.key === "tile")
         : detectedMeaning;
-    const token = {
+    const relatedConcepts = meaning?.key === "excavation"
+      ? intent === "equipment" && /^(?:землян|землерой|землекоп)/u.test(word)
+        ? ["trencher", "excavator", "bulldozer", "grader"] : ["trencher"]
+      : meaning?.key === "dig" ? ["excavation"]
+      : meaning?.key === "excavator" && hasExcavationSubject && intent === "equipment" ? ["trencher"]
+      : undefined;
+    const token: SearchToken = {
       word,
       root: searchTokenRoot(word),
       concept: meaning?.key,
       primaryRequired: meaning?.primaryRequired,
+      relatedConcepts,
     };
     // Слова одного строительного смысла не должны искусственно сужать поиск:
     // «керамическая плита» — один предмет, а не два независимых требования.
@@ -491,7 +530,10 @@ function queryRequirements(query: unknown): SearchToken[] {
 
 function tokenMatchScore(requirement: SearchToken, token: SearchToken) {
   if (token.word === requirement.word) return 140;
-  if (requirement.concept && requirement.concept === token.concept) return 110;
+  if (requirement.concept && requirement.concept === token.concept) {
+    return requirement.root === token.root ? 125 : 110;
+  }
+  if (token.concept && requirement.relatedConcepts?.includes(token.concept)) return 85;
   // Once a query word has an explicit domain meaning, do not let an unrelated
   // word with a shared prefix replace it ("грунтовка" is not "грунт").
   if (requirement.concept && requirement.concept !== token.concept) return 0;
@@ -539,10 +581,9 @@ function requirementsScore(value: unknown, requirements: SearchToken[]) {
 export function searchRelevanceScore(value: unknown, query: unknown) {
   const normalizedQuery = normalizeSearchKeywords(query);
   const requirements = queryRequirements(query);
-  if (!requirements.length) return 0;
-
   const normalizedValue = normalizeSearchKeywords(value);
   if (!valueMatchesIntent(normalizedValue, querySearchIntent(query))) return -1;
+  if (!requirements.length) return 0;
   let score = normalizedValue.includes(normalizedQuery) ? 900 : 0;
   const matchedRequirementsScore = requirementsScore(value, requirements);
   if (matchedRequirementsScore < 0) return -1;
@@ -583,19 +624,27 @@ export function catalogSearchRelevanceScore(
     (actionRequirements.length && actionScore >= 0 ? 2_000 + actionScore : 0);
 }
 
+function sectionMarker(value: unknown) {
+  const section = normalizeSearchKeywords(value);
+  if (/^(?:materials?|материалы)$/u.test(section)) return "разделматериалы";
+  if (/^(?:services?|услуги)$/u.test(section)) return "разделуслуги";
+  if (/^(?:solutions?|complex|комплексные решения)$/u.test(section)) return "разделрешения";
+  if (/^(?:equipment|machinery|техника|спецтехника)$/u.test(section)) return "разделтехника";
+  return "";
+}
+
 function publicationSectionMarker(item: Record<string, any>) {
-  const section = normalizeSearchKeywords(
-    item.catalogSection || item.section || item.catalogType
-  );
-  return section.includes("material")
-    ? "разделматериалы"
-    : section.includes("service")
-      ? "разделуслуги"
-      : section.includes("solution") || section.includes("complex")
-        ? "разделрешения"
-        : section.includes("equipment") || section.includes("machinery")
-          ? "разделтехника"
-          : "";
+  for (const value of [item.catalogSection, item.section, item.catalogType, Array.isArray(item.catalogPath) ? item.catalogPath[0] : ""]) {
+    const marker = sectionMarker(value);
+    if (marker) return marker;
+  }
+  const category = normalizeSearchKeywords(item.category);
+  const marker = sectionMarker(category);
+  if (marker) return marker;
+  // Legacy publications have a category but no catalogSection/catalogPath.
+  if (/^(?:ремонт квартир|дизайн и проектирование|строительство)$/u.test(category)) return "разделрешения";
+  if (/^(?:отделочные работы|электрика|сантехника|полы|крыша и фасад|участок и благоустройство|инженерные системы|окна и двери|мебель|дополнительные услуги|земляные работы)$/u.test(category)) return "разделуслуги";
+  return "";
 }
 
 const publicationIdentityCache = new WeakMap<object, string>();
