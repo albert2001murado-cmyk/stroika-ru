@@ -1,3 +1,5 @@
+import { canonicalCatalogFields, catalogSubjectText } from "../data/catalogUpdates";
+
 /**
  * Natural-language search shared by publication and catalog filters.
  *
@@ -31,6 +33,8 @@ export function normalizeSearchKeywords(value: unknown) {
     .replace(/[\u200B-\u200D\uFEFF]/g, "")
     .replace(/[^\p{L}\p{N}]+/gu, " ")
     .replace(/\s+/g, " ")
+    .replace(/кварц\s+винил/gu, "кварцвинил")
+    .replace(/(^| )спс(?= |$)/gu, "$1spc")
     .trim();
 
   return cacheSearchValue(normalizedSearchCache, source, normalized);
@@ -99,6 +103,7 @@ const concepts: SearchConcept[] = [
   { key: "facade", roots: ["фасад", "облицов"] },
   { key: "siding", roots: ["сайдинг"], primaryRequired: true },
   { key: "floor", roots: ["напольн", "покрыт", "наливнпол"] },
+  { key: "vinyl-floor", roots: ["кварцвинил", "винилов"], primaryRequired: true },
   { key: "laminate", roots: ["ламинат"], primaryRequired: true },
   { key: "linoleum", roots: ["линолеум"], primaryRequired: true },
   { key: "parquet", roots: ["паркет"], primaryRequired: true },
@@ -111,12 +116,17 @@ const concepts: SearchConcept[] = [
   { key: "mixer", roots: ["смесител"], primaryRequired: true },
   { key: "toilet", roots: ["унитаз"], primaryRequired: true },
   { key: "sink", roots: ["раковин"], primaryRequired: true },
+  { key: "chandelier", roots: ["люстр"], primaryRequired: true },
+  { key: "lighting", roots: ["освещен", "светильник"], primaryRequired: true },
+  { key: "wall-panel", roots: ["панел"], primaryRequired: true },
+  { key: "routing", roots: ["разводк", "развест"] },
+  { key: "electric-panel", roots: ["электрощит"], primaryRequired: true },
+  { key: "street", roots: ["уличн", "улиц", "наружн"] },
+  { key: "wiring", roots: ["электропровод", "проводк"], primaryRequired: true },
   { key: "electric", roots: ["электр"] },
-  { key: "wiring", roots: ["проводк"], primaryRequired: true },
   { key: "cable", roots: ["кабел"], primaryRequired: true },
   { key: "socket", roots: ["розет"], primaryRequired: true },
   { key: "switch", roots: ["выключател"], primaryRequired: true },
-  { key: "electric-panel", roots: ["электрощит"], primaryRequired: true },
   { key: "heating", roots: ["отоплен"] },
   { key: "radiator", roots: ["радиатор"], primaryRequired: true },
   { key: "boiler", roots: ["котел"], primaryRequired: true },
@@ -152,9 +162,9 @@ const concepts: SearchConcept[] = [
   { key: "excavation", roots: ["землян", "землерой", "землекоп", "котлован", "транше", "канав", "ямк"], primaryRequired: true },
   { key: "dig", roots: ["копа", "копк", "копан", "выкоп", "выкапы", "раскоп", "раскапы", "вскоп", "вскапы", "прокоп", "прокапы", "откоп", "откапы", "рыт", "выры", "разры", "проры"], optionalWithSubject: true, primaryRequired: true },
   { key: "lay", roots: ["уклад", "уклады", "улож", "полож", "класть", "постел", "настел"], optionalWithSubject: true },
-  { key: "install", roots: ["установ", "монтаж", "монтир", "смонтир", "подключ", "обшит", "обшив"], optionalWithSubject: true },
+  { key: "install", roots: ["установ", "монтаж", "монтир", "смонтир", "подключ", "обшит", "обшив", "повес", "провест"], optionalWithSubject: true },
   { key: "provider", roots: ["мастер", "специалист", "исполнител", "работник", "бригад", "подрядчик"], optionalWithSubject: true },
-  { key: "repair", roots: ["ремонт", "отремонт", "почин", "чинит", "чиню"] },
+  { key: "repair", roots: ["ремонт", "отремонт", "почин", "чинит", "чиню", "устран"] },
   { key: "rent", roots: ["аренд", "прокат", "напрокат"] },
   { key: "delivery", roots: ["достав", "привез", "привоз", "перевоз"] },
   { key: "build", roots: ["строител", "строит", "постро", "возвед"] },
@@ -192,8 +202,8 @@ const EQUIPMENT_CONCEPTS = new Set([
 ]);
 const EQUIPMENT_CONTEXT = /^(?:спецтехник|техник|машин(?:а|ы|у|ой|е|ам|ами|ах)?$|оборудован|механиз(?:м|ации)|агрегат)/u;
 const RENTAL_WORD = /^(?:аренд|прокат|напрокат)/u;
-const MAINTENANCE_WORD = /^(?:ремонт|отремонт|почин|чинит|чиню|обслужив|диагностик)/u;
-const SERVICE_VERB = /^(?:пролож|замен|помен|пробур|просверл|обшит|обшив|сварит|сварим|сварю)/u;
+const MAINTENANCE_WORD = /^(?:устран|ремонт|отремонт|почин|чинит|чиню|обслужив|диагностик)/u;
+const SERVICE_VERB = /^(?:сделать|сделайте|шпаклеват|шпатлеват|штукатурит|поклеит|повес|развест|пролож|замен|помен|пробур|просверл|обшит|обшив|сварит|сварим|сварю)/u;
 
 /** Section/transaction words route the search instead of becoming extra subjects. */
 function routingWord(word: string, intent: SearchIntent) {
@@ -241,6 +251,11 @@ const MATERIAL_PRODUCT_ROOTS = [
   "радиатор",
   "котел",
   "ламинат",
+  "кварцвинил",
+  "черепиц",
+  "металлочерепиц",
+  "профнастил",
+  "рубероид",
   "линолеум",
   "паркет",
   "пиломатериал",
@@ -288,6 +303,7 @@ function querySearchIntent(query: unknown): SearchIntent {
   } else if (
     /(?:^| )(?:работа|работы|работу|услуга|услуги|мастер|мастера|исполнитель|бригада|подрядчик|укладка|укладывать|уложить|положить|постелить|настелить|монтаж|монтировать|смонтировать|установка|установить|ремонт|отремонтировать|строительство|построить|возведение|покраска|окраска|покрасить|штукатурка|шпаклевка|кладка|сборка|собрать|залить|отсыпать|засыпать|укатать|бетонирование|асфальтирование|сварка|бурение|сверление)(?: |$)/u.test(value) ||
     meanings.includes("dig") || words.some(word => SERVICE_VERB.test(word)) ||
+    words.some(word => /^(?:электрик|сантехник|штукатур|маляр)(?:а|у|ом|и|ов)?$/u.test(word)) ||
     words.some(word => /^(?:землян|землерой|землекоп)/u.test(word))
   ) {
     intent = "service";
@@ -314,7 +330,7 @@ function valueMatchesIntent(value: string, intent: SearchIntent) {
     EQUIPMENT_CONCEPTS.has(concept(word)?.key || "") || EQUIPMENT_CONTEXT.test(word)
   );
   const looksLikeService =
-    /(?:^| )(?:услуга|услуги|работа|работы|мастер|бригада|подрядчик|укладка|настил|монтаж|установка|ремонт|строительство|возведение|покраска|окраска|штукатурка|шпаклевка|кладка|сборка|отсыпка|засыпка|укатка|бетонирование|асфальтирование)(?: |$)/u.test(value) ||
+    /(?:^| )(?:услуга|услуги|работа|работы|мастер|бригада|подрядчик|укладка|настил|монтаж|установка|устройство|ремонт|строительство|возведение|покраска|окраска|штукатурка|шпаклевка|кладка|сборка|отсыпка|засыпка|укатка|бетонирование|асфальтирование)(?: |$)/u.test(value) ||
     words.some(word => MAINTENANCE_WORD.test(word) || concept(word)?.key === "dig" || /^(?:землян|землерой|землекоп)/u.test(word));
   const looksLikeMaterial =
     /(?:^| )(?:материал(?:ы|ов|ами)?|товар(?:ы|ов)?|продажа|продам|поставка)(?: |$)/u.test(value) ||
@@ -593,7 +609,7 @@ export function searchRelevanceScore(value: unknown, query: unknown) {
 }
 
 export function matchesSearchKeywords(value: unknown, query: unknown) {
-  return searchRelevanceScore(value, query) >= 0;
+  return searchRelevanceScore(catalogSubjectText(value), query) >= 0;
 }
 
 /**
@@ -606,20 +622,21 @@ export function catalogSearchRelevanceScore(
   searchablePath: unknown,
   query: unknown
 ) {
+  const scope = catalogSubjectText(primaryTitle);
   const primaryRequirements = queryRequirements(query).filter(
     (requirement) => requirement.primaryRequired
   );
   if (
     primaryRequirements.length &&
-    requirementsScore(primaryTitle, primaryRequirements) < 0
+    requirementsScore(scope, primaryRequirements) < 0
   ) {
     return -1;
   }
-  const relevance = searchRelevanceScore(searchablePath, query);
+  const relevance = searchRelevanceScore(`${searchablePath} ${scope}`, query);
   if (relevance < 0) return -1;
 
   const actionRequirements = queryActionRequirements(query);
-  const actionScore = requirementsScore(primaryTitle, actionRequirements);
+  const actionScore = requirementsScore(scope, actionRequirements);
   return relevance +
     (actionRequirements.length && actionScore >= 0 ? 2_000 + actionScore : 0);
 }
@@ -661,16 +678,18 @@ export function publicationSearchIdentityText(item: Record<string, any>) {
   const cached = publicationIdentityCache.get(item);
   if (cached !== undefined) return cached;
 
+  const catalog = canonicalCatalogFields(item);
   const text = [
     item.title,
     item.name,
-    item.category,
-    item.subcategory,
-    item.catalogCategoryTitle,
+    catalog.category,
+    catalog.subcategory,
+    catalog.catalogCategoryTitle,
     item.catalogGroupTitle,
+    catalogSubjectText(catalog.subcategory),
     item.offerActionLabel,
-    publicationSectionMarker(item),
-    ...(Array.isArray(item.catalogPath) ? item.catalogPath : []),
+    publicationSectionMarker(catalog),
+    ...(Array.isArray(catalog.catalogPath) ? catalog.catalogPath : []),
   ]
     .filter((entry) => typeof entry === "string")
     .join(" ");
@@ -683,9 +702,10 @@ export function publicationSearchPrimaryText(item: Record<string, any>) {
   const cached = publicationPrimaryCache.get(item);
   if (cached !== undefined) return cached;
 
-  const catalogPath = Array.isArray(item.catalogPath) ? item.catalogPath : [];
+  const catalog = canonicalCatalogFields(item);
+  const catalogPath = Array.isArray(catalog.catalogPath) ? catalog.catalogPath : [];
   const leaf = catalogPath.length ? catalogPath[catalogPath.length - 1] : "";
-  const text = [item.title, item.name, item.subcategory, leaf, item.offerActionLabel]
+  const text = [item.title, item.name, catalogSubjectText(catalog.subcategory), leaf, item.offerActionLabel]
     .filter((entry) => typeof entry === "string")
     .join(" ");
   publicationPrimaryCache.set(item, text);

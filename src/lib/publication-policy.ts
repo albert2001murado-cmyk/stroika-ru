@@ -1,3 +1,4 @@
+import { canonicalCatalogFields } from "../data/catalogUpdates";
 import { validatePayment } from "./payments";
 import { checkCatalogConsistency } from "./catalogConsistency";
 import {
@@ -264,7 +265,7 @@ function optionMatches(
 }
 
 export function normalizePublicationCatalog(dataValue: unknown): NormalizedCatalog {
-  const data = object(dataValue);
+  const data = canonicalCatalogFields(object(dataValue));
   const requestedSection = text(data.catalogSection, 32) as CatalogSectionId;
   const input = {
     categoryId: text(data.catalogCategoryId, 80),

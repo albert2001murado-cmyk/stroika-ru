@@ -1,3 +1,4 @@
+import { canonicalCatalogFields } from "../data/catalogUpdates";
 import { isPublicationExpired } from "./publication-lifetime";
 import { normalizePublicationCatalog } from "./publication-policy";
 import { CATALOG_FORM_SECTIONS, getCatalogFormCategories } from "../data/catalogForm";
@@ -40,7 +41,7 @@ export function sameCatalogPath(a: MatchPublication, b: MatchPublication) {
   const right = normalizePublicationCatalog(b);
   // Moderation's legacy normalizer can recover a category from a subcategory.
   // Matching must not reinterpret a conflicting explicit category as a match.
-  for (const [data, catalog] of [[a, left], [b, right]] as const) {
+  for (const [data, catalog] of [[canonicalCatalogFields(a), left], [canonicalCatalogFields(b), right]] as const) {
     if (data.catalogSection && data.catalogSection !== catalog.section) return false;
     if (typeof data.catalogCategoryId === "string" && knownCategoryIds.has(data.catalogCategoryId) &&
         data.catalogCategoryId !== catalog.categoryId) return false;

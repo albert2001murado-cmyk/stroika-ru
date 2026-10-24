@@ -1,4 +1,5 @@
 "use client";
+import { canonicalCatalogFields } from "@/data/catalogUpdates";
 import { uploadAuthHeaders } from "@/lib/uploadAuth";
 
 
@@ -138,10 +139,11 @@ export default function EditCustomerRequestPage() {
 
         const data = { id: snapshot.id, ...snapshot.data() } as CustomerRequest;
         setOwnerId(data.customerId || "");
-        setCatalogMetadata(snapshot.data());
+        const currentCatalog = canonicalCatalogFields(snapshot.data());
+        setCatalogMetadata(currentCatalog);
         setTitle(data.title || "");
         setDescription(data.description || "");
-        setCategory(data.category || REQUEST_CATEGORIES[0]);
+        setCategory(currentCatalog.category || REQUEST_CATEGORIES[0]);
         setCity(data.city || "");
         setAddress(String(snapshot.data().address || ""));
         setBudgetFrom(

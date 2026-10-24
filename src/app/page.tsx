@@ -5,7 +5,7 @@ import {
   publicationSearchRelevanceScore,
 } from "@/lib/searchKeywords";
 import { normalizePaymentChoice } from "@/lib/payments";
-import { publicationCatalogSelection } from "@/lib/catalogSelection";
+import { publicationMatchesCatalogPath } from "@/lib/catalogSelection";
 
 import CustomerRequestCard from "@/components/CustomerRequestCard";
 import CatalogSearchFilter from "@/components/CatalogSearchFilter";
@@ -210,20 +210,9 @@ function isListingVerified(listing: Listing) {
   );
 }
 
-function requestMatches(
-  request: CustomerRequest,
-  category: string,
-  subcategory: string
-) {
-  const matchesCategory = category
-    ? normalizeCatalogValue(request.category) === normalizeCatalogValue(category)
-    : true;
-  const matchesSubcategory = subcategory
-    ? normalizeCatalogValue(request.subcategory) ===
-      normalizeCatalogValue(subcategory)
-    : true;
-
-  return isPublicationApproved(request) && request.status === "active" && matchesCategory && matchesSubcategory;
+function requestMatches(request: CustomerRequest, category: string, subcategory: string, catalogSection = "", catalogCategoryId = "") {
+  return isPublicationApproved(request) && request.status === "active" &&
+    publicationMatchesCatalogPath(request, { category, subcategory, catalogSection, catalogCategoryId });
 }
 
 function formatPrice(value: number) {
@@ -546,16 +535,7 @@ export default function HomePage() {
         if (relevance < 0) return false;
         relevanceScores.set(listing, relevance);
       }
-      const matchesCategory = category
-        ? normalizeCatalogValue(listing.category) === normalizeCatalogValue(category)
-        : true;
-      const catalogSelection = publicationCatalogSelection(listing);
-      const matchesCatalogCategory = !catalogCategoryId || catalogSelection.categoryId === catalogCategoryId;
-      const matchesCatalogSection = !catalogSection || catalogSelection.section === catalogSection;
-      const matchesSubcategory = subcategory
-        ? normalizeCatalogValue(listing.subcategory) ===
-          normalizeCatalogValue(subcategory)
-        : true;
+      const matchesCatalog = publicationMatchesCatalogPath(listing, { category, subcategory, catalogSection, catalogCategoryId });
       const matchesOffer = matchesOfferSelection(
         listing,
         selectedOfferAction,
@@ -579,10 +559,7 @@ export default function HomePage() {
       const matchesPhotos = withPhotosOnly ? hasImages(listing) : true;
 
       return (
-        matchesCategory &&
-        matchesCatalogCategory &&
-        matchesCatalogSection &&
-        matchesSubcategory &&
+        matchesCatalog &&
         matchesOffer &&
         matchesCity &&
         matchesPrice &&
@@ -625,7 +602,9 @@ export default function HomePage() {
         const baseMatches = requestMatches(
           request,
           category,
-          subcategory
+          subcategory,
+          catalogSection,
+          catalogCategoryId
         );
         if (!baseMatches) return false;
         if (hasSearch) {
@@ -633,9 +612,6 @@ export default function HomePage() {
           if (relevance < 0) return false;
           relevanceScores.set(request, relevance);
         }
-        const catalogSelection = publicationCatalogSelection(request);
-      const matchesCatalogCategory = !catalogCategoryId || catalogSelection.categoryId === catalogCategoryId;
-      const matchesCatalogSection = !catalogSection || catalogSelection.section === catalogSection;
       const matchesCity = cityMatches(publicationLocation(request), city);
         const range = requestPriceRange(request);
         const matchesPrice = overlapsPriceRange(
@@ -650,8 +626,6 @@ export default function HomePage() {
         const matchesPhotos = withPhotosOnly ? hasImages(request) : true;
 
         return (
-          matchesCatalogCategory &&
-          matchesCatalogSection &&
           matchesCity &&
           matchesPrice &&
           matchesUrgency &&

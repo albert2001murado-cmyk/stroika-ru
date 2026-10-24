@@ -1,3 +1,4 @@
+import { canonicalCatalogFields, catalogSubjectText } from "../data/catalogUpdates";
 import {
   CATALOG_FORM_SECTIONS,
   getCatalogFormCategories,
@@ -58,7 +59,7 @@ function subjectMatch(content: string, label: string) {
   const normalized = normalizeCatalogText(content);
   const key = normalizeCatalogText(label);
   if (key && ` ${normalized} `.includes(` ${key} `)) return true;
-  const labelTerms = terms(label);
+  const labelTerms = terms(catalogSubjectText(label));
   return terms(content).some((word) => labelTerms.includes(word));
 }
 
@@ -118,7 +119,7 @@ function findSelectedOption(
 export function checkCatalogConsistency(
   value: unknown
 ): CatalogConsistencyIssue | null {
-  const data = object(value);
+  const data = canonicalCatalogFields(object(value));
   const section = text(data.catalogSection, 32);
   const category = text(data.category);
   const subcategory = text(data.subcategory);

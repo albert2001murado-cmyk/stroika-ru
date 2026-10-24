@@ -7,7 +7,7 @@ import { getPublicProfile } from "@/lib/publicProfiles";
 import BankDetailsCard from "@/components/BankDetailsCard";
 import { paymentLabel, normalizePaymentChoice } from "@/lib/payments";
 import SharePublicationButton from "@/components/SharePublicationButton";
-import { catalogLabel } from "@/data/catalogLabels";
+import { catalogCategoryLabel, catalogLabel } from "@/data/catalogLabels";
 
 import { useAuth } from "@/components/AuthProvider";
 import ReportDialog from "@/components/ReportDialog";
@@ -500,7 +500,7 @@ export default function ListingPage() {
 
             <div className="rounded-[24px] bg-white p-4 shadow-sm sm:rounded-[34px] sm:p-8">
               <p className="font-black text-[#0057ff]">
-                {listing.category} · {catalogLabel(listing.subcategory)}
+                {catalogCategoryLabel(listing)} · {catalogLabel(listing.subcategory, listing)}
               </p>
 
               <h1 className="mt-3 text-3xl font-black text-gray-950 sm:text-4xl">

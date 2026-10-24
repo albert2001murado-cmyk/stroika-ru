@@ -1,3 +1,4 @@
+import { canonicalCatalogFields } from "./catalogUpdates";
 import { MATERIAL_SUBCATEGORIES } from "./materials";
 
 export type MaterialServiceSection = "services" | "solutions";
@@ -78,6 +79,8 @@ function createMaterialActionTitle(material: string, baseTitle?: string) {
 }
 
 function register(materials: string[], target: ServiceTarget) {
+  const current = canonicalCatalogFields({ ...target, catalogSection: target.section });
+  target = { ...target, category: current.category, subcategory: current.subcategory };
   materials.forEach((material) => {
     const key = normalize(material);
     links.set(key, {
@@ -601,6 +604,8 @@ register(["Системы автополива"], {
   imageCategoryId: "landscape",
   actionTitle: "Найти монтажника автополива",
 });
+
+register(["Мягкая кровля", "Композитная черепица"], { category: "Крыша и фасад", subcategory: "Монтаж кровли", section: "services", imageCategoryId: "roof", actionTitle: "Найти кровельщиков" });
 
 export function getMaterialServiceLink(material?: string) {
   return links.get(normalize(material)) || null;

@@ -1,3 +1,4 @@
+import { canonicalCatalogFields } from "../data/catalogUpdates";
 import { publicationCatalogSelection, normalizeCatalogText } from "./catalogSelection";
 import { matchesOfferSelection, type SearchableListingFields } from "./listingOffer";
 import { isPublicationApproved } from "./moderation";
@@ -216,7 +217,7 @@ export function indexNearbyPublication(item: NearbyPublication, coords: Coordina
     }
     indexed = {
       item, key: nearbyKey(item), selection,
-      subcategory: normalizeCatalogText(item.subcategory),
+      subcategory: normalizeCatalogText(selection.subcategory),
       city: normalizeCatalogText([item.city, publicationAddress(item)].join(" ")).replace(/^г\s+/, ""),
       image: publicationImage(item), price: publicationPrice(item), created: timestampMillis(item.createdAt),
       verified: verifiedPublication(item), urgent: Boolean(item.isUrgent || item.urgency === "urgent"),
@@ -232,7 +233,8 @@ export function indexNearbyPublication(item: NearbyPublication, coords: Coordina
 
 export function filterNearbyPublications(entries: IndexedNearbyPublication[], filters: NearbyFilters) {
   const city = normalizeCatalogText(filters.city).replace(/^г\s+/, "");
-  const subcategory = normalizeCatalogText(filters.subcategory);
+  const selected = canonicalCatalogFields({ catalogSection: filters.section, catalogCategoryId: filters.categoryId, subcategory: filters.subcategory });
+  const subcategory = normalizeCatalogText(selected.subcategory);
   const min = priceNumber(filters.priceMin);
   const max = priceNumber(filters.priceMax);
   const scores = new Map<string, number>();
@@ -241,8 +243,8 @@ export function filterNearbyPublications(entries: IndexedNearbyPublication[], fi
     if (!isPublicationApproved(item) || (item.kind === "request" && item.status && item.status !== "active")) return false;
     if (filters.audience === "contractors" && item.kind !== "contractor") return false;
     if (filters.audience === "customers" && item.kind !== "request") return false;
-    if (filters.section && selection.section !== filters.section) return false;
-    if (filters.categoryId && selection.categoryId !== filters.categoryId) return false;
+    if (selected.catalogSection && selection.section !== selected.catalogSection) return false;
+    if (selected.catalogCategoryId && selection.categoryId !== selected.catalogCategoryId) return false;
     if (subcategory && entry.subcategory !== subcategory) return false;
     if (city && !locationMatchesFilter(entry.city, filters.city)) return false;
     if (filters.radius !== null && filters.hasOrigin && (distance === null || distance > filters.radius)) return false;

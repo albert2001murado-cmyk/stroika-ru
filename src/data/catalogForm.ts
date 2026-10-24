@@ -1,3 +1,4 @@
+import { canonicalCatalogFields, catalogTextKey } from "./catalogUpdates";
 import { catalogLabel } from "./catalogLabels";
 import { categories } from "./categories";
 import { groupsForSection } from "./catalogGroups";
@@ -172,6 +173,7 @@ export function resolveCatalogPath(input: {
   category?: string;
   subcategory?: string;
 }): CatalogPathValue {
+  input = canonicalCatalogFields(input);
   const inferredSection = input.category
     ? sectionForCategory(input.category)
     : "services";
@@ -184,9 +186,9 @@ export function resolveCatalogPath(input: {
   const option =
     (input.catalogGroupId ? options.find((item) => item.groupId === input.catalogGroupId) : undefined) ||
     options.find((item) =>
-      item.subcategories.includes(catalogLabel(input.subcategory))
+      item.subcategories.includes(catalogLabel(input.subcategory, input))
     ) ||
-    options.find((item) => item.category === input.category) ||
+    options.find((item) => catalogTextKey(item.category) === catalogTextKey(input.category)) ||
     options[0];
 
   return {
@@ -196,8 +198,8 @@ export function resolveCatalogPath(input: {
     catalogGroupId: option?.groupId || "",
     category: option?.category || input.category || "",
     subcategory:
-      option?.subcategories.includes(catalogLabel(input.subcategory))
-        ? catalogLabel(input.subcategory)
+      option?.subcategories.includes(catalogLabel(input.subcategory, input))
+        ? catalogLabel(input.subcategory, input)
         : option?.subcategories[0] || "",
   };
 }
