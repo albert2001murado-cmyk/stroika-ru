@@ -60,8 +60,8 @@ export default function CatalogPathPicker({
     const search = normalize(query);
     const items = activeCategory?.subcategories || [];
     if (!search) return items;
-    return items.filter((item) => matchesSearchKeywords(item, search));
-  }, [activeCategory, query]);
+    return items.filter((item) => matchesSearchKeywords(item, search, value.catalogSection));
+  }, [activeCategory, query, value.catalogSection]);
   const visibleSubcategories =
     query || showAll || filteredSubcategories.length <= 18
       ? filteredSubcategories

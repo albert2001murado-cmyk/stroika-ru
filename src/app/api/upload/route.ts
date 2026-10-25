@@ -96,6 +96,8 @@ export async function POST(request: NextRequest) {
         Key: key,
         Body: buffer,
         ContentType: file.type,
+        // Each upload has a new UUID key; a URL's bytes are never overwritten.
+        CacheControl: "public, max-age=31536000, immutable",
       }),
       { abortSignal: AbortSignal.timeout(30_000) }
     );

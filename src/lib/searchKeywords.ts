@@ -313,6 +313,17 @@ function querySearchIntent(query: unknown): SearchIntent {
   return cacheSearchValue(queryIntentCache, value, intent);
 }
 
+/** Bare subjects follow the selected catalog; explicit rent/buy/work requests keep their intent. */
+function scopedQueryIntent(query: unknown, catalogSection?: string): SearchIntent {
+  const intent = querySearchIntent(query);
+  if (!sectionMarker(catalogSection)) return intent;
+  const words = normalizeSearchKeywords(query).split(" ");
+  const explicit = queryActionRequirements(query).length > 0 || words.some(word =>
+    RENTAL_WORD.test(word) || MAINTENANCE_WORD.test(word) || SERVICE_VERB.test(word) ||
+    /^(?:купить|куплю|покупка|продажа|продам|поставка|материал(?:ы|ов)?|товар(?:ы|ов)?|услуг(?:а|и)|мастер|бригада|подрядчик)$/u.test(word));
+  return explicit ? intent : "any";
+}
+
 function valueMatchesIntent(value: string, intent: SearchIntent) {
   if (intent === "any") return true;
 
@@ -594,11 +605,11 @@ function requirementsScore(value: unknown, requirements: SearchToken[]) {
  * part of the query is absent. This keeps multi-word search precise while
  * allowing material/service synonyms to meet the same requirement.
  */
-export function searchRelevanceScore(value: unknown, query: unknown) {
+export function searchRelevanceScore(value: unknown, query: unknown, catalogSection?: string) {
   const normalizedQuery = normalizeSearchKeywords(query);
   const requirements = queryRequirements(query);
   const normalizedValue = normalizeSearchKeywords(value);
-  if (!valueMatchesIntent(normalizedValue, querySearchIntent(query))) return -1;
+  if (!valueMatchesIntent(normalizedValue, scopedQueryIntent(query, catalogSection))) return -1;
   if (!requirements.length) return 0;
   let score = normalizedValue.includes(normalizedQuery) ? 900 : 0;
   const matchedRequirementsScore = requirementsScore(value, requirements);
@@ -608,8 +619,8 @@ export function searchRelevanceScore(value: unknown, query: unknown) {
   return score;
 }
 
-export function matchesSearchKeywords(value: unknown, query: unknown) {
-  return searchRelevanceScore(catalogSubjectText(value), query) >= 0;
+export function matchesSearchKeywords(value: unknown, query: unknown, catalogSection?: string) {
+  return searchRelevanceScore(catalogSubjectText(value), query, catalogSection) >= 0;
 }
 
 /**
@@ -620,7 +631,8 @@ export function matchesSearchKeywords(value: unknown, query: unknown) {
 export function catalogSearchRelevanceScore(
   primaryTitle: unknown,
   searchablePath: unknown,
-  query: unknown
+  query: unknown,
+  catalogSection?: string
 ) {
   const scope = catalogSubjectText(primaryTitle);
   const primaryRequirements = queryRequirements(query).filter(
@@ -632,7 +644,7 @@ export function catalogSearchRelevanceScore(
   ) {
     return -1;
   }
-  const relevance = searchRelevanceScore(`${searchablePath} ${scope}`, query);
+  const relevance = searchRelevanceScore(`${searchablePath} ${scope}`, query, catalogSection);
   if (relevance < 0) return -1;
 
   const actionRequirements = queryActionRequirements(query);
@@ -747,7 +759,8 @@ export function publicationSearchStructuredText(item: Record<string, any>) {
  */
 export function publicationSearchRelevanceScore(
   item: Record<string, any>,
-  query: unknown
+  query: unknown,
+  catalogSection?: string
 ) {
   const normalizedQuery = normalizeSearchKeywords(query);
   if (!normalizedQuery) return 0;
@@ -768,12 +781,12 @@ export function publicationSearchRelevanceScore(
 
   const structuredScore = searchRelevanceScore(
     publicationSearchStructuredText(item),
-    query
+    query, catalogSection
   );
   if (structuredScore < 0) return -1;
 
-  const fullScore = searchRelevanceScore(publicationSearchText(item), query);
-  const identityScore = searchRelevanceScore(identityText, query);
+  const fullScore = searchRelevanceScore(publicationSearchText(item), query, catalogSection);
+  const identityScore = searchRelevanceScore(identityText, query, catalogSection);
   return (
     structuredScore +
     Math.max(0, primaryRequirementsScore) * 4 +

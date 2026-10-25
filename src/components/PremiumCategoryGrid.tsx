@@ -1,11 +1,12 @@
 "use client";
 
+import { getCatalogFormCategories, type CatalogSectionId } from "@/data/catalogForm";
 import { getMaterialServiceLink } from "@/data/materialServices";
 import { groupsForSection } from "@/data/catalogGroups";
 import { matchesSearchKeywords } from "@/lib/searchKeywords";
 import { ArrowLeft, ArrowRight, Search, ShieldCheck } from "lucide-react";
 import type { ReactNode } from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type CategoryLike = {
   id?: string;
@@ -29,8 +30,11 @@ type CategorySelection = {
 type Props = {
   categories: CategoryLike[];
   selectedCategory?: string;
+  selectedSection?: CatalogSectionId | "";
+  selectedCategoryId?: string;
   selectedSubcategory?: string;
   onSelectCategory?: (category: string) => void;
+  onBrowsePath?: (path: { section: CatalogSectionId | ""; categoryId: string; category: string }) => void;
   onApplySelection?: (selection: CategorySelection) => void;
   className?: string;
 };
@@ -367,9 +371,12 @@ function buildActions(
 export default function PremiumCategoryGrid({
   categories,
   selectedCategory,
+  selectedSection,
+  selectedCategoryId,
   selectedSubcategory,
   onSelectCategory,
   onApplySelection,
+  onBrowsePath,
   className = "",
 }: Props) {
   const [sectionId, setSectionId] = useState<SectionId | null>(null);
@@ -379,6 +386,20 @@ export default function PremiumCategoryGrid({
   const [search, setSearch] = useState("");
   const [sectionSearch, setSectionSearch] = useState("");
   const [subcategoryPage, setSubcategoryPage] = useState(1);
+
+  // Catalog tiles, the filter sheet and autocomplete share the same visible path.
+  useEffect(() => {
+    if (selectedSection === undefined) return;
+    const nextSection: SectionId | null = selectedSection === "equipment" ? "machinery"
+      : selectedSection === "solutions" ? "complex" : selectedSection || null;
+    const category = selectedCategory ? categories.find(item => normalize(getTitle(item)) === normalize(selectedCategory)) : null;
+    const group = nextSection ? groupsForSection(nextSection).find(item => item.id === selectedCategoryId) : null;
+    setSectionId(nextSection);
+    setCategoryName(category ? getTitle(category) : "");
+    setGroupId(group?.id || "");
+    setSubcategory(selectedSubcategory || "");
+    setSearch(""); setSectionSearch(""); setSubcategoryPage(1);
+  }, [categories, selectedSection, selectedCategoryId, selectedCategory, selectedSubcategory]);
 
   const section = sections.find((item) => item.id === sectionId) || null;
   const catalogGroups = groupsForSection(sectionId);
@@ -476,6 +497,14 @@ export default function PremiumCategoryGrid({
     ? buildActions(activeCategory, subcategory, categories)
     : [];
 
+  function browse(nextSection: SectionId | null, nextCategory = "", nextGroup = "") {
+    const section: CatalogSectionId | "" = nextSection === "machinery" ? "equipment"
+      : nextSection === "complex" ? "solutions" : nextSection || "";
+    const option = section ? getCatalogFormCategories(section).find(item => nextGroup
+      ? item.id === nextGroup : nextCategory && normalize(item.category) === normalize(nextCategory)) : null;
+    onBrowsePath?.({ section, categoryId: option?.id || "", category: option?.category || nextCategory });
+  }
+
   function resetAll() {
     setSectionId(null);
     setCategoryName("");
@@ -489,14 +518,20 @@ export default function PremiumCategoryGrid({
   }
 
   function goBack() {
-    if (subcategory) return setSubcategory("");
+    if (subcategory) {
+      setSubcategory("");
+      browse(sectionId, categoryName, groupId);
+      return;
+    }
     if (categoryName) {
       setCategoryName("");
       setGroupId("");
       setSearch("");
       setSubcategoryPage(1);
+      browse(sectionId);
       return;
     }
+    browse(null);
     setSectionId(null);
     setSectionSearch("");
     setSubcategoryPage(1);
@@ -591,6 +626,7 @@ export default function PremiumCategoryGrid({
                   onClick={() => {
                     setSectionId(id);
                     setSectionSearch("");
+                    browse(id);
                   }}
                   className="group relative min-h-[190px] overflow-hidden rounded-[24px] sm:min-h-[228px] sm:rounded-[30px] border border-slate-100 bg-[#f8fbff] p-5 text-left transition duration-500 ease-out hover:-translate-y-1.5 hover:border-blue-200 hover:bg-white hover:shadow-[0_26px_70px_rgba(0,87,255,0.16)] active:scale-[0.975]"
                 >
@@ -688,6 +724,7 @@ export default function PremiumCategoryGrid({
                     if (!sourceCategory) return;
                     setGroupId(group.id);
                     setCategoryName(getTitle(sourceCategory));
+                    browse(sectionId, getTitle(sourceCategory), group.id);
                     setSearch("");
                     setSubcategoryPage(1);
                   }}
@@ -727,6 +764,7 @@ export default function PremiumCategoryGrid({
                     type="button"
                     onClick={() => {
                       setCategoryName(title);
+                      browse(sectionId, title);
                       setGroupId("");
                       setSearch("");
                       setSubcategoryPage(1);

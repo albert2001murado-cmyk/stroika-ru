@@ -1,9 +1,9 @@
 "use client";
 import { usePublicationExpiry } from "../lib/usePublicationExpiry";
 import {
-  catalogSearchRelevanceScore,
   publicationSearchRelevanceScore,
 } from "@/lib/searchKeywords";
+import { getCatalogSearchSuggestions, type CatalogSearchSuggestion as MainSearchSuggestion } from "@/lib/catalogSearch";
 import { normalizePaymentChoice } from "@/lib/payments";
 import { publicationMatchesCatalogPath } from "@/lib/catalogSelection";
 
@@ -60,21 +60,6 @@ type FeedMode = "contractors" | "customers";
 type AccountTypeFilter = "" | "individual" | "ip" | "ooo";
 type PaymentFilter = "" | "cash_or_transfer" | "bank_account";
 
-type MainSearchSuggestion = {
-  id: string;
-  title: string;
-  path: string[];
-  section: CatalogSectionId;
-  categoryId: string;
-  category: string;
-  subcategory: string;
-};
-
-type IndexedMainSearchSuggestion = MainSearchSuggestion & {
-  normalizedTitle: string;
-  searchable: string;
-};
-
 const POPULAR_CITIES = [
   "Москва",
   "Санкт-Петербург",
@@ -105,35 +90,6 @@ function normalizeCatalogValue(value: unknown) {
     .replace(/\s+/g, " ")
     .trim();
 }
-
-const MAIN_SEARCH_CANDIDATES: IndexedMainSearchSuggestion[] = (() => {
-  const seen = new Set<string>();
-
-  return CATALOG_FORM_SECTIONS.flatMap((section) =>
-    getCatalogFormCategories(section.id).flatMap((catalogCategory) =>
-      catalogCategory.subcategories.map((catalogSubcategory) => ({
-        id: `${section.id}:${catalogCategory.id}:${catalogSubcategory}`,
-        title: catalogSubcategory,
-        path: [section.title, catalogCategory.title, catalogSubcategory],
-        section: section.id,
-        categoryId: catalogCategory.id,
-        category: catalogCategory.category,
-        subcategory: catalogSubcategory,
-        normalizedTitle: normalizeCatalogValue(catalogSubcategory),
-        searchable: normalizeCatalogValue(
-          [section.title, catalogCategory.title, catalogSubcategory].join(" ")
-        ),
-      }))
-    )
-  ).filter((item) => {
-    const key = normalizeCatalogValue(
-      `${item.section}:${item.categoryId}:${item.subcategory}`
-    );
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-})();
 
 function toFiniteNumber(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -474,35 +430,10 @@ export default function HomePage() {
     [selectedOfferGroup]
   );
 
-  const mainSearchSuggestions = useMemo<MainSearchSuggestion[]>(() => {
-    const query = normalizeCatalogValue(deferredSearch);
-    if (!query) return [];
-
-    return MAIN_SEARCH_CANDIDATES
-      .map((item) => ({
-        item,
-        relevance: catalogSearchRelevanceScore(item.title, item.searchable, query),
-      }))
-      .filter(({ relevance }) => relevance >= 0)
-      .sort((left, right) => {
-        const score = (title: string) => {
-          if (title === query) return 0;
-          if (title.startsWith(query)) return 1;
-          return 2;
-        };
-
-        return (
-          score(left.item.normalizedTitle) - score(right.item.normalizedTitle) ||
-          right.relevance - left.relevance ||
-          left.item.title.localeCompare(right.item.title, "ru", {
-            numeric: true,
-            sensitivity: "base",
-          })
-        );
-      })
-      .slice(0, 6)
-      .map(({ item }) => item);
-  }, [deferredSearch]);
+  const mainSearchSuggestions = useMemo<MainSearchSuggestion[]>(
+    () => getCatalogSearchSuggestions(deferredSearch, catalogSection, catalogCategoryId, 6),
+    [deferredSearch, catalogSection, catalogCategoryId]
+  );
 
   const availableCities = useMemo(() => {
     const source = feedMode === "contractors" ? listings : requests;
@@ -531,7 +462,7 @@ export default function HomePage() {
     const result = listings.filter((listing) => {
       if (!isPublicationApproved(listing)) return false;
       if (hasSearch) {
-        const relevance = publicationSearchRelevanceScore(listing, deferredSearch);
+        const relevance = publicationSearchRelevanceScore(listing, deferredSearch, catalogSection);
         if (relevance < 0) return false;
         relevanceScores.set(listing, relevance);
       }
@@ -608,7 +539,7 @@ export default function HomePage() {
         );
         if (!baseMatches) return false;
         if (hasSearch) {
-          const relevance = publicationSearchRelevanceScore(request, deferredSearch);
+          const relevance = publicationSearchRelevanceScore(request, deferredSearch, catalogSection);
           if (relevance < 0) return false;
           relevanceScores.set(request, relevance);
         }
@@ -736,7 +667,7 @@ export default function HomePage() {
       subcategory: nextSubcategory,
     });
     setCatalogSection(path.catalogSection);
-    setCatalogCategoryId(nextSubcategory ? path.catalogCategoryId : "");
+    setCatalogCategoryId(nextSubcategory || path.catalogSection === "services" || path.catalogSection === "solutions" ? path.catalogCategoryId : "");
   }
 
   function applySolution(selection: SolutionSelection) {
@@ -890,7 +821,7 @@ export default function HomePage() {
                         Искать «{search.trim()}»
                       </span>
                       <span className="mt-0.5 block text-[10px] font-bold text-gray-500">
-                        Во всех публикациях выбранного раздела
+                        {catalogCategoryId ? "В публикациях выбранной категории" : "Во всех публикациях выбранного раздела"}
                       </span>
                     </span>
                     <Search size={17} strokeWidth={2.8} className="shrink-0 text-[#0057ff]" />
@@ -1291,7 +1222,14 @@ export default function HomePage() {
         <PremiumCategoryGrid
           categories={categories}
           selectedCategory={category}
+          selectedSection={catalogSection}
+          selectedCategoryId={catalogCategoryId}
           selectedSubcategory={subcategory}
+          onBrowsePath={({ section, categoryId, category: nextCategory }) => {
+            setCatalogSection(section); setCatalogCategoryId(categoryId); setCategory(nextCategory);
+            setSubcategory(""); setSubcategoryQuery("");
+            setSelectedOfferAction(""); setRequiredOfferFeatures([]); setSourceMaterial("");
+          }}
           onSelectCategory={(value) => {
             applyCatalogValues(value, "");
             setSelectedOfferAction("");

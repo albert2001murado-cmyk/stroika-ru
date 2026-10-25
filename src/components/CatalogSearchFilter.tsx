@@ -55,13 +55,13 @@ export default function CatalogSearchFilter({
     ? categories.filter((item) =>
         matchesSearchKeywords(
           [item.title, item.description, ...item.subcategories].join(" "),
-          normalizedQuery
+          normalizedQuery, section
         )
       )
     : categories;
   const visibleSubcategories = selected
     ? selected.subcategories.filter((item) =>
-        normalizedQuery ? matchesSearchKeywords(item, normalizedQuery) : true
+        normalizedQuery ? matchesSearchKeywords(item, normalizedQuery, section) : true
       )
     : [];
 
