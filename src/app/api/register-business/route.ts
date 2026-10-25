@@ -1,3 +1,6 @@
+import { ContactError, checkPhoneAvailable, contactPhone, preparePhoneChange } from "@/lib/unique-phone-server";
+import { contactResponseData, contactApiError } from "@/lib/contact-api-server";
+import { normalizeRussianPhone } from "@/lib/phone";
 import { readJsonObject, RequestBodyError } from "@/lib/request-body";
 import { limitRequests, activeProfileGuard } from "@/lib/api-guard";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase-admin";
@@ -22,6 +25,8 @@ function bearerToken(request: Request): string {
 }
 
 export async function POST(request: Request) {
+  let hasProfile: boolean | undefined;
+  let committed = false;
   try {
     const token = bearerToken(request);
     if (!token) {
@@ -46,7 +51,15 @@ export async function POST(request: Request) {
     const throttled = limitRequests("register-business:" + decoded.uid, 6);
     if (throttled) return throttled;
     const authUser = await adminAuth.getUser(decoded.uid);
-    const company = await lookupCompanyByInn(body.inn || "", body.accountType);
+    const existingProfile = await adminDb.collection("users").doc(decoded.uid).get();
+    hasProfile = Boolean(existingProfile.get("accountType") || existingProfile.get("createdAt"));
+    const phone = contactPhone(body.phone);
+    await checkPhoneAvailable(adminDb, adminAuth, phone, decoded.uid);
+    const company = await lookupCompanyByInn(body.inn || "", body.accountType).catch(error => {
+      const message = error instanceof Error ? error.message : "Не получилось проверить ИНН.";
+      const temporary = /недоступ|вовремя|DADATA_API_KEY/.test(message);
+      throw new ContactError("registration/business", message, temporary ? 503 : 400);
+    });
     const displayName = company.shortName || company.officialName;
 
     const userRef = adminDb.collection("users").doc(decoded.uid);
@@ -66,7 +79,17 @@ export async function POST(request: Request) {
         throw new Error("INN_ALREADY_CLAIMED");
       }
 
+      const phoneChange = await preparePhoneChange(adminDb, adminAuth, transaction, authUser, phone);
+      // Retrying after a lost response must not reset an already verified company.
+      if (userSnapshot.get("companyInn") === company.inn && userSnapshot.get("accountType") === body.accountType
+        && normalizeRussianPhone(userSnapshot.get("phone")) === phone) {
+        phoneChange.apply();
+        transaction.set(userRef, { phone }, { merge: true });
+        return;
+      }
+
       const now = FieldValue.serverTimestamp();
+      phoneChange.apply();
 
       transaction.set(
         claimRef,
@@ -106,7 +129,7 @@ export async function POST(request: Request) {
           companyLookupProvider: "dadata",
           companyRegistryCheckedAt: now,
           city: body.city?.trim() || "",
-          phone: body.phone?.trim() || "",
+          phone,
           avatarUrl: "",
           avatarPath: "",
           verified: false,
@@ -144,46 +167,24 @@ export async function POST(request: Request) {
       );
     });
 
-    await adminAuth.updateUser(decoded.uid, { displayName });
-
-    return NextResponse.json({
-      profile: {
-        uid: decoded.uid,
-        email: authUser.email || decoded.email || null,
-        displayName,
-        representativeName,
-        accountType: body.accountType,
-        companyName: displayName,
-        companyOfficialName: company.officialName,
-        companyShortName: company.shortName,
-        companyInn: company.inn,
-        companyKpp: company.kpp || "",
-        companyOgrn: company.ogrn,
-        companyLegalAddress: company.legalAddress || "",
-        companyRegistryType: company.registryType,
-        companyRegistryStatus: company.registryStatus,
-        city: body.city?.trim() || "",
-        phone: body.phone?.trim() || "",
-        verified: false,
-        isVerified: false,
-        verificationStatus: "pending",
-        avatarUrl: "",
-        avatarPath: "",
-      },
-    });
+    committed = true;
+    await adminAuth.updateUser(decoded.uid, { displayName }).catch(() => undefined);
+    const saved = await userRef.get();
+    return NextResponse.json({ profile: contactResponseData(saved.data()) });
   } catch (error) {
+    if (error instanceof ContactError) return contactApiError(error, !committed && hasProfile === false);
     if (error instanceof RequestBodyError) return NextResponse.json({ error: error.message }, { status: error.status });
     console.error("Business registration error:", error);
     const message = error instanceof Error ? error.message : "Ошибка регистрации ИП или ООО.";
 
     if (message === "INN_ALREADY_CLAIMED") {
       return NextResponse.json(
-        { error: "Этот ИНН уже привязан к другому аккаунту." },
+        { error: "Этот ИНН уже привязан к другому аккаунту.", code: "registration/inn-already-in-use", notCommitted: !committed && hasProfile === false },
         { status: 409 }
       );
     }
 
-    const status = message.includes("FIREBASE_ADMIN") || message.includes("DADATA_API_KEY") ? 503 : 400;
-    return NextResponse.json({ error: message }, { status });
+    // A failed/uncertain transaction response must never authorize deleting Auth.
+    return contactApiError(error, false);
   }
 }

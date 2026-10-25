@@ -156,7 +156,7 @@ const concepts: SearchConcept[] = [
   { key: "warehouse", roots: ["склад"], primaryRequired: true },
   { key: "hangar", roots: ["ангар"], primaryRequired: true },
   { key: "geodesy", roots: ["геодез", "межеван", "топограф", "кадастр"], primaryRequired: true },
-  { key: "welding", roots: ["сварк", "свароч", "сварит", "сварим", "сварю"], primaryRequired: true },
+  { key: "welding", roots: ["сварк", "свароч", "сварщ", "сварит", "сварим", "сварю"], primaryRequired: true },
   { key: "metal-structures", roots: ["металлоконструкц"], primaryRequired: true },
   { key: "drilling", roots: ["бурен", "сверлен", "бурит", "бурим", "пробур", "сверлит", "просверл"], primaryRequired: true },
   { key: "excavation", roots: ["землян", "землерой", "землекоп", "котлован", "транше", "канав", "ямк"], primaryRequired: true },

@@ -433,7 +433,7 @@ register(["Трубы для тёплого пола"], {
 
 register(["Газовые трубы", "ПНД-трубы для газа", "Стальные газовые трубы"], {
   category: "Инженерные системы",
-  subcategory: "Газопровод",
+  subcategory: "Монтаж газопроводов",
   section: "services",
   imageCategoryId: "engineering",
   actionTitle: "Найти монтажника газопровода",
@@ -447,7 +447,7 @@ register([
   "Гибкие трубы для теплотрасс",
 ], {
   category: "Инженерные системы",
-  subcategory: "Тепловые пункты",
+  subcategory: "Монтаж тепловых пунктов",
   section: "services",
   imageCategoryId: "engineering",
   actionTitle: "Найти монтажника теплотрасс",
@@ -471,7 +471,7 @@ register(["Котлы"], {
 
 register(["Вентиляционные трубы", "Воздуховоды", "Комплектующие для вентиляции"], {
   category: "Инженерные системы",
-  subcategory: "Вентиляция",
+  subcategory: "Монтаж вентиляции",
   section: "services",
   imageCategoryId: "engineering",
   actionTitle: "Найти монтажника вентиляции",

@@ -19,6 +19,22 @@ type CatalogUpdate = {
 // previous is exclusively for existing records/bookmarks. Only current values
 // are emitted by the category arrays and can appear as selectable directions.
 export const CATALOG_UPDATES: readonly CatalogUpdate[] = [
+  { categoryId: "engineering", category: "Инженерные системы", current: "Монтаж отопления",
+    previous: ["Водяное отопление", "Электрическое отопление", "Тёплые стены"],
+    topics: "отопление водяное электрическое теплые стены обогрев" },
+  { categoryId: "engineering", category: "Инженерные системы", current: "Монтаж вентиляции",
+    previous: ["Вентиляция", "Приточно-вытяжная система", "Монтаж рекуператора"],
+    topics: "вентиляция приточная вытяжная приточно вытяжная система рекуператор воздуховод", shared: true },
+  { categoryId: "engineering", category: "Инженерные системы", current: "Монтаж газопроводов",
+    previous: ["Газопровод"], topics: "газопровод газовая труба трубы газ", shared: true },
+  { categoryId: "engineering", category: "Инженерные системы", current: "Установка и обслуживание кондиционеров",
+    previous: ["Кондиционеры"], topics: "кондиционер сплит система климат установка обслуживание", shared: true },
+  { categoryId: "engineering", category: "Инженерные системы", current: "Монтаж и обслуживание чиллеров",
+    previous: ["Чиллеры"], topics: "чиллер охлаждение установка обслуживание", shared: true },
+  { categoryId: "engineering", category: "Инженерные системы", current: "Монтаж тепловых насосов",
+    previous: ["Тепловые насосы"], topics: "тепловой насос отопление тепло", shared: true },
+  { categoryId: "engineering", category: "Инженерные системы", current: "Монтаж тепловых пунктов",
+    previous: ["Тепловые пункты"], topics: "тепловой пункт итп цтп теплоснабжение", shared: true },
   { categoryId: "roof", category: "Крыша и фасад", current: "Устройство фасада и сайдинг",
     previous: ["Устройство фасада", "Сайдинг", "Работы по установке сайдинга", "Облицовка фасада"],
     topics: "фасад сайдинг облицовка обшивка", shared: true },

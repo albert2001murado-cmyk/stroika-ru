@@ -1,5 +1,6 @@
 "use client";
 
+import { ContactRequestError, contactRequest } from "@/lib/contact-request";
 import { auth, db } from "@/lib/firebase";
 import type { AccountType, UserProfile } from "@/types";
 import {
@@ -13,15 +14,15 @@ import {
   signInWithEmailAndPassword,
   setPersistence,
   signOut,
-  updateProfile,
 } from "firebase/auth";
-import { doc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
+import { doc, onSnapshot } from "firebase/firestore";
 import {
   createContext,
   ReactNode,
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -52,80 +53,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const pendingRegistration = useRef<{ user: User; email: string } | null>(null);
+
   async function register(data: RegisterData) {
     const normalizedEmail = data.email.trim().toLocaleLowerCase("en-US");
-    const credential = await createUserWithEmailAndPassword(
-      auth,
-      normalizedEmail,
-      data.password
-    );
-
-    const isBusiness = data.accountType === "ip" || data.accountType === "ooo";
-
+    const pending = pendingRegistration.current?.email === normalizedEmail && auth.currentUser?.uid === pendingRegistration.current.user.uid
+      ? pendingRegistration.current.user : undefined;
+    await contactRequest("/api/registration/check-phone", { phone: data.phone }, pending);
+    const registeredUser = pending || (await createUserWithEmailAndPassword(auth, normalizedEmail, data.password)).user;
+    pendingRegistration.current = { user: registeredUser, email: normalizedEmail };
     try {
-      if (isBusiness) {
-        const token = await credential.user.getIdToken(true);
-        const response = await fetch("/api/register-business", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            accountType: data.accountType,
-            inn: data.companyInn,
-            representativeName: data.displayName,
-            city: data.city,
-            phone: data.phone,
-          }),
-        });
-
-        const payload = await response.json();
-        if (!response.ok) {
-          throw new Error(payload.error || "Не получилось зарегистрировать организацию.");
-        }
-
-        await credential.user.reload();
-        const businessProfile = payload.profile as UserProfile;
-        setUser(auth.currentUser || credential.user);
-        setProfile(businessProfile);
-        return;
+      const business = data.accountType === "ip" || data.accountType === "ooo";
+      const result = await contactRequest(business ? "/api/register-business" : "/api/registration/profile", {
+        accountType: data.accountType, inn: data.companyInn, representativeName: data.displayName,
+        displayName: data.displayName, city: data.city, phone: data.phone,
+      }, registeredUser);
+      await registeredUser.reload().catch(() => undefined);
+      pendingRegistration.current = null;
+      if (auth.currentUser?.uid === registeredUser.uid) {
+        setUser(auth.currentUser);
+        setProfile(result.profile as UserProfile);
       }
-
-      const individualName = data.displayName.trim();
-      await updateProfile(credential.user, { displayName: individualName });
-
-      const userProfile: UserProfile = {
-        uid: credential.user.uid,
-        email: normalizedEmail,
-        displayName: individualName,
-        representativeName: individualName,
-        accountType: "individual",
-        companyName: "",
-        city: data.city?.trim() || "",
-        phone: data.phone?.trim() || "",
-        avatarUrl: "",
-        avatarPath: "",
-        verified: false,
-        isVerified: false,
-        verificationStatus: "unverified",
-        verifiedAt: null,
-        verifiedBy: "",
-      };
-
-      await setDoc(doc(db, "users", credential.user.uid), {
-        ...userProfile,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-
-      setUser(credential.user);
-      setProfile(userProfile);
     } catch (error) {
-      try {
-        await deleteUser(credential.user);
-      } catch (deleteError) {
-        console.error("Не получилось откатить созданного пользователя:", deleteError);
+      // A lost response may follow a successful commit: never delete on an uncertain result.
+      if (error instanceof ContactRequestError && error.notCommitted && error.status >= 400 && error.status < 500) {
+        try { await deleteUser(registeredUser); pendingRegistration.current = null; }
+        catch { /* Preserve the original, actionable registration error. */ }
       }
       throw error;
     }
