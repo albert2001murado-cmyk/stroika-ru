@@ -4,8 +4,6 @@ import { uploadAuthHeaders } from "@/lib/uploadAuth";
 
 import { useAuth } from "@/components/AuthProvider";
 import { getApiUrl } from "@/lib/getApiUrl";
-import { db } from "@/lib/firebase";
-import { collection, doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 import { ArrowLeft, Camera, Hammer, Loader2, MessageCircleMore, Ruler, ShieldCheck, UserRound, Wrench } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -23,14 +21,6 @@ async function readApiResult(response: Response) {
         : text.slice(0, 180)
     );
   }
-}
-
-function inviteTokenFromSeed(seed: string) {
-  return Array.from(seed)
-    .map((character) => character.charCodeAt(0).toString(16).padStart(2, "0"))
-    .join("")
-    .slice(0, 32)
-    .padEnd(32, "0");
 }
 
 export default function NewGroupPage() {
@@ -73,52 +63,21 @@ export default function NewGroupPage() {
         avatarPath = String(upload.path || "");
       }
 
-      const chatRef = doc(collection(db, "chats"));
-      const inviteSeed = doc(collection(db, "chats")).id;
-      const inviteToken = inviteTokenFromSeed(`${inviteSeed}${chatRef.id}`);
-      const profileSnapshot = await getDoc(doc(db, "users", user.uid));
-      const profile = profileSnapshot.data() || {};
-      const displayName = String(
-        profile.displayName || profile.name || user.displayName || user.email || "Пользователь"
-      );
-      const memberAvatar = String(
-        profile.avatarUrl || profile.photoURL || user.photoURL || ""
-      );
-
-      await setDoc(chatRef, {
-        chatType: "group",
-        isGroup: true,
-        groupTitle: title.trim().slice(0, 80),
-        groupAvatarUrl: avatarUrl,
-        groupAvatarPath: avatarPath,
-        ownerId: user.uid,
-        adminIds: [user.uid],
-        participantIds: [user.uid],
-        participants: {
-          [user.uid]: { uid: user.uid, displayName, avatarUrl: memberAvatar },
+      const response = await fetch(getApiUrl("/api/groups/create"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${await user.getIdToken()}`,
         },
-        users: {
-          [user.uid]: {
-            uid: user.uid,
-            name: displayName,
-            displayName,
-            photoURL: memberAvatar,
-            avatarUrl: memberAvatar,
-          },
-        },
-        memberCount: 1,
-        inviteToken,
-        inviteEnabled: true,
-        lastMessageText: "Группа создана",
-        lastMessageType: "text",
-        pinnedBy: {},
-        mutedBy: {},
-        hiddenFor: {},
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        lastMessageAt: serverTimestamp(),
+        body: JSON.stringify({ title: title.trim(), avatarUrl, avatarPath }),
       });
-      router.push(`/messages/${chatRef.id}/info?created=1`);
+      const result = await response.json().catch(() => null);
+      if (!response.ok || result?.ok !== true || typeof result.chatId !== "string" || !result.chatId) {
+        throw new Error(typeof result?.error === "string"
+          ? result.error
+          : "Не получилось создать группу. Проверьте, что сервер сайта обновлён, и повторите попытку.");
+      }
+      router.push(`/messages/${result.chatId}/info?created=1`);
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : "Не получилось создать группу.");
     } finally {
