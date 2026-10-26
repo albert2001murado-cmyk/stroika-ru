@@ -336,7 +336,7 @@ register(
 
 register(["Окна ПВХ", "Алюминиевые окна", "Стеклопакеты", "Подоконники и откосы"], {
   category: "Окна и двери",
-  subcategory: "Установка окон",
+  subcategory: "Установка и замена окон",
   section: "services",
   imageCategoryId: "windows",
   actionTitle: "Найти монтажника окон",

@@ -19,6 +19,18 @@ type CatalogUpdate = {
 // previous is exclusively for existing records/bookmarks. Only current values
 // are emitted by the category arrays and can appear as selectable directions.
 export const CATALOG_UPDATES: readonly CatalogUpdate[] = [
+  { categoryId: "windows", category: "Окна и двери", current: "Установка и замена окон",
+    previous: ["Установка окон", "Замена окон", "Установка пластиковых окон", "Деревянные окна", "Алюминиевое остекление"],
+    topics: "окно окна окон стеклопакет ПВХ пластиковые деревянные алюминиевые установка замена монтаж остекление", shared: true },
+  { categoryId: "windows", category: "Окна и двери", current: "Установка дверей",
+    previous: ["Входные двери", "Межкомнатные двери"],
+    topics: "дверь двери дверей входные межкомнатные установка монтаж", shared: true },
+  { categoryId: "windows", category: "Окна и двери", current: "Ремонт и регулировка окон",
+    previous: ["Ремонт окон", "Регулировка окон"],
+    topics: "окно окна окон ремонт регулировка отрегулировать настройка фурнитура петля ручка уплотнитель" },
+  // This direction stays separate; сетки/сеток need the same search subject.
+  { categoryId: "windows", category: "Окна и двери", current: "Установка москитных сеток",
+    previous: [], topics: "москитная москитные сетка сетки сеток установка монтаж" },
   { categoryId: "engineering", category: "Инженерные системы", current: "Монтаж отопления",
     previous: ["Водяное отопление", "Электрическое отопление", "Тёплые стены"],
     topics: "отопление водяное электрическое теплые стены обогрев" },
