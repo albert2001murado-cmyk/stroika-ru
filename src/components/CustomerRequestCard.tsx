@@ -1,5 +1,6 @@
 "use client";
 
+import ListingAuthorVerifiedBadge from "./ListingAuthorVerifiedBadge";
 import type { CustomerRequest } from "@/types";
 import { isCreatedWithinHours } from "@/types";
 import {
@@ -118,6 +119,7 @@ function CustomerRequestCard({ request }: CustomerRequestCardProps) {
                 <p className="truncate text-sm font-black text-gray-950">
                   {request.customerName || "Заказчик"}
                 </p>
+                <ListingAuthorVerifiedBadge listing={request} userId={request.customerId} className="mt-1" />
                 <p className="text-xs font-bold text-gray-400">Заявка заказчика</p>
               </div>
             </div>

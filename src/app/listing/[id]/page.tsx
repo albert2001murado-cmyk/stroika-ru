@@ -1,4 +1,5 @@
 "use client";
+import ListingAuthorVerifiedBadge from "@/components/ListingAuthorVerifiedBadge";
 import { isPublicationExpired } from "@/lib/publication-lifetime";
 import { usePublicationClock } from "@/lib/usePublicationExpiry";
 import PublicationTerm from "@/components/PublicationTerm";
@@ -600,9 +601,7 @@ export default function ListingPage() {
                       )}
                     </div>
 
-                    <p className="font-black text-gray-950">
-                      {authorProfile?.displayName || listing.authorName}
-                    </p>
+                    <div><p className="font-black text-gray-950">{authorProfile?.displayName || listing.authorName}</p><ListingAuthorVerifiedBadge listing={listing} userId={listing.authorId} className="mt-1" /></div>
                   </Link>
                 </div>
 
@@ -698,6 +697,7 @@ export default function ListingPage() {
                   {authorProfile?.displayName || listing.authorName}
                 </h2>
 
+                <ListingAuthorVerifiedBadge listing={listing} userId={listing.authorId} className="mt-2" />
                 <p className="mt-1 text-gray-500">
                   {listing.accountType === "ip"
                     ? "ИП"

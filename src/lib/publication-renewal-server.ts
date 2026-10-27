@@ -1,5 +1,6 @@
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { getAdminDb } from "./firebase-admin";
+import { canAccountPublish } from "./accountVerification";
 import { isPublicationExpired, oneCalendarMonthAfter, publicationDateMillis, publicationExpiryMillis } from "./publication-lifetime";
 
 export type PublicationKind = "listing" | "request";
@@ -23,8 +24,8 @@ export async function renewOwnedPublication(input: {
     }
     const user = profile.data() || {};
     if (!profile.exists || user.moderationStatus === "blocked") throw new PublicationRenewalError("Аккаунту недоступна публикация.", 403);
-    if (user.accountType && user.accountType !== "individual" && user.verificationStatus !== "approved") {
-      throw new PublicationRenewalError("Для повторной публикации подтвердите профиль организации.", 403);
+    if (!canAccountPublish(user)) {
+      throw new PublicationRenewalError("Для повторной публикации пройдите проверку аккаунта.", 403);
     }
     if (!snapshot.exists) throw new PublicationRenewalError("Объявление не найдено.", 404);
     const source = snapshot.data() || {};

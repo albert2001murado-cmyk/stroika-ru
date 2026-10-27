@@ -10,6 +10,8 @@ import PaymentFields from "@/components/PaymentFields";
 import { checkCatalogConsistency, type CatalogConsistencyInput } from "@/lib/catalogConsistency";
 import CatalogConsistencyHint from "@/components/CatalogConsistencyHint";
 
+import PublicationVerificationGate from "@/components/PublicationVerificationGate";
+import { canAccountPublish, isAccountVerified } from "@/lib/accountVerification";
 import { useAuth } from "@/components/AuthProvider";
 import CatalogPathPicker from "@/components/CatalogPathPicker";
 import {
@@ -160,7 +162,7 @@ async function geocodeAddress(
 
 export default function NewListingPage() {
   const router = useRouter();
-  const { user, profile } = useAuth();
+  const { user, profile, loading } = useAuth();
 
   const defaultCatalogPath = getDefaultCatalogPath("services");
 
@@ -367,6 +369,8 @@ export default function NewListingPage() {
       return;
     }
 
+    if (!canAccountPublish(profile)) { router.push("/verification"); return; }
+
     if (title.trim().length < 5 || description.trim().length < 20 || !category || !subcategory) {
       setError("Название — от 5 символов, описание — от 20; выбери категорию и подкатегорию.");
       return;
@@ -495,6 +499,9 @@ export default function NewListingPage() {
         authorId: user.uid,
         authorName:
           profile?.displayName || user.displayName || user.email || "Пользователь",
+        verified: isAccountVerified(profile),
+        isVerified: isAccountVerified(profile),
+        authorVerified: isAccountVerified(profile),
         authorAvatarUrl: profile?.avatarUrl || user.photoURL || "",
         accountType: profile?.accountType || "individual",
 
@@ -523,6 +530,9 @@ export default function NewListingPage() {
       setIsSaving(false);
     }
   }
+
+  if (loading) return <main className="app-page">Загрузка…</main>;
+  if (user && !canAccountPublish(profile)) return <PublicationVerificationGate />;
 
   return (
     <main className="min-h-screen bg-[#f5f7fb] px-3 py-6 sm:px-5 sm:py-10">

@@ -8,6 +8,8 @@ import ContactPreferencePicker from "@/components/ContactPreferencePicker";
 import { checkCatalogConsistency, type CatalogConsistencyInput } from "@/lib/catalogConsistency";
 import CatalogConsistencyHint from "@/components/CatalogConsistencyHint";
 
+import PublicationVerificationGate from "@/components/PublicationVerificationGate";
+import { canAccountPublish, isAccountVerified } from "@/lib/accountVerification";
 import { useAuth } from "@/components/AuthProvider";
 import CatalogPathPicker from "@/components/CatalogPathPicker";
 import {
@@ -137,6 +139,7 @@ export default function NewRequestPage() {
     if (catalogIssue) { setError(catalogIssue.message); return; }
 
     if (!user) return;
+    if (!canAccountPublish(profile)) { router.push("/verification"); return; }
 
     if (title.trim().length < 5) {
       setError("Название должно быть не короче 5 символов.");
@@ -197,6 +200,9 @@ export default function NewRequestPage() {
       const geo = pickedLocation || await geocodePublicationLocation(city, address);
       const reference = await addDoc(collection(db, "customerRequests"), {
         customerId: user.uid,
+        verified: isAccountVerified(profile),
+        isVerified: isAccountVerified(profile),
+        customerVerified: isAccountVerified(profile),
         customerName,
         customerAvatar,
         customerPhone: normalizeRussianPhone(customerPhone),
@@ -279,6 +285,8 @@ export default function NewRequestPage() {
       </main>
     );
   }
+
+  if (!canAccountPublish(profile)) return <PublicationVerificationGate />;
 
   return (
     <main className="min-h-screen bg-[#f5f7fb] px-3 py-6 sm:px-5 sm:py-10">

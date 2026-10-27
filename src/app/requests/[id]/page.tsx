@@ -1,4 +1,5 @@
 "use client";
+import ListingAuthorVerifiedBadge from "@/components/ListingAuthorVerifiedBadge";
 import { isPublicationExpired } from "@/lib/publication-lifetime";
 import { usePublicationClock } from "@/lib/usePublicationExpiry";
 import PublicationTerm from "@/components/PublicationTerm";
@@ -477,10 +478,7 @@ export default function CustomerRequestPage() {
                   <p className="truncate text-xl font-black">
                     {request.customerName || "Заказчик"}
                   </p>
-                  <span className="mt-1.5 inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-[11px] font-black text-[#0057ff]">
-                    <BadgeCheck size={14} />
-                    Автор заявки
-                  </span>
+                  <ListingAuthorVerifiedBadge listing={request} userId={request.customerId} className="mt-1.5 bg-white" />
                 </div>
               </div>
             </div>

@@ -31,6 +31,7 @@ function getLocalVerified(listing: any) {
     listing?.verified ||
       listing?.isVerified ||
       listing?.authorVerified ||
+      listing?.customerVerified ||
       listing?.userVerified ||
       listing?.profileVerified ||
       listing?.verificationStatus === "approved"
@@ -101,7 +102,7 @@ export default function ListingAuthorVerifiedBadge({
   return (
     <span
       className={`inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-black text-blue-700 ring-1 ring-blue-100 ${className}`}
-      title="Проверенный исполнитель"
+      title="Проверенный аккаунт"
     >
       <BadgeCheck size={14} strokeWidth={2.8} />
       Проверен

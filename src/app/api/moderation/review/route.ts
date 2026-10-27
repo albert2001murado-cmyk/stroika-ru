@@ -3,7 +3,7 @@ import { readJsonObject, RequestBodyError } from "@/lib/request-body";
 import { hasModeratorClaim } from "@/lib/security-policy";
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminAuth } from "@/lib/firebase-admin";
-import { applyManualModerationDecision } from "@/lib/publication-moderation-server";
+import { applyManualModerationDecision, PublicationVerificationError } from "@/lib/publication-moderation-server";
 import { validateManualModerationReason } from "@/lib/publication-moderation-feedback";
 import type { PublicationKind } from "@/lib/publication-policy";
 
@@ -61,6 +61,7 @@ export async function POST(request: NextRequest) {
     });
     return NextResponse.json({ ok: true, ...result });
   } catch (error) {
+    if (error instanceof PublicationVerificationError) return NextResponse.json({ error: error.message }, { status: 403 });
     if (error instanceof RequestBodyError) return NextResponse.json({ error: error.message }, { status: error.status });
     console.error("moderation review route error", error);
     return NextResponse.json({ error: "Не удалось сохранить решение." }, { status: 500 });

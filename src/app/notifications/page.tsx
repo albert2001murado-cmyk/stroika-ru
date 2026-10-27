@@ -51,6 +51,8 @@ function meta(type?: NotificationType) {
       return { Icon: MessageCircle, iconClass: "bg-blue-50 text-[#0057ff]", stripe: "bg-[#0057ff]" };
     case "moderation":
       return { Icon: ShieldCheck, iconClass: "bg-violet-50 text-violet-600", stripe: "bg-violet-500" };
+    case "verification":
+      return { Icon: ShieldCheck, iconClass: "bg-blue-50 text-[#0057ff]", stripe: "bg-[#0057ff]" };
     case "nearby_request":
     case "match":
       return { Icon: MapPin, iconClass: "bg-cyan-50 text-cyan-600", stripe: "bg-cyan-500" };
@@ -210,7 +212,7 @@ export default function NotificationsPage() {
                         {!item.read ? <span className="rounded-full bg-[#0057ff] px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.1em] text-white">Новое</span> : null}
                       </div>
                       <p className="mt-1.5 whitespace-pre-line break-words text-sm font-medium leading-6 text-slate-500">{item.body || "Новое событие"}</p>
-                      {item.type === "moderation" && item.actionLabel ? <span className="mt-3 inline-flex items-center gap-1 rounded-xl bg-blue-50 px-3 py-2 text-xs font-black text-blue-700">{item.actionLabel} <ChevronRight size={14} /></span> : null}
+                      {(item.type === "moderation" || item.type === "verification") && item.actionLabel ? <span className="mt-3 inline-flex items-center gap-1 rounded-xl bg-blue-50 px-3 py-2 text-xs font-black text-blue-700">{item.actionLabel} <ChevronRight size={14} /></span> : null}
                       {item.type === "nearby_request" ? <span className="mt-3 inline-flex items-center gap-1 rounded-xl bg-cyan-50 px-3 py-2 text-xs font-black text-cyan-700">Открыть заявку <ChevronRight size={14} /></span> : null}
                       <p className="mt-2 text-xs font-black text-slate-400">{formatTime(item.createdAt)}</p>
                     </button>

@@ -14,6 +14,8 @@ import {
   type ContactPreference,
 } from "@/lib/contactPreference";
 
+import PublicationVerificationGate from "@/components/PublicationVerificationGate";
+import { canAccountPublish } from "@/lib/accountVerification";
 import { useAuth } from "@/components/AuthProvider";
 import { db } from "@/lib/firebase";
 import type { CustomerRequest, CustomerRequestStatus } from "@/types";
@@ -94,7 +96,7 @@ function isLocalImage(image: EditableImage): image is LocalImage {
 export default function EditCustomerRequestPage() {
   const params = useParams();
   const router = useRouter();
-  const { user, loading: authLoading } = useAuth();
+  const { user, profile, loading: authLoading } = useAuth();
   const requestId =
     typeof params?.id === "string"
       ? params.id
@@ -321,6 +323,8 @@ export default function EditCustomerRequestPage() {
       </main>
     );
   }
+
+  if (user && !canAccountPublish(profile)) return <PublicationVerificationGate />;
 
   return (
     <main className="min-h-screen bg-[#f5f7fb] px-3 py-6 sm:px-5 sm:py-10">

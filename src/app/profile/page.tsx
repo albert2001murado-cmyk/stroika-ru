@@ -1,4 +1,5 @@
 "use client";
+import { contactRequest } from "@/lib/contact-request";
 import PublicationPlacementCard from "@/components/PublicationPlacementCard";
 import { isPublicationExpired } from "@/lib/publication-lifetime";
 import { usePublicationClock } from "@/lib/usePublicationExpiry";
@@ -8,6 +9,7 @@ import { syncSavedProfileAvatar } from "@/lib/profileAvatarSync";
 
 import CustomerRequestCard from "@/components/CustomerRequestCard";
 import { ListingCard } from "@/components/ListingCard";
+import { isAccountVerified, verificationButtonLabel } from "@/lib/accountVerification";
 import { useAuth } from "@/components/AuthProvider";
 import { db } from "@/lib/firebase";
 import PaymentFields from "@/components/PaymentFields";
@@ -244,6 +246,8 @@ export default function ProfilePage() {
         ? profile?.companyShortName || profile?.companyName || profile?.displayName || displayName
         : displayName.trim();
 
+      await contactRequest("/api/profile/contact", { phone: normalizeRussianPhone(phone) }, user);
+
       await updateProfile(user, {
         displayName: safeDisplayName,
         photoURL: finalAvatarUrl || null,
@@ -416,6 +420,8 @@ export default function ProfilePage() {
                   />
                 </label>
               </div>
+
+              {!isAccountVerified(profile) ? <Link href="/verification" className="mx-auto mt-4 flex w-fit items-center gap-2 rounded-xl bg-blue-50 px-4 py-2 text-sm font-bold text-blue-700"><BadgeCheck size={17} />{verificationButtonLabel(profile)}</Link> : null}
 
               <p className="mt-4 text-center text-sm font-bold text-gray-500">
                 Нажми на синюю кнопку, чтобы выбрать фото профиля.

@@ -9,6 +9,7 @@ import {
   type DocumentData,
 } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase-admin";
+import { canAccountPublish } from "./accountVerification";
 import {
   evaluatePublicationLocally,
   MODERATION_POLICY_VERSION,
@@ -31,6 +32,7 @@ import { onlyTemporaryModerationFlags, moderationRetryAttempt, moderationRetryDe
 
 const LEASE_MS = 6 * 60 * 1000;
 const BATCH_LIMIT = 30;
+export class PublicationVerificationError extends Error {}
 
 const CONFIG = {
   listing: {
@@ -283,9 +285,9 @@ export async function processPublication(kind: PublicationKind, idValue: string)
     const owner = ownerId(kind, data);
     const profile = owner && !owner.includes("/")
       ? await getAdminDb().doc(`users/${owner}`).get() : null;
-    const blockedOwner = !profile?.exists || profile.data()?.moderationStatus === "blocked";
+    const blockedOwner = !profile?.exists || !canAccountPublish(profile.data());
     if (blockedOwner) local.flags.push({ code: "owner-unavailable", field: "owner", severity: "review",
-      message: "Необходимо проверить статус автора публикации." });
+      message: "Автору необходимо пройти проверку аккаунта перед публикацией." });
     const ownerPaymentError = kind === "listing" && Array.isArray(data.paymentMethods) && data.paymentMethods.includes("bank_account")
       ? validatePayment(data.paymentMethods, data.bankDetails, profile?.data()?.accountType, data.bankDetailsConfirmed)
         || validateBankOwner(data.paymentMethods, data.bankDetails, profile?.data()) : null;
@@ -342,6 +344,16 @@ export async function processPublication(kind: PublicationKind, idValue: string)
         return false;
       }
 
+      if (decision === "approved") {
+        const currentOwner = await transaction.get(getAdminDb().doc(`users/${owner}`));
+        if (!currentOwner.exists || !canAccountPublish(currentOwner.data())) {
+          transaction.update(reference, { moderationStatus: "manual_review", moderationStage: "complete",
+            moderationReason: "Автору необходимо пройти проверку аккаунта перед публикацией.",
+            moderationFlags: [{ code: "owner-unavailable", field: "owner", severity: "review", message: "Аккаунт автора не проверен." }],
+            moderationLeaseUntil: FieldValue.delete(), moderationRunId: FieldValue.delete() });
+          return false;
+        }
+      }
       transaction.set(getAdminDb().collection("publicationNotificationJobs").doc(`${kind}_${id}_${runId}`), {
         kind, publicationId: id, runId, done: false, ownerNotified: false, cursor: "",
         createdAt: FieldValue.serverTimestamp(),
@@ -555,6 +567,12 @@ export async function applyManualModerationDecision(input: {
     const latest = await transaction.get(reference);
     if (!latest.exists || moderationInputFingerprint(dataObject(latest.data())) !== moderationInputFingerprint(data)) {
       throw new Error("Публикация изменилась. Обновите страницу перед решением.");
+    }
+    if (input.status === "approved") {
+      const uid = ownerId(input.kind, dataObject(latest.data()));
+      if (!uid || uid.includes("/")) throw new Error("Не указан автор публикации.");
+      const profile = await transaction.get(getAdminDb().doc(`users/${uid}`));
+      if (!profile.exists || !canAccountPublish(profile.data())) throw new PublicationVerificationError("Автору необходимо пройти проверку аккаунта перед публикацией.");
     }
     transaction.set(getAdminDb().collection("publicationNotificationJobs").doc(`${input.kind}_${id}_${runId}`), {
       kind: input.kind, publicationId: id, runId, done: false, ownerNotified: false, cursor: "", createdAt: FieldValue.serverTimestamp(),
