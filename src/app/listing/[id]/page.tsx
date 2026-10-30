@@ -1,4 +1,5 @@
 "use client";
+import CompareListingButton from "@/components/CompareListingButton";
 import ListingAuthorVerifiedBadge from "@/components/ListingAuthorVerifiedBadge";
 import { isPublicationExpired } from "@/lib/publication-lifetime";
 import { usePublicationClock } from "@/lib/usePublicationExpiry";
@@ -508,7 +509,7 @@ export default function ListingPage() {
                 {listing.title}
               </h1>
                 <PublicationTerm publication={listing} />
-              {isPublicationApproved(listing) ? <SharePublicationButton kind="listing" id={listing.id} title={listing.title || "Объявление"} /> : null}
+              {isPublicationApproved(listing) ? <div className="mt-4 flex flex-wrap items-center gap-3"><SharePublicationButton kind="listing" id={listing.id} title={listing.title || "Объявление"} /><CompareListingButton id={listing.id} /></div> : null}
 
               <p className="mt-4 whitespace-pre-wrap text-base leading-7 text-gray-600 sm:mt-5 sm:text-lg sm:leading-8">
                 {listing.description}

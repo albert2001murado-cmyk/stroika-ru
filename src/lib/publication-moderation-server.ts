@@ -9,7 +9,7 @@ import {
   type DocumentData,
 } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase-admin";
-import { canAccountPublish } from "./accountVerification";
+import { canAccountPublish, publicationVerificationFields } from "./accountVerification";
 import {
   evaluatePublicationLocally,
   MODERATION_POLICY_VERSION,
@@ -287,7 +287,7 @@ export async function processPublication(kind: PublicationKind, idValue: string)
       ? await getAdminDb().doc(`users/${owner}`).get() : null;
     const blockedOwner = !profile?.exists || !canAccountPublish(profile.data());
     if (blockedOwner) local.flags.push({ code: "owner-unavailable", field: "owner", severity: "review",
-      message: "Автору необходимо пройти проверку аккаунта перед публикацией." });
+      message: "Аккаунту автора недоступна публикация. Обратитесь в поддержку." });
     const ownerPaymentError = kind === "listing" && Array.isArray(data.paymentMethods) && data.paymentMethods.includes("bank_account")
       ? validatePayment(data.paymentMethods, data.bankDetails, profile?.data()?.accountType, data.bankDetailsConfirmed)
         || validateBankOwner(data.paymentMethods, data.bankDetails, profile?.data()) : null;
@@ -344,21 +344,24 @@ export async function processPublication(kind: PublicationKind, idValue: string)
         return false;
       }
 
+      let verificationFields = {};
       if (decision === "approved") {
         const currentOwner = await transaction.get(getAdminDb().doc(`users/${owner}`));
         if (!currentOwner.exists || !canAccountPublish(currentOwner.data())) {
           transaction.update(reference, { moderationStatus: "manual_review", moderationStage: "complete",
-            moderationReason: "Автору необходимо пройти проверку аккаунта перед публикацией.",
-            moderationFlags: [{ code: "owner-unavailable", field: "owner", severity: "review", message: "Аккаунт автора не проверен." }],
+            moderationReason: "Аккаунту автора недоступна публикация. Обратитесь в поддержку.",
+            moderationFlags: [{ code: "owner-unavailable", field: "owner", severity: "review", message: "Аккаунт автора отсутствует или заблокирован." }],
             moderationLeaseUntil: FieldValue.delete(), moderationRunId: FieldValue.delete() });
           return false;
         }
+        verificationFields = publicationVerificationFields(currentOwner.data());
       }
       transaction.set(getAdminDb().collection("publicationNotificationJobs").doc(`${kind}_${id}_${runId}`), {
         kind, publicationId: id, runId, done: false, ownerNotified: false, cursor: "",
         createdAt: FieldValue.serverTimestamp(),
       });
       transaction.update(reference, {
+        ...verificationFields,
         moderationStatus: decision,
         ...(decision === "approved" && publicationExpiryMillis(latestData)
           ? { expiresAt: Timestamp.fromMillis(publicationExpiryMillis(latestData)) } : {}),
@@ -568,16 +571,19 @@ export async function applyManualModerationDecision(input: {
     if (!latest.exists || moderationInputFingerprint(dataObject(latest.data())) !== moderationInputFingerprint(data)) {
       throw new Error("Публикация изменилась. Обновите страницу перед решением.");
     }
+    let verificationFields = {};
     if (input.status === "approved") {
       const uid = ownerId(input.kind, dataObject(latest.data()));
       if (!uid || uid.includes("/")) throw new Error("Не указан автор публикации.");
       const profile = await transaction.get(getAdminDb().doc(`users/${uid}`));
-      if (!profile.exists || !canAccountPublish(profile.data())) throw new PublicationVerificationError("Автору необходимо пройти проверку аккаунта перед публикацией.");
+      if (!profile.exists || !canAccountPublish(profile.data())) throw new PublicationVerificationError("Аккаунту автора недоступна публикация. Обратитесь в поддержку.");
+      verificationFields = publicationVerificationFields(profile.data());
     }
     transaction.set(getAdminDb().collection("publicationNotificationJobs").doc(`${input.kind}_${id}_${runId}`), {
       kind: input.kind, publicationId: id, runId, done: false, ownerNotified: false, cursor: "", createdAt: FieldValue.serverTimestamp(),
     });
     transaction.update(reference, {
+    ...verificationFields,
     moderationRunId: runId,
     ...(input.status === "approved" && publicationExpiryMillis(latest.data())
       ? { expiresAt: Timestamp.fromMillis(publicationExpiryMillis(latest.data())) } : {}),

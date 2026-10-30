@@ -64,7 +64,6 @@ export async function POST(request: Request) {
 
     const userRef = adminDb.collection("users").doc(decoded.uid);
     const claimRef = adminDb.collection("companyInnClaims").doc(company.inn);
-    const verificationRef = adminDb.collection("verificationRequests").doc(decoded.uid);
 
     await adminDb.runTransaction(async (transaction) => {
       const [claimSnapshot, userSnapshot] = await Promise.all([
@@ -100,7 +99,7 @@ export async function POST(request: Request) {
           officialName: company.officialName,
           shortName: company.shortName,
           ogrn: company.ogrn,
-          status: "pending",
+          status: "registered",
           updatedAt: now,
           ...(claimSnapshot.exists ? {} : { createdAt: now }),
         },
@@ -134,7 +133,7 @@ export async function POST(request: Request) {
           avatarPath: "",
           verified: false,
           isVerified: false,
-          verificationStatus: "pending",
+          verificationStatus: "unverified",
           verifiedAt: null,
           verifiedBy: "",
           updatedAt: now,
@@ -143,28 +142,6 @@ export async function POST(request: Request) {
         { merge: true }
       );
 
-      transaction.set(
-        verificationRef,
-        {
-          userId: decoded.uid,
-          email: authUser.email || decoded.email || null,
-          accountType: body.accountType,
-          representativeName,
-          companyName: displayName,
-          companyOfficialName: company.officialName,
-          inn: company.inn,
-          kpp: company.kpp || "",
-          ogrn: company.ogrn,
-          legalAddress: company.legalAddress || "",
-          registryType: company.registryType,
-          registryStatus: company.registryStatus,
-          status: "pending",
-          source: "web-registration",
-          updatedAt: now,
-          createdAt: now,
-        },
-        { merge: true }
-      );
     });
 
     committed = true;

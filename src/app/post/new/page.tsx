@@ -369,7 +369,7 @@ export default function NewListingPage() {
       return;
     }
 
-    if (!canAccountPublish(profile)) { router.push("/verification"); return; }
+    if (!canAccountPublish(profile)) { router.push("/profile"); return; }
 
     if (title.trim().length < 5 || description.trim().length < 20 || !category || !subcategory) {
       setError("Название — от 5 символов, описание — от 20; выбери категорию и подкатегорию.");

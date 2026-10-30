@@ -26,7 +26,6 @@ import {
   Clock3,
   Edit3,
   FileText,
-  GitCompareArrows,
   Hammer,
   Hash,
   Images,
@@ -160,10 +159,8 @@ export default function PublicUserPage() {
   );
   const [portfolio, setPortfolio] = useState<PortfolioItem[]>([]);
   const [availability, setAvailability] = useState<AvailabilityDay[]>([]);
-  const [comparisonIds, setComparisonIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [profileMissing, setProfileMissing] = useState(false);
-  const [compareLoading, setCompareLoading] = useState(false);
   const [phoneLoading, setPhoneLoading] = useState(false);
   const [phoneError, setPhoneError] = useState("");
   const [revealedContact, setRevealedContact] = useState<{
@@ -298,19 +295,6 @@ export default function PublicUserPage() {
     };
   }, [uid]);
 
-  useEffect(() => {
-    if (!user) return;
-
-    return onSnapshot(
-      doc(db, "comparisonSelections", user.uid),
-      (snapshot) => {
-        setComparisonIds((snapshot.data()?.userIds || []).slice(0, 3));
-      },
-      (error) => {
-        console.error("Не получилось загрузить сравнение:", error);
-      }
-    );
-  }, [user]);
 
   const upcoming = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10);
@@ -331,7 +315,6 @@ export default function PublicUserPage() {
       profile?.verificationStatus === "approved"
   );
   const isPendingVerification = profile?.verificationStatus === "pending";
-  const isCompared = comparisonIds.includes(uid);
   const avatarUrl = profile?.avatarUrl || profile?.photoURL || "";
   const businessName =
     profile?.companyOfficialName ||
@@ -393,30 +376,7 @@ export default function PublicUserPage() {
     },
   ].filter((item) => Boolean(item.value));
 
-  async function toggleCompare() {
-    if (!user || user.uid === uid || compareLoading) return;
 
-    setCompareLoading(true);
-
-    try {
-      const next = isCompared
-        ? comparisonIds.filter((item) => item !== uid)
-        : [...comparisonIds, uid].slice(0, 3);
-
-      await setDoc(
-        doc(db, "comparisonSelections", user.uid),
-        {
-          userIds: next,
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true }
-      );
-    } catch (error) {
-      console.error("Не получилось изменить список сравнения:", error);
-    } finally {
-      setCompareLoading(false);
-    }
-  }
 
   if (loading) {
     return (
@@ -541,25 +501,7 @@ export default function PublicUserPage() {
                   </Link>
                 ) : null}
 
-                {user && !isOwner ? (
-                  <button
-                    type="button"
-                    onClick={toggleCompare}
-                    disabled={compareLoading}
-                    className={`inline-flex min-h-11 items-center gap-2 rounded-2xl px-4 py-2 text-sm font-black shadow-lg transition duration-300 hover:-translate-y-1 hover:scale-[1.02] active:scale-[0.97] disabled:cursor-wait disabled:opacity-70 ${
-                      isCompared
-                        ? "bg-[#ffd233] text-slate-950 shadow-amber-950/10"
-                        : "bg-white/14 text-white ring-1 ring-white/20 backdrop-blur-md hover:bg-white/20"
-                    }`}
-                  >
-                    <GitCompareArrows size={17} />
-                    {compareLoading
-                      ? "Сохраняем..."
-                      : isCompared
-                      ? "В сравнении"
-                      : "Сравнить"}
-                  </button>
-                ) : null}
+
               </div>
             </div>
           </div>

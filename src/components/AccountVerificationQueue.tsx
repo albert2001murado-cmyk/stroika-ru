@@ -15,6 +15,7 @@ import {
   type VerificationStatus,
 } from "@/lib/accountVerification";
 import { getApiUrl } from "@/lib/getApiUrl";
+import VerificationAttachments from "./VerificationAttachments";
 
 export default function AccountVerificationQueue() {
   const { user, loading } = useAuth();
@@ -142,6 +143,25 @@ export default function AccountVerificationQueue() {
                     <dl className="mt-6 grid gap-4 text-sm sm:grid-cols-2">
                       {[
                         ["Роль", verificationRoleLabel(item.role)],
+                        [
+                          "Тип аккаунта",
+                          item.accountType === "ip"
+                            ? "ИП"
+                            : item.accountType === "ooo"
+                              ? "ООО"
+                              : "Физлицо",
+                        ],
+                        ["Год рождения", item.birthYear],
+                        [
+                          "Связь с компанией",
+                          item.accountType === "individual"
+                            ? ""
+                            : item.companyRole === "representative"
+                              ? "Представитель"
+                              : item.accountType === "ip"
+                                ? "Предприниматель"
+                                : "Владелец / руководитель",
+                        ],
                         ["Телефон", item.phone],
                         ["Почта", item.email],
                         ["Город", item.city],
@@ -168,9 +188,14 @@ export default function AccountVerificationQueue() {
                       </p>
                       <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6">
                         {item.message ||
-                          "Заявка организации из регистрации. Проверьте реквизиты выше."}
+                          "Описание не заполнено в предыдущей версии формы."}
                       </p>
                     </div>
+                    <VerificationAttachments
+                      key={item.id}
+                      files={item.attachments}
+                      accountType={item.accountType}
+                    />
                     <Link
                       href={`/user/${encodeURIComponent(item.userId)}`}
                       target="_blank"

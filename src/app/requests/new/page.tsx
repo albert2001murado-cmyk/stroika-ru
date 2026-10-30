@@ -139,7 +139,7 @@ export default function NewRequestPage() {
     if (catalogIssue) { setError(catalogIssue.message); return; }
 
     if (!user) return;
-    if (!canAccountPublish(profile)) { router.push("/verification"); return; }
+    if (!canAccountPublish(profile)) { router.push("/profile"); return; }
 
     if (title.trim().length < 5) {
       setError("Название должно быть не короче 5 символов.");

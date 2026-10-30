@@ -25,7 +25,7 @@ export async function renewOwnedPublication(input: {
     const user = profile.data() || {};
     if (!profile.exists || user.moderationStatus === "blocked") throw new PublicationRenewalError("Аккаунту недоступна публикация.", 403);
     if (!canAccountPublish(user)) {
-      throw new PublicationRenewalError("Для повторной публикации пройдите проверку аккаунта.", 403);
+      throw new PublicationRenewalError("Аккаунту недоступна повторная публикация. Обратитесь в поддержку.", 403);
     }
     if (!snapshot.exists) throw new PublicationRenewalError("Объявление не найдено.", 404);
     const source = snapshot.data() || {};

@@ -2,6 +2,7 @@ import {
   FieldPath,
   FieldValue,
   type DocumentData,
+  type QueryDocumentSnapshot,
 } from "firebase-admin/firestore";
 import { getAdminDb } from "./firebase-admin";
 import { isDocumentId } from "./security-policy";
@@ -9,18 +10,20 @@ import { normalizeRussianPhone } from "./phone";
 import {
   isAccountVerified,
   verificationFormError,
+  verificationAccountType,
+  verificationFullName,
+  VERIFICATION_MAX_FILES,
+  publicationVerificationFields,
   type VerificationForm,
   type VerificationRequest,
 } from "./accountVerification";
-
-export class VerificationError extends Error {
-  constructor(
-    message: string,
-    readonly status = 400,
-  ) {
-    super(message);
-  }
-}
+import { VerificationError } from "./verification-errors";
+export { VerificationError } from "./verification-errors";
+import {
+  isVerificationFileId,
+  verificationAttachmentView,
+  verificationRetryAt,
+} from "./verification-files-server";
 const text = (value: unknown, max = 3000) =>
   typeof value === "string" ? value.trim().slice(0, max) : "";
 const millis = (value: any) =>
@@ -41,6 +44,18 @@ export function verificationView(
         profile.displayName,
       120,
     ),
+    firstName: text(data.firstName, 60),
+    lastName: text(data.lastName, 60),
+    patronymic: text(data.patronymic, 60),
+    birthYear: text(data.birthYear, 4),
+    companyRole:
+      data.companyRole === "representative" ? "representative" : "owner",
+    attachments: Array.isArray(data.attachments)
+      ? data.attachments
+          .slice(0, VERIFICATION_MAX_FILES)
+          .filter((file) => file && isVerificationFileId(String(file.id || "")))
+          .map((file) => verificationAttachmentView(file.id, file))
+      : [],
     phone: text(data.phone || profile.phone, 40),
     city: text(data.city || profile.city, 120),
     role:
@@ -54,11 +69,10 @@ export function verificationView(
       data.status === "approved" || data.status === "rejected"
         ? data.status
         : "pending",
-    accountType: text(
+    accountType: verificationAccountType(
       data.accountType ||
         data.profileSnapshot?.accountType ||
         profile.accountType,
-      30,
     ),
     companyName: text(data.companyName || profile.companyName, 300),
     inn: text(data.inn || profile.companyInn, 20),
@@ -82,6 +96,47 @@ export function verificationView(
     },
   };
 }
+function automatedRegistration(data?: DocumentData) {
+  return (
+    data?.source === "web-registration" && Number(data.schemaVersion || 0) < 2
+  );
+}
+async function retireRegistrationRequest(uid: string, id: string) {
+  const db = getAdminDb(),
+    requestRef = db.doc(`verificationRequests/${id}`),
+    profileRef = db.doc(`users/${uid}`);
+  return db.runTransaction(async (tx) => {
+    const [request, profile] = await Promise.all([
+      tx.get(requestRef),
+      tx.get(profileRef),
+    ]);
+    if (
+      request.get("userId") !== uid ||
+      !["pending", "rejected"].includes(request.get("status")) ||
+      !automatedRegistration(request.data())
+    )
+      return false;
+    tx.update(requestRef, {
+      status: "withdrawn",
+      withdrawalReason: "manual-verification-only",
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    if (
+      profile.exists &&
+      !isAccountVerified(profile.data()) &&
+      ["pending", "rejected"].includes(profile.get("verificationStatus")) &&
+      (!profile.get("verificationRequestId") ||
+        profile.get("verificationRequestId") === id)
+    ) {
+      tx.update(profileRef, {
+        verificationStatus: "unverified",
+        verificationRequestId: FieldValue.delete(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    }
+    return true;
+  });
+}
 export async function ownVerification(uid: string) {
   const db = getAdminDb(),
     profileDoc = await db.doc(`users/${uid}`).get(),
@@ -91,18 +146,49 @@ export async function ownVerification(uid: string) {
     last = await db
       .doc(`verificationRequests/${profile.verificationRequestId}`)
       .get();
-  if (!last?.exists || last.get("userId") !== uid) {
+  if (
+    last?.exists &&
+    last.get("userId") === uid &&
+    ["pending", "rejected"].includes(last.get("status")) &&
+    automatedRegistration(last.data())
+  ) {
+    if (await retireRegistrationRequest(uid, last.id))
+      return ownVerification(uid);
+  }
+  if (
+    !last?.exists ||
+    last.get("userId") !== uid ||
+    !["pending", "approved", "rejected"].includes(last.get("status"))
+  ) {
     const previous = await db
       .collection("verificationRequests")
       .where("userId", "==", uid)
       .limit(100)
       .get();
-    last = previous.docs.sort(
-      (a, b) => millis(b.get("createdAt")) - millis(a.get("createdAt")),
-    )[0];
+    const automated = previous.docs.find(
+      (doc) =>
+        ["pending", "rejected"].includes(doc.get("status")) &&
+        automatedRegistration(doc.data()),
+    );
+    if (automated && (await retireRegistrationRequest(uid, automated.id)))
+      return ownVerification(uid);
+    last = previous.docs
+      .filter(
+        (doc) =>
+          ["pending", "approved", "rejected"].includes(doc.get("status")) &&
+          !(
+            doc.get("status") !== "approved" &&
+            automatedRegistration(doc.data())
+          ),
+      )
+      .sort(
+        (a, b) => millis(b.get("createdAt")) - millis(a.get("createdAt")),
+      )[0];
   }
   return {
     verified: isAccountVerified(profile),
+    accountType: verificationAccountType(profile.accountType),
+    retryAt: last?.exists ? verificationRetryAt(last.data()) : 0,
     request: last?.exists
       ? verificationView(last.id, last.data() || {}, profile)
       : null,
@@ -126,17 +212,66 @@ export async function submitVerification(
         .collection("verificationRequests")
         .where("userId", "==", uid)
         .where("status", "==", "pending")
-        .limit(1),
+        .limit(50),
     );
-    if (!pending.empty) {
+    const manualPending = pending.docs.find(
+      (doc) => !automatedRegistration(doc.data()),
+    );
+    if (manualPending) {
       tx.update(profileRef, {
-        verificationRequestId: pending.docs[0].id,
+        verificationRequestId: manualPending.id,
         verificationStatus: "pending",
       });
       return;
     }
+    const previousId = text(profile.verificationRequestId, 128);
+    const previous = isDocumentId(previousId)
+      ? await tx.get(db.doc(`verificationRequests/${previousId}`))
+      : null;
+    const retryAt =
+      previous?.get("userId") === uid
+        ? verificationRetryAt(previous.data())
+        : 0;
+    if (retryAt > Date.now())
+      throw new VerificationError(
+        "Повторная заявка доступна через 24 часа после отказа.",
+        429,
+        retryAt,
+      );
+    const requestedFiles = Array.isArray(body.attachments)
+      ? body.attachments
+      : [];
+    if (requestedFiles.length > VERIFICATION_MAX_FILES)
+      throw new VerificationError(
+        `Можно прикрепить до ${VERIFICATION_MAX_FILES} файлов.`,
+      );
+    const ids = requestedFiles.map((file) => text(file?.id, 40));
+    if (
+      new Set(ids).size !== ids.length ||
+      ids.some((id) => !isVerificationFileId(id))
+    )
+      throw new VerificationError("Проверьте прикреплённые файлы.");
+    const files = ids.length
+      ? await tx.getAll(
+          ...ids.map((id) => db.doc(`verificationAttachments/${id}`)),
+        )
+      : [];
+    if (files.some((file) => !file.exists || file.get("ownerUid") !== uid))
+      throw new VerificationError(
+        "Файл не найден или принадлежит другому аккаунту.",
+        403,
+      );
     const form: VerificationForm = {
+      accountType: verificationAccountType(profile.accountType),
       name: text(body.name, 121),
+      firstName: text(body.firstName, 61),
+      lastName: text(body.lastName, 61),
+      patronymic: text(body.patronymic, 61),
+      birthYear: text(body.birthYear, 5),
+      companyRole: body.companyRole as VerificationForm["companyRole"],
+      attachments: files.map((file) =>
+        verificationAttachmentView(file.id, file.data()!),
+      ),
       phone: normalizeRussianPhone(profile.phone),
       city: text(body.city, 121),
       role: body.role as VerificationForm["role"],
@@ -146,6 +281,15 @@ export async function submitVerification(
     };
     const error = verificationFormError(form);
     if (error) throw new VerificationError(error);
+    if (form.accountType === "individual") {
+      form.name = verificationFullName(form);
+      form.companyRole = "owner";
+    } else {
+      form.firstName = "";
+      form.lastName = "";
+      form.patronymic = "";
+      form.birthYear = "";
+    }
     if (form.role === "customer") {
       form.category = "";
       form.experience = "";
@@ -165,7 +309,9 @@ export async function submitVerification(
         avatarUrl: text(profile.avatarUrl || profile.photoURL, 2000),
         accountType: profile.accountType || "individual",
       },
-      schemaVersion: 2,
+      schemaVersion: 3,
+      source: "verification-button",
+      submittedAt: now,
       status: "pending",
       moderatorComment: "",
       createdAt: now,
@@ -176,6 +322,16 @@ export async function submitVerification(
       verificationStatus: "pending",
       updatedAt: now,
     });
+    for (const file of files)
+      tx.update(file.ref, { requestIds: FieldValue.arrayUnion(requestRef.id) });
+    for (const legacy of pending.docs.filter((doc) =>
+      automatedRegistration(doc.data()),
+    ))
+      tx.update(legacy.ref, {
+        status: "withdrawn",
+        withdrawalReason: "manual-verification-only",
+        updatedAt: now,
+      });
   });
   return ownVerification(uid);
 }
@@ -186,14 +342,35 @@ export async function verificationQueue(status: string, after = "") {
   )
     throw new VerificationError("Некорректный фильтр заявок.");
   const db = getAdminDb();
-  let query = db
+  const base = db
     .collection("verificationRequests")
     .where("status", "==", status)
-    .orderBy(FieldPath.documentId())
-    .limit(31);
-  if (after) query = query.startAfter(after);
-  const snapshot = await query.get(),
-    page = snapshot.docs.slice(0, 30);
+    .orderBy(FieldPath.documentId());
+  const page: QueryDocumentSnapshot[] = [];
+  let cursor = after,
+    scanned = 0,
+    hasMore = false;
+  // Old automatic registrations must not occupy an empty first moderator page.
+  // Bound reads while carrying the raw cursor so no manual application is lost.
+  while (page.length < 30 && scanned < 180) {
+    const snapshot = await (cursor ? base.startAfter(cursor) : base)
+      .limit(31)
+      .get();
+    let processed = 0;
+    for (const doc of snapshot.docs) {
+      if (page.length === 30 || scanned === 180) break;
+      cursor = doc.id;
+      scanned++;
+      processed++;
+      if (
+        doc.get("status") === "approved" ||
+        !automatedRegistration(doc.data())
+      )
+        page.push(doc);
+    }
+    hasMore = processed < snapshot.size || snapshot.size === 31;
+    if (!hasMore) break;
+  }
   const uids = [
     ...new Set(
       page.map((doc) => text(doc.get("userId"), 128)).filter(isDocumentId),
@@ -206,10 +383,18 @@ export async function verificationQueue(status: string, after = "") {
     profiles.map((profile) => [profile.id, profile.data() || {}]),
   );
   return {
-    items: page.map((doc) =>
-      verificationView(doc.id, doc.data(), byId.get(doc.get("userId"))),
-    ),
-    nextCursor: snapshot.size > 30 ? page.at(-1)!.id : "",
+    items: page
+      .filter(
+        (doc) =>
+          !(
+            doc.get("status") !== "approved" &&
+            automatedRegistration(doc.data())
+          ),
+      )
+      .map((doc) =>
+        verificationView(doc.id, doc.data(), byId.get(doc.get("userId"))),
+      ),
+    nextCursor: hasMore ? cursor : "",
   };
 }
 async function syncVerifiedPublications(uid: string) {
@@ -251,12 +436,7 @@ async function syncVerifiedPublications(uid: string) {
           seen.add(doc.id);
           writes++;
           batch.update(doc.ref, {
-            verified: true,
-            isVerified: true,
-            authorVerified: true,
-            customerVerified: true,
-            userVerified: true,
-            verificationStatus: "approved",
+            ...publicationVerificationFields({ verified: true }),
             verifiedAt: FieldValue.serverTimestamp(),
           });
         }
@@ -286,6 +466,14 @@ export async function reviewVerification(
     const requestDoc = await tx.get(ref);
     if (!requestDoc.exists)
       throw new VerificationError("Заявка не найдена.", 404);
+    if (
+      requestDoc.get("status") === "pending" &&
+      automatedRegistration(requestDoc.data())
+    )
+      throw new VerificationError(
+        "Эта заявка создана регистрацией. Пользователь должен самостоятельно заполнить новую форму проверки.",
+        409,
+      );
     const request = requestDoc.data()!,
       uid = text(request.userId, 128);
     if (!isDocumentId(uid))
@@ -390,7 +578,7 @@ function verificationNotification(
     type: "verification",
     title: approved ? "Аккаунт проверен" : "Нужно уточнить данные",
     body: approved
-      ? "Проверка пройдена! Теперь можно размещать анкеты и заявки. В объявлениях появилась отметка «Проверен»."
+      ? "Проверка пройдена! В профиле и ваших объявлениях появилась отметка «Проверен»."
       : comment,
     url: "/verification",
     actionLabel: "Открыть проверку",

@@ -331,6 +331,7 @@ export default function ProfilePage() {
   const businessAccount = accountType === "ip" || accountType === "ooo";
   const verificationApproved = profile?.verificationStatus === "approved";
   const verificationRejected = profile?.verificationStatus === "rejected";
+  const verificationPending = profile?.verificationStatus === "pending";
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#f5f7fb] px-3 py-5 sm:px-5 sm:py-8">
@@ -511,14 +512,14 @@ export default function ProfilePage() {
                       ? "bg-emerald-100 text-emerald-700"
                       : verificationRejected
                       ? "bg-red-100 text-red-700"
-                      : "bg-amber-100 text-amber-700"
+                      : verificationPending ? "bg-amber-100 text-amber-700" : "bg-white text-blue-700"
                   }`}>
                     {verificationApproved ? <BadgeCheck size={18} /> : <Clock3 size={18} />}
                     {verificationApproved
                       ? "Организация подтверждена"
                       : verificationRejected
                       ? "Проверка отклонена"
-                      : "Организация ожидает подтверждения владельца"}
+                      : verificationPending ? "Заявка на проверке" : "Проверка аккаунта — по желанию"}
                   </div>
                 </div>
               )}

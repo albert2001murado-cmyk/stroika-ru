@@ -13,12 +13,28 @@ export function catalogTextKey(value: unknown): string {
 
 type CatalogUpdate = {
   categoryId: string; category: string; current: string; previous: readonly string[];
-  topics: string; shared?: boolean; fromCategoryId?: string; fromCategory?: string;
+  section?: "solutions"; topics: string; shared?: boolean; fromCategoryId?: string; fromCategory?: string;
 };
 
 // previous is exclusively for existing records/bookmarks. Only current values
 // are emitted by the category arrays and can appear as selectable directions.
 export const CATALOG_UPDATES: readonly CatalogUpdate[] = [
+  { section: "solutions", categoryId: "design", category: "Дизайн и проектирование", current: "Архитектурное проектирование",
+    previous: ["Проектирование домов и зданий"],
+    topics: "архитектор архитектура проект проектировать дом здание коттедж", shared: true },
+  { section: "solutions", categoryId: "design", category: "Дизайн и проектирование", current: "Дизайн интерьера",
+    previous: ["Планировочные решения"], topics: "дизайн интерьер планировка перепланировка планировочное решение дизайн проект", shared: true },
+  { section: "solutions", categoryId: "construction", category: "Строительство", current: "Строительство домов",
+    previous: ["Строительство домов под ключ", "Дома из газобетона", "Дома из кирпича", "Дома из СИП-панелей", "Каркасные дома", "Модульные дома"],
+    topics: "строить построить строительство дом коттедж газобетон кирпич СИП панели каркасный модульный под ключ" },
+  { section: "solutions", categoryId: "construction", category: "Строительство", current: "Строительство складов и ангаров",
+    previous: ["Строительство складов", "Строительство ангаров"], topics: "строить строительство склад ангар складской промышленный" },
+  { section: "solutions", categoryId: "construction", category: "Строительство", current: "Устройство фундаментов",
+    previous: ["Фундамент ленточный", "Фундамент плитный", "Свайный фундамент"], topics: "фундамент основание лента ленточный плита плитный сваи свайный залить устройство" },
+  { section: "solutions", categoryId: "construction", category: "Строительство", current: "Устройство ростверка",
+    previous: [], topics: "ростверк ростверка фундамент сваи свайный основание армирование бетон" },
+  { section: "solutions", categoryId: "construction", category: "Строительство", current: "Каменная кладка",
+    previous: ["Кладка стен"], topics: "каменщик кладка стен стена кирпич блок газобетон камень раствор" },
   { categoryId: "windows", category: "Окна и двери", current: "Установка и замена окон",
     previous: ["Установка окон", "Замена окон", "Установка пластиковых окон", "Деревянные окна", "Алюминиевое остекление"],
     topics: "окно окна окон стеклопакет ПВХ пластиковые деревянные алюминиевые установка замена монтаж остекление", shared: true },
@@ -104,7 +120,7 @@ export function canonicalCatalogFields<T extends CatalogFields>(input: T) {
     catalogCategoryTitle: string(input.catalogCategoryTitle), catalogGroupId: string(input.catalogGroupId) };
   const section = catalogTextKey(fields.catalogSection), category = catalogTextKey(fields.category);
   // A product with the same name (e.g. gypsum board) is never changed into a service.
-  if (section && section !== "services" && section !== "услуги") return fields;
+  if (section && !["services", "услуги", "solutions", "комплексные решения"].includes(section)) return fields;
   if (/^(?:материалы|спецтехника|техника)$/u.test(category)) return fields;
   const key = catalogTextKey(fields.subcategory);
   const rule = updates.find(entry => {
@@ -116,12 +132,15 @@ export function canonicalCatalogFields<T extends CatalogFields>(input: T) {
     if (category && !categoryMatches) return false;
     if (fields.catalogCategoryId && !idMatches) return false;
     if (fields.catalogGroupId) return false; // Service categories have no material/equipment groups.
-    return categoryMatches || idMatches || section === "services" || section === "услуги" || (!category && !fields.catalogCategoryId && !entry.shared);
+    const expectedSection = entry.section || "services";
+    const sectionMatches = expectedSection === "solutions" ? section === "solutions" || section === "комплексные решения" : section === "services" || section === "услуги";
+    return categoryMatches || idMatches || sectionMatches || (!section && !category && !fields.catalogCategoryId && !entry.shared);
   });
   if (!rule) return fields;
-  return { ...fields, category: rule.category, subcategory: rule.current, catalogSection: "services",
+  const targetSection = rule.section || "services";
+  return { ...fields, category: rule.category, subcategory: rule.current, catalogSection: targetSection,
     catalogCategoryId: rule.categoryId, catalogCategoryTitle: rule.category, catalogGroupId: "",
-    ...(Array.isArray(input.catalogPath) ? { catalogPath: ["Услуги", rule.category, rule.current] } : {}) };
+    ...(Array.isArray(input.catalogPath) ? { catalogPath: [targetSection === "solutions" ? "Комплексные решения" : "Услуги", rule.category, rule.current] } : {}) };
 }
 
 export function currentCatalogSubcategory(value: unknown, context: CatalogFields = {}): string {

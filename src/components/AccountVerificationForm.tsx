@@ -1,5 +1,6 @@
 "use client";
-import type { FormEvent } from "react";
+import { useState, type FormEvent } from "react";
+import VerificationAttachments from "./VerificationAttachments";
 import { useVerificationApplication } from "@/lib/useVerificationApplication";
 import Link from "next/link";
 import {
@@ -25,6 +26,8 @@ export default function AccountVerificationForm() {
     getApiUrl("/api/verification"),
   );
   const { form, state, loading, sending, error, change, load } = application;
+  const [uploading, setUploading] = useState(false);
+  const individual = form.accountType === "individual";
   const verified = isAccountVerified(profile) || state?.verified === true;
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -52,9 +55,9 @@ export default function AccountVerificationForm() {
             Проверка аккаунта
           </h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-blue-100">
-            Заполните короткую заявку. После одобрения в профиле и объявлениях
-            появится отметка «Проверен», а размещение анкет и заявок станет
-            доступно.
+            Проверка добровольная. Публиковать объявления можно и без неё. После
+            одобрения модератором в профиле и объявлениях появится отметка
+            «Проверен».
           </p>
         </header>
         {authLoading || loading ? (
@@ -79,8 +82,8 @@ export default function AccountVerificationForm() {
                 Один статус для всех ролей
               </h2>
               <p className="mt-3 text-sm leading-6 text-slate-500">
-                Проверка нужна и исполнителям, и заказчикам. Модератор увидит
-                ваши контакты, направление и описание.
+                Галочка действует и для исполнителя, и для заказчика. Заявка
+                отправится только после заполнения формы и нажатия кнопки ниже.
               </p>
               <p className="mt-4 border-t border-slate-100 pt-4 text-sm leading-6 text-slate-500">
                 Телефон берётся из профиля. Изменить его можно в настройках
@@ -118,8 +121,8 @@ export default function AccountVerificationForm() {
                     Ваш аккаунт проверен
                   </h2>
                   <p className="mt-3 text-sm leading-6 text-slate-500">
-                    Теперь можно размещать анкеты и заявки. Отметка «Проверен»
-                    отображается у ваших публикаций.
+                    Отметка «Проверен» отображается в профиле и у ваших
+                    публикаций на сайте и в приложении.
                   </p>
                   <Link
                     href="/profile"
@@ -136,7 +139,8 @@ export default function AccountVerificationForm() {
                   </h2>
                   <p className="mt-3 text-sm leading-6 text-slate-500">
                     Повторно отправлять её не нужно. Результат появится здесь и
-                    в уведомлениях.
+                    в уведомлениях. Пока идёт проверка, можно размещать
+                    объявления.
                   </p>
                   <button
                     type="button"
@@ -145,6 +149,36 @@ export default function AccountVerificationForm() {
                   >
                     Обновить статус
                   </button>
+                </div>
+              ) : application.cooldown ? (
+                <div className="py-4">
+                  <Clock3 size={34} className="text-blue-600" />
+                  <h2 className="mt-4 text-2xl font-bold">
+                    Повторная заявка через 24 часа
+                  </h2>
+                  <p className="mt-3 whitespace-pre-wrap rounded-2xl bg-amber-50 p-4 text-sm leading-6 text-amber-900">
+                    {state?.request?.moderatorComment ||
+                      "Уточните данные перед повторной проверкой."}
+                  </p>
+                  <p className="mt-4 text-sm leading-6 text-slate-500">
+                    Заполнить форму и отправить её ещё раз можно с{" "}
+                    <b className="text-slate-800">
+                      {new Date(application.retryAt).toLocaleString("ru-RU", {
+                        day: "numeric",
+                        month: "long",
+                        year: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </b>
+                    . Размещение объявлений остаётся доступным.
+                  </p>
+                  <Link
+                    href="/profile"
+                    className="mt-5 inline-flex text-sm font-bold text-blue-700"
+                  >
+                    В профиль →
+                  </Link>
                 </div>
               ) : state ? (
                 <form onSubmit={submit} className="space-y-5">
@@ -173,17 +207,110 @@ export default function AccountVerificationForm() {
                       ))}
                     </div>
                   </div>
-                  <label className="block text-sm font-bold">
-                    Имя или название компании
-                    <input
-                      required
-                      maxLength={120}
-                      value={form.name}
-                      onChange={(event) => change("name", event.target.value)}
-                      className={input}
-                      autoComplete="name"
-                    />
-                  </label>
+                  {individual ? (
+                    <section className="rounded-2xl bg-slate-50 p-4">
+                      <h3 className="font-bold">Личные данные</h3>
+                      <p className="mt-2 text-xs leading-5 text-slate-500">
+                        Только для проверки — ФИО и год рождения не публикуются
+                        в объявлениях. Паспорт прикладывать не нужно.
+                      </p>
+                      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                        {(
+                          [
+                            ["lastName", "Фамилия"],
+                            ["firstName", "Имя"],
+                            ["patronymic", "Отчество, если есть"],
+                            ["birthYear", "Год рождения"],
+                          ] as const
+                        ).map(([key, title]) => (
+                          <label key={key} className="block text-sm font-bold">
+                            {title}
+                            <input
+                              aria-label={title}
+                              required={key !== "patronymic"}
+                              maxLength={key === "birthYear" ? 4 : 60}
+                              inputMode={
+                                key === "birthYear" ? "numeric" : "text"
+                              }
+                              value={form[key]}
+                              onChange={(event) =>
+                                change(
+                                  key,
+                                  key === "birthYear"
+                                    ? event.target.value.replace(/\D/g, "")
+                                    : event.target.value,
+                                )
+                              }
+                              className={input}
+                              autoComplete={
+                                key === "firstName"
+                                  ? "given-name"
+                                  : key === "lastName"
+                                    ? "family-name"
+                                    : key === "patronymic"
+                                      ? "additional-name"
+                                      : "bday-year"
+                              }
+                            />
+                          </label>
+                        ))}
+                      </div>
+                    </section>
+                  ) : (
+                    <section className="space-y-4 rounded-2xl bg-slate-50 p-4">
+                      <div>
+                        <p className="text-xs text-slate-500">
+                          {form.accountType === "ip"
+                            ? "Индивидуальный предприниматель"
+                            : "Общество с ограниченной ответственностью"}
+                        </p>
+                        <p className="mt-1 break-words font-bold">
+                          {String(
+                            profile?.companyName ||
+                              profile?.displayName ||
+                              "Компания",
+                          )}
+                        </p>
+                        <p className="mt-1 text-sm text-slate-500">
+                          ИНН {String(profile?.companyInn || "не указан")}
+                        </p>
+                      </div>
+                      <label className="block text-sm font-bold">
+                        ФИО представителя
+                        <input
+                          aria-label="ФИО представителя"
+                          required
+                          maxLength={120}
+                          value={form.name}
+                          onChange={(event) =>
+                            change("name", event.target.value)
+                          }
+                          className={input}
+                          autoComplete="name"
+                        />
+                      </label>
+                      <p className="text-sm font-bold">
+                        Ваша связь с компанией
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {(["owner", "representative"] as const).map((role) => (
+                          <button
+                            key={role}
+                            type="button"
+                            onClick={() => change("companyRole", role)}
+                            aria-pressed={form.companyRole === role}
+                            className={`rounded-xl border px-3 py-2 text-sm font-semibold ${form.companyRole === role ? "border-blue-500 bg-white text-blue-700" : "border-slate-200 text-slate-500"}`}
+                          >
+                            {role === "representative"
+                              ? "Представитель"
+                              : form.accountType === "ip"
+                                ? "Я — предприниматель"
+                                : "Владелец / руководитель"}
+                          </button>
+                        ))}
+                      </div>
+                    </section>
+                  )}
                   <div className="grid gap-5 sm:grid-cols-2">
                     <label className="block text-sm font-bold">
                       Телефон из профиля
@@ -242,7 +369,11 @@ export default function AccountVerificationForm() {
                     </div>
                   ) : null}
                   <label className="block text-sm font-bold">
-                    Расскажите о себе или компании
+                    {individual
+                      ? form.role === "customer"
+                        ? "О себе и ваших задачах"
+                        : "Ваша деятельность"
+                      : "О компании и её деятельности"}
                     <textarea
                       required
                       minLength={20}
@@ -262,8 +393,16 @@ export default function AccountVerificationForm() {
                       {form.message.length} / 3000
                     </span>
                   </label>
-                  <button
+                  <VerificationAttachments
+                    key={user.uid}
+                    accountType={form.accountType}
+                    files={form.attachments}
+                    onChange={(files) => change("attachments", files)}
+                    onBusyChange={setUploading}
                     disabled={sending}
+                  />
+                  <button
+                    disabled={sending || uploading}
                     className="flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#0057ff] px-5 py-3 font-bold text-white transition hover:bg-blue-700 disabled:opacity-50"
                   >
                     {sending ? (

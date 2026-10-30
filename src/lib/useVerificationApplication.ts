@@ -4,6 +4,7 @@ import {
   EMPTY_VERIFICATION_FORM,
   VERIFICATION_CATEGORIES,
   verificationFormError,
+  verificationAccountType,
   type VerificationForm,
   type VerificationState,
 } from "./accountVerification";
@@ -27,11 +28,24 @@ export function useVerificationApplication(
   const [loading, setLoading] = useState(true),
     [sending, setSending] = useState(false),
     [error, setError] = useState("");
+  const [now, setNow] = useState(Date.now());
   const generation = useRef(0),
     submitting = useRef(false),
     dirty = useRef(new Set<string>()),
     hydrated = useRef("");
   const state = result?.uid === uid ? result.value : null;
+  const retryAt =
+    state?.request?.status === "rejected" ? Number(state.retryAt || 0) : 0;
+  const cooldown = retryAt > now;
+  useEffect(() => {
+    setNow(Date.now());
+    if (!retryAt || retryAt <= Date.now()) return;
+    const timer = setTimeout(
+      () => setNow(Date.now()),
+      Math.max(1, retryAt - Date.now() + 50),
+    );
+    return () => clearTimeout(timer);
+  }, [retryAt]);
   const form = draft.uid === uid ? draft.value : { ...EMPTY_VERIFICATION_FORM };
   const load = useCallback(async () => {
     const current = ++generation.current;
@@ -80,11 +94,35 @@ export function useVerificationApplication(
         uid,
         value: {
           ...value,
+          accountType: verificationAccountType(
+            profile?.accountType || state?.accountType,
+          ),
           name: fillRequest
             ? request!.name
             : dirty.current.has("name")
               ? value.name
-              : String(profile?.displayName || user?.displayName || ""),
+              : String(
+                  profile?.representativeName ||
+                    profile?.displayName ||
+                    user?.displayName ||
+                    "",
+                ),
+          firstName: fillRequest
+            ? request!.firstName || ""
+            : dirty.current.has("firstName")
+              ? value.firstName
+              : String(
+                  profile?.firstName ||
+                    String(
+                      profile?.displayName || user?.displayName || "",
+                    ).split(/\s+/)[0] ||
+                    "",
+                ),
+          lastName: fillRequest
+            ? request!.lastName || ""
+            : dirty.current.has("lastName")
+              ? value.lastName
+              : String(profile?.lastName || ""),
           city: fillRequest
             ? request!.city
             : dirty.current.has("city")
@@ -99,6 +137,10 @@ export function useVerificationApplication(
                   : VERIFICATION_CATEGORIES[0],
                 experience: request!.experience,
                 message: request!.message,
+                patronymic: request!.patronymic || "",
+                birthYear: request!.birthYear || "",
+                companyRole: request!.companyRole || "owner",
+                attachments: request!.attachments || [],
               }
             : {}),
         },
@@ -110,9 +152,17 @@ export function useVerificationApplication(
     profile?.phone,
     profile?.displayName,
     profile?.city,
+    profile?.accountType,
+    profile?.representativeName,
+    profile?.firstName,
+    profile?.lastName,
+    state?.accountType,
     user?.displayName,
   ]);
-  function change(key: keyof VerificationForm, value: string) {
+  function change<Key extends keyof VerificationForm>(
+    key: Key,
+    value: VerificationForm[Key],
+  ) {
     dirty.current.add(key);
     setDraft((previous) => ({
       uid,
@@ -123,7 +173,7 @@ export function useVerificationApplication(
     }));
   }
   async function submit() {
-    if (!user || submitting.current || !state || loading) return;
+    if (!user || submitting.current || !state || loading || cooldown) return;
     const failure = verificationFormError(form);
     if (failure) {
       setError(failure);
@@ -154,5 +204,16 @@ export function useVerificationApplication(
       }
     }
   }
-  return { form, state, loading, sending, error, change, submit, load };
+  return {
+    form,
+    state,
+    loading,
+    sending,
+    error,
+    change,
+    submit,
+    load,
+    cooldown,
+    retryAt,
+  };
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { ContactRequestError, contactRequest } from "@/lib/contact-request";
 import { useAuth } from "@/components/AuthProvider";
 import { formatRussianPhoneInput, normalizeRussianPhone as normalizePhoneForStorage, russianPhoneError } from "@/lib/phone";
 import { auth, db } from "@/lib/firebase";
@@ -10,19 +11,18 @@ import {
 } from "@/lib/company-verification";
 import type { AccountType, CompanyLookupResult } from "@/types";
 import {
+  deleteUser,
+  getAdditionalUserInfo,
   browserLocalPersistence,
   browserSessionPersistence,
   type ConfirmationResult,
   RecaptchaVerifier,
   setPersistence,
   signInWithPhoneNumber,
-  updateProfile,
 } from "firebase/auth";
 import {
   doc,
   getDoc,
-  serverTimestamp,
-  setDoc,
 } from "firebase/firestore";
 import {
   ArrowLeft,
@@ -73,6 +73,8 @@ function readableAuthError(error: unknown) {
   const code = typeof error === "object" && error && "code" in error
     ? String((error as { code?: unknown }).code || "")
     : "";
+  if (code === "auth/email-already-in-use") return "Эта почта уже используется другим аккаунтом. Перейдите во вкладку «Вход».";
+  if (code === "auth/phone-number-already-in-use") return "Этот номер телефона уже используется другим аккаунтом. Войдите по почте.";
   if (code.includes("invalid-phone-number")) return "Проверьте номер телефона.";
   if (code.includes("invalid-verification-code")) return "Неверный SMS-код.";
   if (code.includes("too-many-requests")) return "Слишком много попыток. Попробуйте немного позже.";
@@ -274,37 +276,16 @@ export default function AuthPage() {
           smsCode.replace(/\D/g, "").slice(0, 6)
         );
         const phoneNumber = credential.user.phoneNumber || `+7${loginPhone}`;
-        const userRef = doc(db, "users", credential.user.uid);
-        const profileSnapshot = await getDoc(userRef);
-
-        if (!credential.user.displayName) {
-          await updateProfile(credential.user, { displayName: "Пользователь" });
-        }
-
-        if (!profileSnapshot.exists()) {
-          await setDoc(userRef, {
-            uid: credential.user.uid,
-            email: credential.user.email || "",
-            displayName: credential.user.displayName || "Пользователь",
-            representativeName: credential.user.displayName || "Пользователь",
-            accountType: "individual",
-            companyName: "",
-            city: "",
-            phone: phoneNumber,
-            avatarUrl: "",
-            avatarPath: "",
-            verified: false,
-            isVerified: false,
-            verificationStatus: "unverified",
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          });
-        } else {
-          await setDoc(
-            userRef,
-            { phone: phoneNumber, updatedAt: serverTimestamp() },
-            { merge: true }
-          );
+        const profileSnapshot = await getDoc(doc(db, "users", credential.user.uid));
+        try {
+          await contactRequest(profileSnapshot.exists() ? "/api/profile/contact" : "/api/registration/profile", {
+            phone: phoneNumber, displayName: credential.user.displayName || "Пользователь",
+          }, credential.user);
+        } catch (error) {
+          if (getAdditionalUserInfo(credential)?.isNewUser && error instanceof ContactRequestError && error.notCommitted && error.status < 500) {
+            await deleteUser(credential.user).catch(() => undefined);
+          }
+          throw error;
         }
       }
 
@@ -656,8 +637,7 @@ export default function AuthPage() {
                           />
                           <p>
                             ИНН подтверждает реквизиты, но не право владения.
-                            Профиль ИП или ООО сначала получает статус «На
-                            проверке».
+                            Проверка аккаунта добровольная — заявку на отметку «Проверен» можно отправить из профиля после регистрации.
                           </p>
                         </div>
                       </div>

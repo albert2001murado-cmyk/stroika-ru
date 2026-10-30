@@ -56,7 +56,15 @@ export async function verificationActor(
 }
 export function verificationFailure(error: unknown) {
   if (error instanceof VerificationError || error instanceof RequestBodyError)
-    return verificationJson({ error: error.message }, error.status);
+    return verificationJson(
+      {
+        error: error.message,
+        ...(error instanceof VerificationError && error.retryAt
+          ? { retryAt: error.retryAt }
+          : {}),
+      },
+      error.status,
+    );
   console.error("account verification failed", {
     code: String((error as { code?: string })?.code || "server-error").slice(
       0,

@@ -104,7 +104,7 @@ register(["Цемент", "Бетон", "Пескобетон", "Добавки 
 
 register(["Раствор"], {
   category: "Строительство",
-  subcategory: "Кладка стен",
+  subcategory: "Каменная кладка",
   section: "solutions",
   imageCategoryId: "construction",
   actionTitle: "Найти мастеров по раствору",
@@ -162,7 +162,7 @@ register(
   ],
   {
     category: "Строительство",
-    subcategory: "Кладка стен",
+    subcategory: "Каменная кладка",
     section: "solutions",
     imageCategoryId: "construction",
     actionTitle: "Найти каменщика",

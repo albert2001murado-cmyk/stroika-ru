@@ -7,14 +7,14 @@ export default function PublicationVerificationGate() {
       <section className="mx-auto max-w-lg rounded-3xl border border-blue-100 bg-white p-7">
         <ShieldCheck size={32} className="text-blue-600" />
         <h1 className="mt-4 text-2xl font-bold text-slate-950">
-          Сначала пройдите проверку
+          Публикация недоступна
         </h1>
         <p className="mt-3 text-sm leading-6 text-slate-500">
-          Для размещения анкеты исполнителя или заявки заказчика нужен
-          проверенный аккаунт. Заявка на проверку общая для сайта и приложения.
+          Аккаунт заблокирован или его данные ещё не загрузились. Вернитесь в
+          профиль или обратитесь в поддержку.
         </p>
-        <Link href="/verification" className="btn-primary mt-6 inline-flex">
-          Пройти проверку
+        <Link href="/support" className="btn-primary mt-6 inline-flex">
+          Обратиться в поддержку
         </Link>
         <Link
           href="/profile"
