@@ -1,4 +1,7 @@
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { BILLING_PERIOD_MS } from "./billing";
+import { billingAccountRef, billingHash, ensureBillingAccount, publicationBillingPath, ownPublications, assertPublicationSlot, consumePublicationAllowance } from "./billing-server";
+import { AccountApiError } from "./account-api-server";
 import { getAdminDb } from "./firebase-admin";
 import { canAccountPublish } from "./accountVerification";
 import { isPublicationExpired, oneCalendarMonthAfter, publicationDateMillis, publicationExpiryMillis } from "./publication-lifetime";
@@ -9,15 +12,17 @@ export class PublicationRenewalError extends Error {
 }
 
 export async function renewOwnedPublication(input: {
-  uid: string; authTime: number; kind: PublicationKind; publicationId: string; expectedExpiresAt: number;
+  uid: string; authTime: number; kind: PublicationKind; publicationId: string; expectedExpiresAt: number; funding: "free" | "plan";
 }) {
+  await ensureBillingAccount(input.uid);
   const db = getAdminDb();
   const ref = db.collection(input.kind === "listing" ? "listings" : "customerRequests").doc(input.publicationId);
   return db.runTransaction(async transaction => {
-    const [profile, revocation, snapshot] = await Promise.all([
+    const [profile, revocation, snapshot, billing] = await Promise.all([
       transaction.get(db.collection("users").doc(input.uid)),
       transaction.get(db.collection("authRevocations").doc(input.uid)),
       transaction.get(ref),
+      transaction.get(billingAccountRef(input.uid)),
     ]);
     if (revocation.exists && !(input.authTime > revocation.data()?.validAfter)) {
       throw new PublicationRenewalError("Сессия недействительна. Войдите снова.", 401);
@@ -47,11 +52,19 @@ export async function renewOwnedPublication(input: {
       throw new PublicationRenewalError("Срок объявления изменился. Обновите профиль и повторите попытку.", 409);
     }
     if (!isPublicationExpired(source, now.toMillis())) throw new PublicationRenewalError("Срок ещё не истёк. Повторная публикация появится после его окончания.", 409);
-    const expiresAt = oneCalendarMonthAfter(now.toMillis());
+    const account = billing.data()!;
+    if (input.funding === "free" && !(account.introEligible === true && !account.freeRenewalUsed)) throw new AccountApiError("Бесплатное продление уже использовано. Выберите размещение по тарифу", 409, "renewal-gift-used");
+    const catalog = publicationBillingPath(source);
+    const owned = await ownPublications(transaction, input.uid);
+    const consumed = consumePublicationAllowance(account, catalog.catalogSection, input.funding === "free", now.toMillis());
+    assertPublicationSlot(owned, { ...source, ...catalog }, input.kind, consumed.limit, input.publicationId, now.toMillis());
+    const expiresAt = now.toMillis() + BILLING_PERIOD_MS;
     const renewalCount = Math.max(0, Math.floor(Number(source.renewalCount) || 0)) + 1;
     const firstCreatedAt = publicationDateMillis(source.firstCreatedAt) || publicationDateMillis(source.createdAt) || publicationDateMillis(source.publishedAt);
     transaction.update(ref, {
       // createdAt is the current placement date, so existing feeds also surface a renewed ad.
+      ...catalog, publicationTermDays: 30, billingManaged: true,
+      engagementTopicKey: billingHash(`${catalog.catalogSection}:${catalog.catalogCategoryId}:${catalog.subcategory}`),
       firstCreatedAt: firstCreatedAt ? Timestamp.fromMillis(firstCreatedAt) : null,
       createdAt: now, renewedAt: now, expiresAt: Timestamp.fromMillis(expiresAt), renewalCount,
       publishedAt: null, updatedAt: now,
@@ -62,6 +75,8 @@ export async function renewOwnedPublication(input: {
       moderationNextRetryAt: FieldValue.delete(), moderationRetryFingerprint: FieldValue.delete(),
       moderationRetryCount: 0,
     });
+    transaction.set(billingAccountRef(input.uid), consumed.account);
+    transaction.create(db.doc(`billingUsages/${billingHash(`${input.kind}:${input.publicationId}:${renewalCount}`)}`), { uid: input.uid, kind: input.kind, publicationId: input.publicationId, renewalCount, catalog: catalog.catalogSection, funding: consumed.funding, periodId: consumed.periodId, orderId: consumed.orderId, createdAt: FieldValue.serverTimestamp() });
     return { kind: input.kind, publicationId: input.publicationId, alreadyRenewed: false,
       createdAt: now.toMillis(), expiresAt, renewalCount, moderationStatus: "pending" };
   });

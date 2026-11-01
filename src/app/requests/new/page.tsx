@@ -1,4 +1,6 @@
 "use client";
+import BillingAllowance from "@/components/BillingAllowance";
+import { createAccountPublication, newAccountRequestId } from "@/lib/accountClient";
 import PublicationTerm from "@/components/PublicationTerm";
 import { uploadAuthHeaders } from "@/lib/uploadAuth";
 
@@ -74,6 +76,7 @@ export default function NewRequestPage() {
   const router = useRouter();
   const defaultCatalogPath = getDefaultCatalogPath("services");
 
+  const [publicationRequestId] = useState(newAccountRequestId);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [catalogPath, setCatalogPath] = useState(defaultCatalogPath);
@@ -198,7 +201,7 @@ export default function NewRequestPage() {
         typeof profile?.phone === "string" ? profile.phone.trim() : "";
 
       const geo = pickedLocation || await geocodePublicationLocation(city, address);
-      const reference = await addDoc(collection(db, "customerRequests"), {
+      const reference = await createAccountPublication("request", {
         customerId: user.uid,
         verified: isAccountVerified(profile),
         isVerified: isAccountVerified(profile),
@@ -253,7 +256,7 @@ export default function NewRequestPage() {
         moderationSource: "web",
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-      });
+      }, publicationRequestId);
 
       images.forEach((image) => URL.revokeObjectURL(image.previewUrl));
       void requestPublicationModeration("request", reference.id);
@@ -465,6 +468,7 @@ export default function NewRequestPage() {
             </p>
           ) : null}
 
+          <BillingAllowance catalog={catalogPath.catalogSection} />
           <PublicationTerm />
           <button
             disabled={saving || locationBusy}

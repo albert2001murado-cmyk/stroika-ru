@@ -1,6 +1,7 @@
 "use client";
 
 import { ContactRequestError, contactRequest } from "@/lib/contact-request";
+import { checkAccountSession, securityLogin, securityRequest } from "@/lib/accountSecurityClient";
 import { auth, db } from "@/lib/firebase";
 import type { AccountType, UserProfile } from "@/types";
 import {
@@ -9,9 +10,8 @@ import {
   browserSessionPersistence,
   createUserWithEmailAndPassword,
   deleteUser,
-  onAuthStateChanged,
+  onIdTokenChanged,
   sendPasswordResetEmail,
-  signInWithEmailAndPassword,
   setPersistence,
   signOut,
 } from "firebase/auth";
@@ -52,6 +52,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [sessionProblem, setSessionProblem] = useState("");
+  const [sessionRetry, setSessionRetry] = useState(0);
 
   const pendingRegistration = useRef<{ user: User; email: string } | null>(null);
 
@@ -89,11 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       auth,
       remember ? browserLocalPersistence : browserSessionPersistence
     );
-    await signInWithEmailAndPassword(
-      auth,
-      email.trim().toLocaleLowerCase("en-US"),
-      password
-    );
+    await securityLogin(email.trim().toLocaleLowerCase("en-US"), password, remember);
   }
 
   async function resetPassword(email: string) {
@@ -105,6 +103,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function logout() {
+    if (auth.currentUser) await securityRequest("logout", {}, auth.currentUser).catch(() => undefined);
     await signOut(auth);
     setUser(null);
     setProfile(null);
@@ -113,19 +112,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let unsubscribeProfile: (() => void) | undefined;
 
-    const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
-      if (unsubscribeProfile) {
-        unsubscribeProfile();
-        unsubscribeProfile = undefined;
-      }
-
-      setUser(currentUser);
-
-      if (!currentUser) {
-        setProfile(null);
-        setLoading(false);
+    let generation = 0, mounted = true;
+    const unsubscribeAuth = onIdTokenChanged(auth, async (currentUser) => {
+      const run = ++generation;
+      unsubscribeProfile?.(); unsubscribeProfile = undefined;
+      setUser(null); setProfile(null); setLoading(true); setSessionProblem("");
+      if (!currentUser) { setLoading(false); return; }
+      try { await checkAccountSession(currentUser); }
+      catch (error) {
+        if (mounted && run === generation) { setLoading(false); setSessionProblem((error as Error).message); }
         return;
       }
+      if (!mounted || run !== generation) return;
+      setUser(currentUser);
 
       unsubscribeProfile = onSnapshot(
         doc(db, "users", currentUser.uid),
@@ -142,17 +141,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     return () => {
-      unsubscribeAuth();
+      mounted = false; generation++; unsubscribeAuth();
       if (unsubscribeProfile) unsubscribeProfile();
     };
-  }, []);
+  }, [sessionRetry]);
 
   const value = useMemo<AuthContextValue>(
     () => ({ user, profile, loading, register, login, resetPassword, logout }),
     [user, profile, loading]
   );
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={value}>{sessionProblem ? <main className="mx-auto max-w-md px-5 py-20"><h1 className="text-2xl font-black">Подтвердите вход</h1><p role="alert" className="mt-4 leading-7 text-slate-600">{sessionProblem}</p><button onClick={() => setSessionRetry(v => v + 1)} className="mt-6 rounded-2xl bg-blue-600 px-5 py-4 font-bold text-white">Повторить проверку</button><button onClick={() => void signOut(auth).then(() => { window.location.assign("/auth"); })} className="mt-3 block p-3 font-bold text-blue-600">Войти заново</button></main> : children}</AuthContext.Provider>;
 }
 
 export function useAuth() {

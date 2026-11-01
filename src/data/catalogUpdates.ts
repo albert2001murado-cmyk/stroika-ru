@@ -119,6 +119,13 @@ export function canonicalCatalogFields<T extends CatalogFields>(input: T) {
     catalogSection: string(input.catalogSection), catalogCategoryId: string(input.catalogCategoryId),
     catalogCategoryTitle: string(input.catalogCategoryTitle), catalogGroupId: string(input.catalogGroupId) };
   const section = catalogTextKey(fields.catalogSection), category = catalogTextKey(fields.category);
+  // Rebind the retired material label in records/bookmarks, never as a selectable duplicate.
+  if ((!section || section === "materials" || category === "материалы") &&
+      ["секционный забор", "секционные заборы"].includes(catalogTextKey(fields.subcategory))) {
+    fields.subcategory = "3D ограждения";
+    if (Array.isArray(fields.catalogPath)) fields.catalogPath = fields.catalogPath.map(value =>
+      ["секционный забор", "секционные заборы"].includes(catalogTextKey(value)) ? "3D ограждения" : value);
+  }
   // A product with the same name (e.g. gypsum board) is never changed into a service.
   if (section && !["services", "услуги", "solutions", "комплексные решения"].includes(section)) return fields;
   if (/^(?:материалы|спецтехника|техника)$/u.test(category)) return fields;

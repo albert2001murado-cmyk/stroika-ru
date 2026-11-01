@@ -12,8 +12,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "./AuthProvider";
 import {
-  VERIFICATION_CATEGORIES,
-  VERIFICATION_ROLES,
+  VERIFICATION_DOCUMENT_CONSENT,
   isAccountVerified,
 } from "@/lib/accountVerification";
 import { getApiUrl } from "@/lib/getApiUrl";
@@ -79,10 +78,10 @@ export default function AccountVerificationForm() {
             <aside className="order-2 rounded-3xl md:order-1 border border-slate-100 bg-white p-6">
               <ShieldCheck size={28} className="text-blue-600" />
               <h2 className="mt-4 text-lg font-bold">
-                Один статус для всех ролей
+                Проверка личности или компании
               </h2>
               <p className="mt-3 text-sm leading-6 text-slate-500">
-                Галочка действует и для исполнителя, и для заказчика. Заявка
+                Проверка подходит для всех ваших объявлений. Заявка
                 отправится только после заполнения формы и нажатия кнопки ниже.
               </p>
               <p className="mt-4 border-t border-slate-100 pt-4 text-sm leading-6 text-slate-500">
@@ -191,28 +190,12 @@ export default function AccountVerificationForm() {
                       </p>
                     </div>
                   ) : null}
-                  <div>
-                    <p className="text-sm font-bold">Ваша роль</p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {VERIFICATION_ROLES.map((role) => (
-                        <button
-                          type="button"
-                          key={role.id}
-                          aria-pressed={form.role === role.id}
-                          onClick={() => change("role", role.id)}
-                          className={`rounded-xl border px-4 py-2.5 text-sm font-bold ${form.role === role.id ? "border-blue-500 bg-blue-50 text-blue-700" : "border-slate-200 text-slate-500"}`}
-                        >
-                          {role.title}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
                   {individual ? (
                     <section className="rounded-2xl bg-slate-50 p-4">
                       <h3 className="font-bold">Личные данные</h3>
                       <p className="mt-2 text-xs leading-5 text-slate-500">
                         Только для проверки — ФИО и год рождения не публикуются
-                        в объявлениях. Паспорт прикладывать не нужно.
+                        в объявлениях. Подтвердите личность разворотом паспорта с фотографией.
                       </p>
                       <div className="mt-4 grid gap-4 sm:grid-cols-2">
                         {(
@@ -335,66 +318,22 @@ export default function AccountVerificationForm() {
                       />
                     </label>
                   </div>
-                  {form.role !== "customer" ? (
-                    <div className="grid gap-5 sm:grid-cols-2">
-                      <label className="block text-sm font-bold">
-                        Направление
-                        <select
-                          value={form.category}
-                          onChange={(event) =>
-                            change("category", event.target.value)
-                          }
-                          className={input}
-                        >
-                          {VERIFICATION_CATEGORIES.map((category) => (
-                            <option key={category}>{category}</option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="block text-sm font-bold">
-                        Опыт{" "}
-                        <span className="font-normal text-slate-400">
-                          необязательно
-                        </span>
-                        <input
-                          maxLength={80}
-                          value={form.experience}
-                          onChange={(event) =>
-                            change("experience", event.target.value)
-                          }
-                          placeholder="Например, 5 лет"
-                          className={input}
-                        />
-                      </label>
-                    </div>
-                  ) : null}
                   <label className="block text-sm font-bold">
-                    {individual
-                      ? form.role === "customer"
-                        ? "О себе и ваших задачах"
-                        : "Ваша деятельность"
-                      : "О компании и её деятельности"}
-                    <textarea
-                      required
-                      minLength={20}
-                      maxLength={3000}
-                      value={form.message}
-                      onChange={(event) =>
-                        change("message", event.target.value)
-                      }
-                      placeholder={
-                        form.role === "customer"
-                          ? "Какие задачи планируете размещать, в каком городе работаете…"
-                          : "Чем занимаетесь, какие работы выполняете, что важно знать о вас…"
-                      }
-                      className={input + " min-h-36 resize-y font-normal"}
-                    />
-                    <span className="mt-1 block text-right text-xs font-normal text-slate-400">
-                      {form.message.length} / 3000
-                    </span>
+                    Комментарий к заявке <span className="font-normal text-slate-400">необязательно</span>
+                    <textarea aria-label="Комментарий к заявке" maxLength={3000} value={form.message}
+                      onChange={(event) => change("message", event.target.value)}
+                      placeholder="Если нужно, поясните что-нибудь для модератора"
+                      className={input + " min-h-24 resize-y font-normal"} />
+                  </label>
+                  <label className="flex items-start gap-3 rounded-2xl border border-blue-100 bg-blue-50/50 p-4 text-sm leading-6 text-slate-600">
+                    <input type="checkbox" checked={form.documentConsent} disabled={sending || uploading}
+                      onChange={(event) => change("documentConsent", event.target.checked)}
+                      className="mt-1 h-5 w-5 shrink-0 accent-[#0057ff]" />
+                    <span>{VERIFICATION_DOCUMENT_CONSENT}. <Link href="/privacy" className="font-semibold text-blue-700 underline">Политика конфиденциальности</Link></span>
                   </label>
                   <VerificationAttachments
-                    key={user.uid}
+                    key={`${user.uid}:${form.accountType}`}
+                    documentConsent={form.documentConsent}
                     accountType={form.accountType}
                     files={form.attachments}
                     onChange={(files) => change("attachments", files)}
@@ -402,7 +341,7 @@ export default function AccountVerificationForm() {
                     disabled={sending}
                   />
                   <button
-                    disabled={sending || uploading}
+                    disabled={sending || uploading || !form.documentConsent}
                     className="flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#0057ff] px-5 py-3 font-bold text-white transition hover:bg-blue-700 disabled:opacity-50"
                   >
                     {sending ? (

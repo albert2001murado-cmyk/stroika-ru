@@ -1,4 +1,6 @@
 "use client";
+import { useBilling } from "@/lib/useBilling";
+import Link from "next/link";
 import { CalendarDays, Clock3, Loader2, RotateCcw } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { publicationTermDisplay } from "@/lib/publication-lifetime";
@@ -18,6 +20,7 @@ export default function PublicationPlacementCard(props: Props) {
 }
 
 function OwnedPublicationPlacementCard({ kind, publicationId, publication }: Props) {
+  const billing = useBilling();
   const renewal = usePublicationRenewal(kind, publicationId, publication);
   usePublicationClock([renewal.publication], 60_000);
   const term = publicationTermDisplay(renewal.publication);
@@ -26,7 +29,7 @@ function OwnedPublicationPlacementCard({ kind, publicationId, publication }: Pro
     <div className="flex items-center gap-3">
       <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-[#1457b9] ring-1 ring-black/5"><CalendarDays size={20} /></span>
       <div className="min-w-0 flex-1">
-        <p className="text-[11px] font-extrabold uppercase tracking-[0.09em] text-slate-500">{term.expired ? "Срок размещения истёк" : "Месяц размещения"}</p>
+        <p className="text-[11px] font-extrabold uppercase tracking-[0.09em] text-slate-500">{term.expired ? "Срок размещения истёк" : "Срок размещения"}</p>
         <p className="mt-0.5 text-sm font-semibold text-slate-600">{term.expired ? "Объявление сохранено в профиле" : term.countdown}</p>
       </div>
     </div>
@@ -36,11 +39,12 @@ function OwnedPublicationPlacementCard({ kind, publicationId, publication }: Pro
     </div> : null}
     {!term.expired && term.deadline > 0 ? <div className="mt-4 h-1 overflow-hidden rounded-full bg-white" aria-hidden="true"><div className={`h-full rounded-full ${term.endingSoon ? "bg-amber-400" : "bg-[#3d7be0]"}`} style={{ width: `${term.remainingPercent}%` }} /></div> : null}
     {term.expired ? <div className="mt-4">
-      <button type="button" onClick={renewal.renew} disabled={renewal.busy} aria-busy={renewal.busy} className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#0057ff] px-4 py-3 text-sm font-extrabold text-white transition hover:bg-[#004de6] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-wait disabled:opacity-65">
-        {renewal.busy ? <Loader2 size={18} className="animate-spin" /> : <RotateCcw size={18} />}{renewal.busy ? "Отправляем…" : "Опубликовать снова"}
+      <button type="button" onClick={() => void renewal.renew(billing.data?.freeRenewalAvailable ? "free" : "plan").then(() => billing.refresh())} disabled={renewal.busy || billing.loading || !billing.data} aria-busy={renewal.busy} className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#0057ff] px-4 py-3 text-sm font-extrabold text-white transition hover:bg-[#004de6] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-wait disabled:opacity-65">
+        {renewal.busy ? <Loader2 size={18} className="animate-spin" /> : <RotateCcw size={18} />}{renewal.busy ? "Отправляем…" : billing.data?.freeRenewalAvailable ? "Продлить бесплатно на 30 дней" : "Продлить по тарифу на 30 дней"}
       </button>
-      <p className="mt-2 text-center text-xs leading-5 text-slate-500">На новый месяц · с проверкой объявления</p>
+      <p className="mt-2 text-center text-xs leading-5 text-slate-500">{billing.data?.freeRenewalAvailable ? "Один подарок на весь аккаунт — для этого объявления" : "Используется одно размещение из тарифа"}</p>
     </div> : null}
+    {term.expired && <Link href="/plans" className="mt-3 block text-sm font-bold text-blue-600">Тарифы и условия →</Link>}
     {renewal.error ? <p role="alert" className="mt-3 text-sm font-semibold leading-6 text-red-600">{renewal.error}</p> : null}
   </section>;
 }

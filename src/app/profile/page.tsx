@@ -1,4 +1,5 @@
 "use client";
+import AccountServiceLinks from "@/components/AccountServiceLinks";
 import { contactRequest } from "@/lib/contact-request";
 import PublicationPlacementCard from "@/components/PublicationPlacementCard";
 import { isPublicationExpired } from "@/lib/publication-lifetime";
@@ -385,6 +386,7 @@ export default function ProfilePage() {
 
         <div className="my-profile-enter mt-6" style={{ animationDelay: "80ms" }}>
           <ProfileTools />
+            <AccountServiceLinks />
         </div>
 
         <div className="mt-5 grid gap-5 sm:mt-6 sm:gap-6 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">

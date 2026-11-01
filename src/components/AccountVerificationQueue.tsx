@@ -102,7 +102,7 @@ export default function AccountVerificationQueue() {
                         {request.name || "Пользователь"}
                       </span>
                       <span className="mt-1 block text-xs text-slate-500">
-                        {verificationRoleLabel(request.role)} ·{" "}
+                        {request.accountType === "ip" ? "ИП" : request.accountType === "ooo" ? "ООО" : "Физлицо"} ·{" "}
                         {request.city || "Город не указан"}
                       </span>
                       <span className="mt-3 block text-xs text-blue-700">
@@ -142,7 +142,7 @@ export default function AccountVerificationQueue() {
                     </div>
                     <dl className="mt-6 grid gap-4 text-sm sm:grid-cols-2">
                       {[
-                        ["Роль", verificationRoleLabel(item.role)],
+                        ["Роль в предыдущей форме", item.schemaVersion < 4 ? verificationRoleLabel(item.role) : ""],
                         [
                           "Тип аккаунта",
                           item.accountType === "ip"
@@ -152,6 +152,7 @@ export default function AccountVerificationQueue() {
                               : "Физлицо",
                         ],
                         ["Год рождения", item.birthYear],
+                        ["Согласие на обработку документов", item.documentConsent ? "Получено при отправке" : ""],
                         [
                           "Связь с компанией",
                           item.accountType === "individual"
@@ -182,15 +183,14 @@ export default function AccountVerificationQueue() {
                           </div>
                         ))}
                     </dl>
-                    <div className="mt-6 rounded-2xl bg-slate-50 p-4">
+                    {item.message ? <div className="mt-6 rounded-2xl bg-slate-50 p-4">
                       <p className="text-xs text-slate-400">
-                        О себе или компании
+                        {item.schemaVersion >= 4 ? "Комментарий к заявке" : "О себе или компании"}
                       </p>
                       <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6">
-                        {item.message ||
-                          "Описание не заполнено в предыдущей версии формы."}
+                        {item.message}
                       </p>
-                    </div>
+                    </div> : null}
                     <VerificationAttachments
                       key={item.id}
                       files={item.attachments}

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { User } from "firebase/auth";
 import {
   EMPTY_VERIFICATION_FORM,
-  VERIFICATION_CATEGORIES,
   verificationFormError,
   verificationAccountType,
   type VerificationForm,
@@ -85,6 +84,7 @@ export function useVerificationApplication(
   }, [load]);
   useEffect(() => {
     const request = state?.request,
+      accountType = verificationAccountType(profile?.accountType || state?.accountType),
       fillRequest = Boolean(request && request.id !== hydrated.current);
     if (fillRequest) hydrated.current = request!.id;
     setDraft((previous) => {
@@ -94,9 +94,7 @@ export function useVerificationApplication(
         uid,
         value: {
           ...value,
-          accountType: verificationAccountType(
-            profile?.accountType || state?.accountType,
-          ),
+          accountType,
           name: fillRequest
             ? request!.name
             : dirty.current.has("name")
@@ -131,16 +129,20 @@ export function useVerificationApplication(
           phone: normalizeRussianPhone(String(profile?.phone || "")),
           ...(fillRequest
             ? {
-                role: request!.role,
-                category: VERIFICATION_CATEGORIES.includes(request!.category)
-                  ? request!.category
-                  : VERIFICATION_CATEGORIES[0],
-                experience: request!.experience,
+                role: "both",
+                category: "",
+                experience: "",
                 message: request!.message,
                 patronymic: request!.patronymic || "",
                 birthYear: request!.birthYear || "",
                 companyRole: request!.companyRole || "owner",
-                attachments: request!.attachments || [],
+                // A prior portfolio is not an identity document. Keep history at the moderator, not in the new draft.
+                attachments: (request!.attachments || []).filter((file) =>
+                  accountType === "individual"
+                    ? file.kind === "passport"
+                    : file.kind === "registration" || file.kind === "authority",
+                ),
+                documentConsent: false,
               }
             : {}),
         },

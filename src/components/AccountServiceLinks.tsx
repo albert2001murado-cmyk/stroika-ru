@@ -1,0 +1,5 @@
+"use client";
+import Link from "next/link";
+import { ArrowUpRight, Layers3, ShieldCheck } from "lucide-react";
+const items = [{ href: "/plans", title: "Тарифы", text: "Размещения и подарки", icon: Layers3 }, { href: "/profile/security", title: "Безопасность", text: "Двухэтапный вход", icon: ShieldCheck }];
+export default function AccountServiceLinks() { return <section aria-label="Управление аккаунтом" className="my-6 grid gap-3 sm:grid-cols-2">{items.map(item => <Link key={item.href} href={item.href} className="group flex items-center gap-3 rounded-[24px] border border-blue-100 bg-white p-5 transition hover:border-blue-300 hover:shadow-sm"><span className="rounded-2xl bg-blue-50 p-3 text-blue-600"><item.icon size={22}/></span><span className="min-w-0 flex-1"><span className="block text-base font-extrabold text-slate-900">{item.title}</span><span className="mt-1 block text-xs leading-5 text-slate-500">{item.text}</span></span><ArrowUpRight size={16} className="text-slate-400 group-hover:text-blue-600"/></Link>)}</section>; }

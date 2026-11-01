@@ -196,7 +196,7 @@ function buildActions(
             selection: {
               category: resolveCategoryName(categories, serviceLink.category),
               subcategory: serviceLink.subcategory,
-              search: "",
+              search: serviceLink.search || "",
               sourceMaterial: subcategory,
             },
           },

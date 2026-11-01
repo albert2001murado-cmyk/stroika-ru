@@ -1,0 +1,42 @@
+{
+  "name": "stroika-ru",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --webpack",
+    "build": "next build",
+    "start": "node server.js",
+    "lint": "next lint",
+    "postbuild": "node scripts/prepare-standalone.mjs",
+    "typecheck": "tsc --noEmit",
+    "test:security": "node --test tests/security.test.mjs",
+    "test:rules": "npm --prefix security-tests test"
+  },
+  "dependencies": {
+    "@apple/app-store-server-library": "^3.1.0",
+    "@aws-sdk/client-s3": "^3.1075.0",
+    "expo": "^57.0.22",
+    "firebase": "^12.15.0",
+    "firebase-admin": "^14.2.0",
+    "lucide-react": "^1.21.0",
+    "next": "16.4.0",
+    "nodemailer": "10.1.0",
+    "qrcode-generator": "^2.0.4",
+    "react": "19.2.4",
+    "react-dom": "19.2.4"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/nodemailer": "^8.0.1",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.4.0",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  },
+  "overrides": {
+    "@grpc/grpc-js": "^1.14.6"
+  }
+}

@@ -13,6 +13,7 @@ import {
   verificationAccountType,
   verificationFullName,
   VERIFICATION_MAX_FILES,
+  VERIFICATION_DOCUMENT_CONSENT,
   publicationVerificationFields,
   type VerificationForm,
   type VerificationRequest,
@@ -35,6 +36,8 @@ export function verificationView(
 ): VerificationRequest {
   return {
     id,
+    schemaVersion: Number(data.schemaVersion || 0),
+    documentConsent: data.documentConsent === true,
     userId: text(data.userId, 128),
     email: text(data.email || profile.email, 254),
     name: text(
@@ -59,6 +62,7 @@ export function verificationView(
     phone: text(data.phone || profile.phone, 40),
     city: text(data.city || profile.city, 120),
     role:
+      Number(data.schemaVersion || 0) >= 4 ? "both" :
       data.role === "customer" || data.role === "both"
         ? data.role
         : "contractor",
@@ -272,11 +276,12 @@ export async function submitVerification(
       attachments: files.map((file) =>
         verificationAttachmentView(file.id, file.data()!),
       ),
+      documentConsent: body.documentConsent === true,
       phone: normalizeRussianPhone(profile.phone),
       city: text(body.city, 121),
-      role: body.role as VerificationForm["role"],
-      category: text(body.category, 160),
-      experience: text(body.experience, 81),
+      role: "both",
+      category: "",
+      experience: "",
       message: text(body.message, 3001),
     };
     const error = verificationFormError(form);
@@ -290,16 +295,13 @@ export async function submitVerification(
       form.patronymic = "";
       form.birthYear = "";
     }
-    if (form.role === "customer") {
-      form.category = "";
-      form.experience = "";
-    }
     const now = FieldValue.serverTimestamp();
+    const { role: _role, category: _category, experience: _experience, ...identityForm } = form;
     tx.create(requestRef, {
-      ...form,
+      ...identityForm,
       userId: uid,
       email: text(profile.email, 254),
-      accountType: profile.accountType || "individual",
+      accountType: form.accountType,
       companyName: text(profile.companyName, 300),
       inn: text(profile.companyInn, 20),
       ogrn: text(profile.companyOgrn, 20),
@@ -309,7 +311,10 @@ export async function submitVerification(
         avatarUrl: text(profile.avatarUrl || profile.photoURL, 2000),
         accountType: profile.accountType || "individual",
       },
-      schemaVersion: 3,
+      schemaVersion: 4,
+      documentConsentText: VERIFICATION_DOCUMENT_CONSENT,
+      documentConsentVersion: 1,
+      documentConsentAt: now,
       source: "verification-button",
       submittedAt: now,
       status: "pending",

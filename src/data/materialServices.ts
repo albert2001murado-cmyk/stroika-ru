@@ -9,6 +9,7 @@ export type MaterialServiceLink = {
   section: MaterialServiceSection;
   imageCategoryId: string;
   actionTitle: string;
+  search?: string;
 };
 
 type ServiceTarget = Omit<MaterialServiceLink, "actionTitle"> & {
@@ -57,7 +58,7 @@ const MATERIAL_ACTION_TITLE_OVERRIDES = new Map<string, string>([
   [normalize("Бордюр резиновый"), "Найти монтажника бордюров"],
   [normalize("Бордюр гранитный"), "Найти монтажника бордюров"],
   [normalize("Заборы и ограждения"), "Найти монтажника ограждений"],
-  [normalize("Секционный забор"), "Найти монтажника секционного забора"],
+  [normalize("3D ограждения"), "Найти мастера по 3D ограждениям"],
   [normalize("Сетка металлическая"), "Найти монтажника ограждений"],
   [normalize("Ванны"), "Найти установщика ванны"],
   [normalize("Душевые кабины"), "Найти установщика душевой кабины"],
@@ -581,12 +582,18 @@ register(["Ливневые лотки", "Канализационные люк�
   actionTitle: "Найти монтажника ливневки",
 });
 
-register(["Заборы и ограждения", "Секционный забор", "Сетка металлическая"], {
+register(["Заборы и ограждения", "3D ограждения", "Сетка металлическая"], {
   category: "Участок и благоустройство",
   subcategory: "Установка ограждений",
   section: "services",
   imageCategoryId: "landscape",
   actionTitle: "Найти монтажника ограждений",
+});
+
+register(["3D ограждения"], {
+  category: "Участок и благоустройство", subcategory: "Установка ограждений",
+  section: "services", imageCategoryId: "landscape",
+  actionTitle: "Найти мастера по 3D ограждениям", search: "3D ограждения",
 });
 
 register(["Ворота и калитки"], {
@@ -608,7 +615,8 @@ register(["Системы автополива"], {
 register(["Мягкая кровля", "Композитная черепица"], { category: "Крыша и фасад", subcategory: "Монтаж кровли", section: "services", imageCategoryId: "roof", actionTitle: "Найти кровельщиков" });
 
 export function getMaterialServiceLink(material?: string) {
-  return links.get(normalize(material)) || null;
+  const current = canonicalCatalogFields({ catalogSection: "materials", category: "Материалы", subcategory: material }).subcategory;
+  return links.get(normalize(current)) || null;
 }
 
 export function materialNeedsSpecialist(material?: string) {

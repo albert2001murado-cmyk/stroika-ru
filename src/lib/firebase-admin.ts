@@ -1,6 +1,7 @@
 import { cert, getApps, initializeApp, type App } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
+import { assertAccountSession } from "./account-security-session";
 
 let adminApp: App | null = null;
 
@@ -34,8 +35,28 @@ export function getFirebaseAdminApp(): App {
   return adminApp;
 }
 
-export function getAdminAuth() {
+/** Only the security bootstrap endpoints may use unverified-first-factor tokens. */
+export function getRawAdminAuth() {
   return getAuth(getFirebaseAdminApp());
+}
+
+let guardedAuth: ReturnType<typeof getAuth> | null = null;
+export function getAdminAuth() {
+  if (!guardedAuth) {
+    const raw = getRawAdminAuth();
+    guardedAuth = new Proxy(raw, {
+      get(target, property) {
+        if (property === "verifyIdToken") return async (token: string, checkRevoked = true) => {
+          const decoded = await target.verifyIdToken(token, checkRevoked);
+          await assertAccountSession(getAdminDb(), decoded);
+          return decoded;
+        };
+        const value = Reflect.get(target, property, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+  }
+  return guardedAuth;
 }
 
 export function getAdminDb() {

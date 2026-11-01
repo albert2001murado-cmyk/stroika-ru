@@ -1,4 +1,6 @@
 "use client";
+import BillingAllowance from "@/components/BillingAllowance";
+import { createAccountPublication, newAccountRequestId } from "@/lib/accountClient";
 import PublicationTerm from "@/components/PublicationTerm";
 import { uploadAuthHeaders } from "@/lib/uploadAuth";
 
@@ -166,6 +168,7 @@ export default function NewListingPage() {
 
   const defaultCatalogPath = getDefaultCatalogPath("services");
 
+  const [publicationRequestId] = useState(newAccountRequestId);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [catalogSection, setCatalogSection] = useState(
@@ -443,7 +446,7 @@ export default function NewListingPage() {
       const capabilities = Array.from(new Set(offerActionIds.flatMap((actionId) =>
         legacyCapabilitiesFromOffer(offerGroup, actionId, offerFeatures)
       )));
-      const listingRef = await addDoc(collection(db, "listings"), {
+      const listingRef = await createAccountPublication("listing", {
         title: title.trim(),
         description: description.trim(),
         category,
@@ -513,7 +516,7 @@ export default function NewListingPage() {
         moderationSubmittedAt: serverTimestamp(),
         moderationSource: "web",
         createdAt: serverTimestamp(),
-      });
+      }, publicationRequestId);
 
       void requestPublicationModeration("listing", listingRef.id);
       alert("Анкета проверяется автоматически. Обычно это занимает до 5 минут.");
@@ -849,6 +852,7 @@ export default function NewListingPage() {
               </div>
             </section>
 
+          <BillingAllowance catalog={catalogSection} />
           <PublicationTerm />
             <button
               type="submit"

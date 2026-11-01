@@ -1,5 +1,4 @@
 import { NextRequest } from "next/server";
-import { readJsonObject } from "@/lib/request-body";
 import {
   ownVerification,
   submitVerification,
@@ -8,6 +7,7 @@ import {
   verificationActor,
   verificationFailure,
   verificationJson,
+  readVerificationBody,
 } from "@/lib/verification-api-server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     return verificationJson(
       await submitVerification(
         user.uid,
-        await readJsonObject(request, false, 16_384),
+        await readVerificationBody(request),
       ),
     );
   } catch (error) {

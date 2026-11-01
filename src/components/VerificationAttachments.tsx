@@ -25,25 +25,27 @@ export default function VerificationAttachments({
   accountType = "individual",
   onChange,
   disabled = false,
+  documentConsent = false,
   onBusyChange,
 }: {
   files?: VerificationAttachment[];
   accountType?: VerificationAccountType;
   onChange?: (files: VerificationAttachment[]) => void;
   disabled?: boolean;
+  documentConsent?: boolean;
   onBusyChange?: (busy: boolean) => void;
 }) {
   const { user } = useAuth();
   const individual = accountType === "individual",
     editable = Boolean(onChange);
   const [kind, setKind] = useState<VerificationAttachmentKind>(
-    individual ? "portfolio" : "registration",
+    individual ? "passport" : "registration",
   );
   const [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const activeKind = individual
-    ? "portfolio"
-    : kind === "portfolio"
+    ? "passport"
+    : kind !== "registration" && kind !== "authority"
       ? "registration"
       : kind;
   function working(value: boolean) {
@@ -53,7 +55,7 @@ export default function VerificationAttachments({
   async function upload(event: ChangeEvent<HTMLInputElement>) {
     const picked = Array.from(event.target.files || []);
     event.target.value = "";
-    if (!user || !picked.length || busy || disabled || !onChange) return;
+    if (!user || !picked.length || busy || disabled || !onChange || !documentConsent) return;
     if (picked.length + files.length > VERIFICATION_MAX_FILES) {
       setError(`Можно прикрепить до ${VERIFICATION_MAX_FILES} файлов.`);
       return;
@@ -70,6 +72,7 @@ export default function VerificationAttachments({
         const body = new FormData();
         body.append("file", file);
         body.append("kind", activeKind);
+        body.append("documentConsent", "true");
         const response = await verificationFileRequest(
           user,
           getApiUrl("/api/verification/files"),
@@ -141,19 +144,14 @@ export default function VerificationAttachments({
     <section className="mt-5 rounded-2xl border border-blue-100 bg-blue-50/40 p-4 sm:p-5">
       <h3 className="flex items-center gap-2 font-bold text-slate-900">
         <Paperclip size={18} className="text-blue-600" />
-        {individual ? "Портфолио" : "Документы компании"}
-        {individual && editable ? (
-          <span className="text-xs font-normal text-slate-500">
-            необязательно
-          </span>
-        ) : null}
+        {individual ? "Паспорт" : "Документы ИП / ООО"}
       </h3>
       {editable ? (
         <>
           <p className="mt-2 text-sm leading-6 text-slate-500">
             {individual
-              ? "Есть фото ваших работ? Добавьте их, если хотите. Отсутствие портфолио не мешает проверке."
-              : "Приложите документы о регистрации и, при необходимости, документ о ваших полномочиях."}
+              ? "Приложите чёткое фото или скан разворота паспорта с фотографией. Достаточно этого разворота — другие страницы не требуются."
+              : "Приложите уставные или регистрационные документы, чтобы подтвердить организацию, и документ о полномочиях, если действуете как представитель."}
           </p>
           {!individual ? (
             <div className="mt-3 flex flex-wrap gap-2">
@@ -181,7 +179,7 @@ export default function VerificationAttachments({
             </p>
           ) : null}
           <label
-            className={`mt-4 inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-700 ${busy || disabled || files.length >= VERIFICATION_MAX_FILES ? "pointer-events-none opacity-50" : ""}`}
+            className={`mt-4 inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-700 ${busy || disabled || !documentConsent || files.length >= VERIFICATION_MAX_FILES ? "pointer-events-none opacity-50" : ""}`}
           >
             {busy ? (
               <Loader2 size={16} className="animate-spin" />
@@ -191,28 +189,24 @@ export default function VerificationAttachments({
             {busy
               ? "Загружаем…"
               : individual
-                ? "Добавить фото работ"
+                ? "Прикрепить паспорт"
                 : "Прикрепить документы"}
             <input
               aria-label={
-                individual ? "Добавить фото работ" : "Прикрепить документы"
+                individual ? "Прикрепить паспорт" : "Прикрепить документы"
               }
               type="file"
               multiple
               className="sr-only"
-              accept={
-                individual
-                  ? "image/jpeg,image/png,image/webp"
-                  : VERIFICATION_FILE_ACCEPT
-              }
+              accept={VERIFICATION_FILE_ACCEPT}
               onChange={(event) => void upload(event)}
               disabled={
-                busy || disabled || files.length >= VERIFICATION_MAX_FILES
+                busy || disabled || !documentConsent || files.length >= VERIFICATION_MAX_FILES
               }
             />
           </label>
           <p className="mt-2 text-xs text-slate-400">
-            {individual ? "JPG, PNG, WebP" : "PDF, JPG, PNG, WebP"} · до 10 МБ
+            PDF, JPG, PNG, WebP · до 10 МБ
             на файл · до 6 файлов
           </p>
         </>

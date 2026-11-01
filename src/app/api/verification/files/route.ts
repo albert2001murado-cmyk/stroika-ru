@@ -32,6 +32,7 @@ export async function POST(request: NextRequest) {
         actor.uid,
         file,
         String(body.get("kind") || ""),
+        body.get("documentConsent") === "true",
       ),
     });
   } catch (error) {

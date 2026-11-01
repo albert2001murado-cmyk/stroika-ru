@@ -10,9 +10,12 @@
     "postbuild": "node scripts/prepare-standalone.mjs",
     "typecheck": "tsc --noEmit",
     "test:security": "node --test tests/security.test.mjs",
-    "test:rules": "npm --prefix security-tests test"
+    "test:rules": "npm --prefix security-tests test",
+    "security:check": "node scripts/configure-strova-security.cjs --check",
+    "security:test": "npx firebase-tools@14.27.0 emulators:exec --config firebase.security-tests.json --project demo-strova-own-mfa --only auth,firestore \"node tests/account-security.emulator.cjs\""
   },
   "dependencies": {
+    "@apple/app-store-server-library": "^3.1.0",
     "@aws-sdk/client-s3": "^3.1075.0",
     "expo": "^57.0.22",
     "firebase": "^12.15.0",
@@ -20,8 +23,10 @@
     "lucide-react": "^1.21.0",
     "next": "16.4.0",
     "nodemailer": "10.1.0",
+    "qrcode-generator": "^2.0.4",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "otpauth": "9.5.2"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

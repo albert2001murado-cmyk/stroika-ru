@@ -9,6 +9,7 @@ import { VerificationError } from "./verification-errors";
 import {
   VERIFICATION_FILE_LIMIT,
   VERIFICATION_RETRY_MS,
+  VERIFICATION_DOCUMENT_CONSENT,
   verificationAccountType,
   type VerificationAttachment,
   type VerificationAttachmentKind,
@@ -23,7 +24,7 @@ export const isVerificationFileId = (id: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
     id,
   );
-const kinds = ["registration", "authority", "portfolio"];
+const kinds = ["registration", "authority", "passport"];
 
 export function verificationAttachmentView(
   id: string,
@@ -55,7 +56,12 @@ export async function saveVerificationAttachment(
   uid: string,
   file: File,
   kind: string,
+  documentConsent = false,
 ) {
+  if (documentConsent !== true)
+    throw new VerificationError(
+      "Подтвердите согласие на обработку документов для проверки аккаунта.",
+    );
   if (!kinds.includes(kind))
     throw new VerificationError("Выберите назначение файла.");
   if (!file.size || file.size > VERIFICATION_FILE_LIMIT)
@@ -66,7 +72,11 @@ export async function saveVerificationAttachment(
     throw new VerificationError("Аккаунту недоступна загрузка.", 403);
   const individual =
     verificationAccountType(profile.get("accountType")) === "individual";
-  if (individual ? kind !== "portfolio" : kind === "portfolio")
+  if (
+    individual
+      ? kind !== "passport"
+      : !["registration", "authority"].includes(kind)
+  )
     throw new VerificationError("Этот файл не подходит для типа аккаунта.");
   const requestId = profile.get("verificationRequestId");
   if (typeof requestId === "string" && isDocumentId(requestId)) {
@@ -98,15 +108,8 @@ export async function saveVerificationAttachment(
               bytes.subarray(8, 12).toString("ascii") === "WEBP"
             ? "image/webp"
             : "";
-  if (
-    !contentType ||
-    (kind === "portfolio" && contentType === "application/pdf")
-  )
-    throw new VerificationError(
-      kind === "portfolio"
-        ? "Для портфолио подойдут фото JPG, PNG или WebP."
-        : "Подойдут PDF, JPG, PNG или WebP.",
-    );
+  if (!contentType)
+    throw new VerificationError("Подойдут PDF, JPG, PNG или WebP.");
   const budgetRef = db.doc(`verificationUploadLimits/${uid}`),
     day = new Date().toISOString().slice(0, 10);
   await db.runTransaction(async (tx) => {
@@ -136,6 +139,10 @@ export async function saveVerificationAttachment(
     contentType,
     kind,
     requestIds: [],
+    documentConsent: true,
+    documentConsentText: VERIFICATION_DOCUMENT_CONSENT,
+    documentConsentVersion: 1,
+    documentConsentAt: FieldValue.serverTimestamp(),
     createdAt: FieldValue.serverTimestamp(),
   };
   await mkdir(privateRoot(), { recursive: true, mode: 0o700 });

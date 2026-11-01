@@ -4,6 +4,7 @@ export type VerificationAccountType = "individual" | "ip" | "ooo";
 export type VerificationAttachmentKind =
   | "registration"
   | "authority"
+  | "passport"
   | "portfolio";
 export type VerificationAttachment = {
   id: string;
@@ -16,6 +17,8 @@ export const VERIFICATION_FILE_LIMIT = 10 * 1024 * 1024;
 export const VERIFICATION_MAX_FILES = 6;
 export const VERIFICATION_FILE_ACCEPT =
   "application/pdf,image/jpeg,image/png,image/webp";
+export const VERIFICATION_DOCUMENT_CONSENT =
+  "Я согласен на обработку прикреплённых документов и указанных данных для проверки аккаунта в Строве";
 export type VerificationForm = {
   accountType: VerificationAccountType;
   name: string;
@@ -25,6 +28,7 @@ export type VerificationForm = {
   birthYear: string;
   companyRole: "owner" | "representative";
   attachments: VerificationAttachment[];
+  documentConsent: boolean;
   phone: string;
   city: string;
   role: VerificationRole;
@@ -33,6 +37,7 @@ export type VerificationForm = {
   message: string;
 };
 export type VerificationRequest = VerificationForm & {
+  schemaVersion: number;
   id: string;
   userId: string;
   email: string;
@@ -90,10 +95,11 @@ export const EMPTY_VERIFICATION_FORM: VerificationForm = {
   birthYear: "",
   companyRole: "owner",
   attachments: [],
+  documentConsent: false,
   phone: "",
   city: "",
-  role: "contractor",
-  category: "Ремонт квартир",
+  role: "both",
+  category: "",
   experience: "",
   message: "",
 };
@@ -152,6 +158,8 @@ export function verificationFormError(value: VerificationForm): string {
       Number(value.birthYear) > new Date().getFullYear()
     )
       return "Укажите корректный год рождения.";
+    if (!value.attachments.some((file) => file.kind === "passport"))
+      return "Приложите разворот паспорта с фотографией.";
   } else if (value.accountType === "ip" || value.accountType === "ooo") {
     if (value.name.trim().length < 2 || value.name.trim().length > 120)
       return "Укажите имя представителя — от 2 до 120 символов.";
@@ -178,7 +186,7 @@ export function verificationFormError(value: VerificationForm): string {
         file.size <= 0 ||
         file.size > VERIFICATION_FILE_LIMIT ||
         (value.accountType === "individual"
-          ? file.kind !== "portfolio"
+          ? file.kind !== "passport"
           : !["registration", "authority"].includes(file.kind)),
     )
   )
@@ -187,22 +195,20 @@ export function verificationFormError(value: VerificationForm): string {
     return "Сначала сохраните корректный телефон в настройках профиля.";
   if (value.city.trim().length < 2 || value.city.trim().length > 120)
     return "Укажите город — от 2 до 120 символов.";
-  if (!VERIFICATION_ROLES.some((role) => role.id === value.role))
-    return "Выберите роль на площадке.";
-  if (
-    value.role !== "customer" &&
-    (!VERIFICATION_CATEGORIES.includes(value.category) ||
-      value.experience.length > 80)
-  )
-    return "Проверьте направление и опыт работы.";
-  if (value.message.trim().length < 20 || value.message.trim().length > 3000)
-    return "Расскажите о себе или компании — от 20 до 3000 символов.";
+  if (value.documentConsent !== true)
+    return "Подтвердите согласие на обработку документов для проверки аккаунта.";
+  if (value.message.trim().length > 3000)
+    return "Комментарий к заявке — до 3000 символов.";
   return "";
 }
 export function verificationAccountType(
   value: unknown,
 ): VerificationAccountType {
-  return value === "ip" || value === "ooo" ? value : "individual";
+  return value === "company"
+    ? "ooo"
+    : value === "ip" || value === "ooo"
+      ? value
+      : "individual";
 }
 export function verificationFullName(
   value: Pick<VerificationForm, "firstName" | "lastName" | "patronymic">,
@@ -215,11 +221,13 @@ export function verificationFullName(
 export function verificationAttachmentLabel(
   kind: VerificationAttachmentKind,
 ): string {
-  return kind === "registration"
-    ? "Документы о регистрации"
-    : kind === "authority"
-      ? "Подтверждение полномочий"
-      : "Портфолио";
+  return kind === "passport"
+    ? "Паспорт — разворот с фотографией"
+    : kind === "registration"
+      ? "Уставные / регистрационные документы"
+      : kind === "authority"
+        ? "Подтверждение полномочий"
+        : "Портфолио";
 }
 export function verificationButtonLabel(
   profile?: Record<string, unknown> | null,

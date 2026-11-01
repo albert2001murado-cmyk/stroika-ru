@@ -1,4 +1,5 @@
 "use client";
+import { accountRequest } from "@/lib/accountClient";
 import { canonicalCatalogFields } from "@/data/catalogUpdates";
 import { uploadAuthHeaders } from "@/lib/uploadAuth";
 
@@ -262,7 +263,7 @@ export default function EditCustomerRequestPage() {
       }
 
       const geo = pickedLocation || await geocodePublicationLocation(city, address);
-      await updateDoc(doc(db, "customerRequests", requestId), {
+      await accountRequest("/api/publications/edit", { kind: "request", id: requestId, publication: {
         title: title.trim(),
         description: description.trim(),
         category,
@@ -284,7 +285,7 @@ export default function EditCustomerRequestPage() {
         status,
         imageUrls,
         updatedAt: serverTimestamp(),
-      });
+      } });
 
       images.forEach((image) => {
         if (isLocalImage(image)) URL.revokeObjectURL(image.previewUrl);

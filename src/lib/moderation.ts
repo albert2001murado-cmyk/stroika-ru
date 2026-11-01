@@ -12,8 +12,12 @@ export function isPublicationModerationApproved(item: { moderationStatus?: unkno
   return status === "" || status === "approved";
 }
 
-export function isPublicationApproved(item: { moderationStatus?: unknown } | null | undefined) {
-  return isPublicationModerationApproved(item) && !isPublicationExpired(item);
+export function isPublicationApproved(source: unknown) {
+  if (!source || typeof source !== "object") return false;
+  const item = source as Record<string, unknown>;
+  return !item.deleted && !item.isDeleted && !item.hidden && !item.isHidden && !item.archived && item.isActive !== false &&
+    !["closed", "inactive", "archived", "deleted", "canceled", "cancelled", "completed", "paused"].includes(String(item.status || "")) &&
+    isPublicationModerationApproved({ moderationStatus: item.moderationStatus }) && !isPublicationExpired(item);
 }
 
 export function isReviewApproved(item: { moderationStatus?: unknown } | null | undefined) {
@@ -24,6 +28,7 @@ export function isReviewApproved(item: { moderationStatus?: unknown } | null | u
 }
 
 export function moderationLabel(status?: unknown) {
+  if (status === "payment_required") return "Оплата возвращена";
   if (status === "pending") return "На модерации";
   if (status === "manual_review") return "Дополнительная проверка";
   if (status === "rejected") return "Нужно исправить";

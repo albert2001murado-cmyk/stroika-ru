@@ -1,4 +1,6 @@
 "use client";
+import MfaChallenge from "@/components/MfaChallenge";
+import { useMfaChallenge } from "@/lib/useMfaChallenge";
 
 import { ContactRequestError, contactRequest } from "@/lib/contact-request";
 import { useAuth } from "@/components/AuthProvider";
@@ -85,6 +87,7 @@ function readableAuthError(error: unknown) {
 
 export default function AuthPage() {
   const router = useRouter();
+  const mfa = useMfaChallenge();
   const { register, login, resetPassword } = useAuth();
 
   const [mode, setMode] = useState<"register" | "login">("register");
@@ -294,6 +297,7 @@ export default function AuthPage() {
         : "/";
       router.push(nextPath.startsWith("/") && !nextPath.startsWith("//") ? nextPath : "/");
     } catch (submitError) {
+      if (mfa.capture(submitError)) { setPassword(""); return; }
       console.error(submitError);
 
       if (mode === "login" && loginMethod === "phone" && !confirmation) {
@@ -350,6 +354,11 @@ export default function AuthPage() {
     mode === "login" &&
     loginMethod === "phone" &&
     (loginPhone.length !== 10 || (Boolean(confirmation) && smsCode.length !== 6));
+
+  if (mfa.resolver) return <main className="app-page px-4 py-8"><MfaChallenge value={mfa} onConfirm={() => void mfa.confirm(() => {
+    const next = new URLSearchParams(window.location.search).get("next") || "/";
+    router.push(next.startsWith("/") && !next.startsWith("//") ? next : "/");
+  })}/></main>;
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#f4f7fc] px-4 py-5 sm:px-6 sm:py-7 lg:px-8">

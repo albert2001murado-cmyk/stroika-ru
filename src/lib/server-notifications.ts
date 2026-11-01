@@ -1,7 +1,8 @@
-import { pushPreview, validExpoPushToken } from "./security-policy";
+import { pushPreview } from "./security-policy";
 import { createHash } from "crypto";
 import { FieldValue, type Transaction } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase-admin";
+import { activeAppPushTokens } from "./app-notifications-server";
 
 export type ServerNotificationInput = {
   recipientId: string;
@@ -15,6 +16,8 @@ export type ServerNotificationInput = {
   chatId?: string;
   dedupeKey?: string;
   durableDedupe?: boolean;
+  /** Discovery belongs only on the phone; it must not create website inbox entries. */
+  pushOnly?: boolean;
   match?: { requestId: string; listingId: string; distanceKm: number };
 };
 
@@ -62,7 +65,9 @@ async function sendExpoPush(
     const messages = chunk.map((to) => ({
       to,
       sound: "default",
-      channelId: input.type === "message" ? "messages" : input.type === "nearby_request" ? "nearby-orders" : "default",
+      ...(input.type.startsWith("engagement_") ? { ttl: 1800 } : {}),
+      ...(input.type.startsWith("engagement_") ? { categoryId: "STROVA_RECOMMENDATIONS" } : {}),
+      channelId: input.type.startsWith("engagement_") ? "recommendations" : input.type === "message" ? "messages" : input.type === "nearby_request" ? "nearby-orders" : "default",
       ...pushPreview(input.type, input.title, input.body),
       data: {
         url: input.url,
@@ -118,16 +123,16 @@ export async function deliverServerNotification(
     ? db.doc(`users/${recipientId}/notifications/${stableId}`)
     : db.collection(`users/${recipientId}/notifications`).doc();
   const receipt = raw.durableDedupe && stableId
-    ? db.doc(`nearbyMatchDeliveries/${stableId}`) : null;
+    ? db.doc(`${type.startsWith("engagement_") ? "engagementDeliveries" : "nearbyMatchDeliveries"}/${stableId}`) : null;
 
   const created = await db.runTransaction(async (transaction) => {
     if (receipt && (await transaction.get(receipt)).exists) return false;
-    if (stableId) {
+    if (stableId && !raw.pushOnly) {
       const existing = await transaction.get(reference);
       if (existing.exists) return false;
     }
     if (guard && !(await guard(transaction))) return false;
-    transaction.create(reference, {
+    if (!raw.pushOnly) transaction.create(reference, {
       userId: recipientId,
       actorId,
       actorName: clean(raw.actorName || (actorId === "system" ? "Строва" : "Пользователь"), 120),
@@ -144,7 +149,7 @@ export async function deliverServerNotification(
       ...(raw.match ? { match: raw.match } : {}),
     });
     if (receipt) transaction.create(receipt, {
-      recipientId, entityId, notificationId: reference.id,
+      recipientId, entityId, notificationId: raw.pushOnly ? "" : reference.id,
       createdAt: FieldValue.serverTimestamp(),
     });
     return true;
@@ -154,19 +159,7 @@ export async function deliverServerNotification(
     return { ok: true, sent: 0, duplicate: true, notificationId: reference.id } as const;
   }
 
-  const tokensSnapshot = await db
-    .collection(`users/${recipientId}/pushTokens`)
-    .where("enabled", "==", true)
-    .select("token")
-    .limit(100)
-    .get();
-  const tokens = [
-    ...new Set(
-      tokensSnapshot.docs
-        .map((item) => item.data().token)
-        .filter(validExpoPushToken)
-    ),
-  ];
+  const tokens = await activeAppPushTokens(recipientId);
   const sent = await sendExpoPush(tokens, {
     title,
     body,
@@ -174,10 +167,11 @@ export async function deliverServerNotification(
     type,
     entityId,
     chatId,
-    notificationId: reference.id,
+    notificationId: raw.pushOnly ? "" : reference.id,
     recipientId,
   });
-  await reference.set(
+  const deliveryRecord = raw.pushOnly ? receipt : reference;
+  if (deliveryRecord) await deliveryRecord.set(
     {
       pushAttemptedAt: FieldValue.serverTimestamp(),
       pushTokenCount: tokens.length,
