@@ -15,10 +15,13 @@ import {
   type VerificationAttachmentKind,
 } from "./accountVerification";
 
+// Uploaded documents exist only on the running server. They are not build assets.
+// Keep the runtime path and permissions; opt these accesses out of bundle tracing.
 const privateRoot = () =>
   path.resolve(
+    /* turbopackIgnore: true */
     process.env.VERIFICATION_DOCUMENTS_DIR ||
-      path.join(process.cwd(), "..", "strova-private", "verification"),
+      path.join(/* turbopackIgnore: true */ process.cwd(), "..", "strova-private", "verification"),
   );
 export const isVerificationFileId = (id: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
@@ -130,7 +133,7 @@ export async function saveVerificationAttachment(
     });
   });
   const id = randomUUID(),
-    target = path.join(privateRoot(), id);
+    target = path.join(/* turbopackIgnore: true */ privateRoot(), id);
   const data = {
     ownerUid: uid,
     name:
@@ -145,12 +148,12 @@ export async function saveVerificationAttachment(
     documentConsentAt: FieldValue.serverTimestamp(),
     createdAt: FieldValue.serverTimestamp(),
   };
-  await mkdir(privateRoot(), { recursive: true, mode: 0o700 });
-  await writeFile(target, bytes, { mode: 0o600, flag: "wx" });
+  await mkdir(/* turbopackIgnore: true */ privateRoot(), { recursive: true, mode: 0o700 });
+  await writeFile(/* turbopackIgnore: true */ target, bytes, { mode: 0o600, flag: "wx" });
   try {
     await db.doc(`verificationAttachments/${id}`).create(data);
   } catch (error) {
-    await rm(target, { force: true });
+    await rm(/* turbopackIgnore: true */ target, { force: true });
     throw error;
   }
   return verificationAttachmentView(id, data);
@@ -174,7 +177,8 @@ export async function readVerificationAttachment(
   const snapshot = await readable(actor, id);
   let bytes: Buffer;
   try {
-    bytes = await readFile(path.join(privateRoot(), id));
+    const target = path.join(/* turbopackIgnore: true */ privateRoot(), id);
+    bytes = await readFile(/* turbopackIgnore: true */ target);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT")
       throw new VerificationError("Файл не найден.", 404);
@@ -202,6 +206,9 @@ export async function removeVerificationAttachment(
     tx.delete(ref);
     return true;
   });
-  if (removed) await rm(path.join(privateRoot(), id), { force: true });
+  if (removed) {
+    const target = path.join(/* turbopackIgnore: true */ privateRoot(), id);
+    await rm(/* turbopackIgnore: true */ target, { force: true });
+  }
   return { ok: true, retainedInHistory: !removed };
 }
