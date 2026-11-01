@@ -134,6 +134,9 @@ export async function startSecurityLogin(body: Record<string, unknown>) {
     ? user.tokensValidAfterTime !== state.firebaseValidAfter
     : Boolean(provider && !provider.legacyMfa && provider.uid === user.uid);
   if (!ownPassword && !resetPassword) throw invalidLogin();
+  // Detect a lost/replaced deployment key before issuing a challenge or spending
+  // factor attempts. Never rotate the key or silently disable an enrolled account.
+  decryptSecret(user.uid, state.secret);
   const id = opaqueId();
   await getAdminDb().doc("accountSecurityChallenges/" + digest(id)).set({
     uid: user.uid, epoch: state.epoch, attempts: 0, expiresAt: Timestamp.fromMillis(Date.now() + CHALLENGE_MS),

@@ -2,9 +2,9 @@
 import { useState } from "react";
 import { getMultiFactorResolver, TotpMultiFactorGenerator, type MultiFactorError, type MultiFactorResolver } from "firebase/auth";
 import { auth } from "./firebase";
-import { acceptSecurityResult, securityRequest, SecurityClientError, type SecurityResult } from "./accountSecurityClient";
+import { acceptSecurityResult, securityRequest, isSecurityClientError, type SecurityResult } from "./accountSecurityClient";
 export function mfaMessage(error: unknown) {
-  if (error instanceof SecurityClientError) return error.message;
+  if (isSecurityClientError(error)) return error.message;
   const code = (error as { code?: string })?.code || "";
   if (code.includes("invalid-verification-code")) return "Код не подошёл. Проверьте время на телефоне и введите новый код";
   if (code.includes("session-expired") || code.includes("invalid-multi-factor-session")) return "Время подтверждения истекло. Войдите заново";
@@ -20,7 +20,7 @@ export function useMfaChallenge() {
   const [code, setRawCode] = useState(""), [recovery, setRecovery] = useState(false);
   const [error, setError] = useState(""), [busy, setBusy] = useState(false);
   function capture(value: unknown) {
-    if (value instanceof SecurityClientError && value.code === "security/mfa-required" && value.challenge) {
+    if (isSecurityClientError(value) && value.code === "security/mfa-required" && /^[a-f0-9]{48}$/.test(value.challenge || "")) {
       setResolver({ challenge: value.challenge });
     } else if ((value as { code?: string })?.code === "auth/multi-factor-auth-required") {
       setResolver(getMultiFactorResolver(auth, value as MultiFactorError));

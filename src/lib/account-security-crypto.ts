@@ -31,12 +31,17 @@ export function encryptSecret(uid: string, value: string) {
   return ["v1", iv.toString("base64"), cipher.getAuthTag().toString("base64"), data.toString("base64")].join(".");
 }
 export function decryptSecret(uid: string, value: string) {
-  const [version, iv, tag, data] = value.split(".");
-  if (version !== "v1" || !iv || !tag || !data) throw new Error("security/secret-format");
-  const decipher = createDecipheriv("aes-256-gcm", encryptionKey(), Buffer.from(iv, "base64"));
-  decipher.setAAD(Buffer.from("strova-mfa:v1:" + uid));
-  decipher.setAuthTag(Buffer.from(tag, "base64"));
-  return Buffer.concat([decipher.update(Buffer.from(data, "base64")), decipher.final()]).toString("utf8");
+  const key = encryptionKey();
+  try {
+    const [version, iv, tag, data] = value.split(".");
+    if (version !== "v1" || !iv || !tag || !data) throw new Error("secret-format");
+    const decipher = createDecipheriv("aes-256-gcm", key, Buffer.from(iv, "base64"));
+    decipher.setAAD(Buffer.from("strova-mfa:v1:" + uid));
+    decipher.setAuthTag(Buffer.from(tag, "base64"));
+    return Buffer.concat([decipher.update(Buffer.from(data, "base64")), decipher.final()]).toString("utf8");
+  } catch {
+    throw new SecurityError("Проверка аккаунта временно недоступна. Обратитесь в поддержку", "security/key-unavailable", 503);
+  }
 }
 export function newTotp(email: string) {
   return new TOTP({ issuer: "Строва", label: email, algorithm: "SHA1", digits: 6, period: 30, secret: new Secret({ size: 20 }) });

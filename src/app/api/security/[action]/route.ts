@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readVerificationBody } from "@/lib/verification-api-server";
 import { SecurityError } from "@/lib/account-security-session";
+import { AUTH_PROTOCOL, AUTH_RELEASE } from "@/lib/account-security-protocol";
+import { assertAuthDeployment, authDeploymentHealth } from "@/lib/account-security-deployment";
 import {
   beginSecurityEnrollment, completeSecurityLogin, finishSecurityEnrollment, manageSecurity,
   endSecuritySession, securityActor, securityRate, securityStatus, startSecurityLogin,
@@ -9,7 +11,7 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 const json = (body: unknown, status = 200) => NextResponse.json(body, {
-  status, headers: { "Cache-Control": "private, no-store, max-age=0", Pragma: "no-cache", Vary: "Authorization, Origin", "X-Content-Type-Options": "nosniff", ...(status === 429 ? { "Retry-After": "600" } : {}) },
+  status, headers: { "Cache-Control": "private, no-store, max-age=0", Pragma: "no-cache", Vary: "Authorization, Origin", "X-Content-Type-Options": "nosniff", "X-Strova-Auth-Protocol": AUTH_PROTOCOL, "X-Strova-Auth-Release": AUTH_RELEASE, ...(status === 429 ? { "Retry-After": "600" } : {}) },
 });
 function sameOrigin(request: NextRequest) {
   const origin = request.headers.get("origin");
@@ -29,7 +31,10 @@ function failure(error: unknown) {
 type Context = { params: Promise<{ action: string }> };
 export async function GET(request: NextRequest, context: Context) {
   try {
-    if ((await context.params).action !== "status") return json({ error: "Не найдено" }, 404);
+    const action = (await context.params).action;
+    if (action === "health") return json(authDeploymentHealth());
+    if (action !== "status") return json({ error: "Не найдено" }, 404);
+    assertAuthDeployment(request.headers.get("x-strova-firebase-project"));
     return json(await securityStatus(await securityActor(request)));
   } catch (error) { return failure(error); }
 }
@@ -38,6 +43,7 @@ export async function POST(request: NextRequest, context: Context) {
     sameOrigin(request);
     const action = (await context.params).action;
     if (!["login", "challenge", "begin", "finish", "manage", "logout"].includes(action)) return json({ error: "Не найдено" }, 404);
+    assertAuthDeployment(request.headers.get("x-strova-firebase-project"));
     // Trust forwarding headers ONLY after the reverse proxy is configured to replace them.
     const ip = process.env.STROVA_TRUST_PROXY_HEADERS === "true"
       ? (request.headers.get("x-forwarded-for") || "").split(",")[0].trim().slice(0, 80) : "shared";

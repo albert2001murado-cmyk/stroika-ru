@@ -112,27 +112,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let unsubscribeProfile: (() => void) | undefined;
 
-    let generation = 0, mounted = true;
+    let generation = 0, mounted = true, acceptedUid = "";
     const unsubscribeAuth = onIdTokenChanged(auth, async (currentUser) => {
       const run = ++generation;
       unsubscribeProfile?.(); unsubscribeProfile = undefined;
-      setUser(null); setProfile(null); setLoading(true); setSessionProblem("");
-      if (!currentUser) { setLoading(false); return; }
+      // A refresh of the same account is not a logout. Keep its last verified
+      // profile until the new token is checked; clear immediately on UID change.
+      if (!currentUser || acceptedUid !== currentUser.uid) { setUser(null); setProfile(null); }
+      setLoading(true); setSessionProblem("");
+      if (!currentUser) { acceptedUid = ""; setLoading(false); return; }
       try { await checkAccountSession(currentUser); }
       catch (error) {
-        if (mounted && run === generation) { setLoading(false); setSessionProblem((error as Error).message); }
+        if (mounted && run === generation) {
+          acceptedUid = ""; setUser(null); setProfile(null); setLoading(false);
+          setSessionProblem((error as Error).message || "Не удалось проверить вход. Повторите попытку");
+        }
         return;
       }
       if (!mounted || run !== generation) return;
-      setUser(currentUser);
+      acceptedUid = currentUser.uid; setUser(currentUser);
 
       unsubscribeProfile = onSnapshot(
         doc(db, "users", currentUser.uid),
         (snapshot) => {
+          if (!mounted || run !== generation) return;
           setProfile(snapshot.exists() ? (snapshot.data() as UserProfile) : null);
           setLoading(false);
         },
         (error) => {
+          if (!mounted || run !== generation) return;
           console.error("Profile realtime error:", error);
           setProfile(null);
           setLoading(false);
