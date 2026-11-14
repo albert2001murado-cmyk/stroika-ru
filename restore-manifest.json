@@ -1,0 +1,196 @@
+{
+  "baseCommit": "b6bfd625d6f86f58f6fa749553b60251c9d58863",
+  "version": "2026-11-14.1",
+  "files": [
+    {
+      "path": "RESTORE-MODERATION-RU.md",
+      "before": null,
+      "after": "08cf3d818b196635d091b5824f2e7d11774223f712329289b89a31f3b45a1f98"
+    },
+    {
+      "path": "moderation-service/.dockerignore",
+      "before": null,
+      "after": "405b3358127a53734d0984baa03d799888ab8976a1c61f293a12b08201133f7a"
+    },
+    {
+      "path": "moderation-service/.env.example",
+      "before": null,
+      "after": "65c53833fdd11c7ed086ae995632780d197ab160c67fd279bbeccd20eb3f5c8d"
+    },
+    {
+      "path": "moderation-service/.gitignore",
+      "before": null,
+      "after": "aeadab7a802152cf9173af88206cae7a5a98cc358b2eb41f902a9eb44ce527dc"
+    },
+    {
+      "path": "moderation-service/Dockerfile",
+      "before": null,
+      "after": "25ceb289c35451b777dc8bf66eaced5d34608850ae1a66f56782b829e80da883"
+    },
+    {
+      "path": "moderation-service/README.md",
+      "before": null,
+      "after": "1cbf16f3afdcc33c7b8220d4a411c7e08357661a32201e72b7065fb8dd11dd80"
+    },
+    {
+      "path": "moderation-service/app/__init__.py",
+      "before": null,
+      "after": "7260b6442d871d80c1446bb8fe3a85dcc262e1f594e9a0d5daf9387a6e24c0c6"
+    },
+    {
+      "path": "moderation-service/app/classifier.py",
+      "before": null,
+      "after": "04793322f0ff01a24933d4a90ebb1aa6662a4f412c8862e3824d4fc8c7299ca3"
+    },
+    {
+      "path": "moderation-service/app/language_policy.py",
+      "before": null,
+      "after": "6783e1e187b14a86eb26ccdd612a8dcab71b5bb40d88b2f1dae06cc5516bbcf3"
+    },
+    {
+      "path": "moderation-service/app/main.py",
+      "before": null,
+      "after": "6f5850132ac4f74bedd25aa3258e707b14c70fb9a157d995e070be5719a616c8"
+    },
+    {
+      "path": "moderation-service/app/moderation-language.json",
+      "before": null,
+      "after": "b04c9ee3f3d398d23b92646b06d3ac754307aecc1f843d32dbbdbad942f0d85b"
+    },
+    {
+      "path": "moderation-service/app/policy.py",
+      "before": null,
+      "after": "726c514a1a3d0a5f494c8c9c57b017bcda84fe600fa973ee90e6e7efae1c6bcd"
+    },
+    {
+      "path": "moderation-service/app/schemas.py",
+      "before": null,
+      "after": "e8b11a342722eefb4d077bca0cef99fd63b00d7f7c0ed644864c4a5526c5bfab"
+    },
+    {
+      "path": "moderation-service/app/security.py",
+      "before": null,
+      "after": "7a139293e42126629346f6e1207ccd2fa07185534bc408d36c22f59df4fbb76f"
+    },
+    {
+      "path": "moderation-service/app/settings.py",
+      "before": null,
+      "after": "3dcfe6dc5a8fd56c0c574fbe472ae5576149afcab3a5989d8799e0f87ba8dabc"
+    },
+    {
+      "path": "moderation-service/docker-compose.yml",
+      "before": null,
+      "after": "210a95ac87c57c3ef98300c1d22a513298f62037d5b03441b335d9b89cc29d9b"
+    },
+    {
+      "path": "moderation-service/requirements.txt",
+      "before": null,
+      "after": "21b8b73af18b3e459c6a9de5b6dfbd5cdd30de8e9035d1a0cf660c048d2cc27d"
+    },
+    {
+      "path": "moderation-service/selftest.py",
+      "before": null,
+      "after": "10bed89b3522e5824414a8d1b2d6e8fbe5424cff939dc46e1d95cd52aeb02502"
+    },
+    {
+      "path": "moderation-service/tests/language-cases.json",
+      "before": null,
+      "after": "65badee484b55e5828e0445b95bc0e869dc8ee7c52016511d029a3b31d125202"
+    },
+    {
+      "path": "moderation-service/tests/test_policy.py",
+      "before": null,
+      "after": "ebfe02ee95961f90d2d20f1f57418e2b14c415e12d5a22c8770070543b98cc09"
+    },
+    {
+      "path": "moderation-service/tests/test_restore.py",
+      "before": null,
+      "after": "b23a382b464523286d8b745dfbfafceed1280b161cfb6281e33b4e7b0946634d"
+    },
+    {
+      "path": "ops/moderation/check-queues.cjs",
+      "before": null,
+      "after": "5ad0da0f4f40959cdad1e58d58b43cbc6d02c1ac1d2c7cfc14aed0308699582e"
+    },
+    {
+      "path": "ops/moderation/configure.cjs",
+      "before": null,
+      "after": "d7af4d8aade862fbf655ef9470e309fd10db780b609cb6067e38180eb2bbb0cb"
+    },
+    {
+      "path": "ops/moderation/install.sh",
+      "before": null,
+      "after": "694594a585be702b7b7f8a4acce9eb566ab4292fcd8773e483928a353e8221fc"
+    },
+    {
+      "path": "ops/moderation/overlay.py",
+      "before": null,
+      "after": "d2c97fca30dc5cd78cf24a7a2778ee59d2770ad242e33adfaa8ea094d0d4fab5"
+    },
+    {
+      "path": "ops/moderation/rollback.sh",
+      "before": null,
+      "after": "24dafe6dbefc6f07dbc6a828065b97e46a554eae9dd5efcd24d51194ab0ca03a"
+    },
+    {
+      "path": "ops/moderation/test_deployment.py",
+      "before": null,
+      "after": "80a139bdd00b12f216c449bdaa2d42364047cd60666a3ca2c61f1240a748318d"
+    },
+    {
+      "path": "package-lock.json",
+      "before": "9e83908198c22f431e51d3c3410c6557fb4d0a14056c63d306172a339a842faa",
+      "after": "e4a9f8206da220cdaf2e5389bd7d0ae72a0816648b207b276b682ef344102465"
+    },
+    {
+      "path": "package.json",
+      "before": "238fd926bf9883e774fc84b32c2d5eb7bc1a231e5c6890cbdbccbbf7c158dc86",
+      "after": "ad82b725f26f0d86c45b421f9fe15d37045316f566f8782a9f6bd011824265cc"
+    },
+    {
+      "path": "src/app/api/moderation/reviews/submit/route.ts",
+      "before": null,
+      "after": "d8ea7dfe502c6410f2a8f09ca0eb4986100f1142fa1122b42d9991e1ecdded16"
+    },
+    {
+      "path": "src/data/moderation-language.json",
+      "before": null,
+      "after": "b04c9ee3f3d398d23b92646b06d3ac754307aecc1f843d32dbbdbad942f0d85b"
+    },
+    {
+      "path": "src/instrumentation-node.ts",
+      "before": "cad2703eb400b19e58132e515e2a1c70a826262a0a591d389af5f317b04af7ac",
+      "after": "263d336e6de22fdb33d40ecd525c92d0bff68a06f6ab3dcd6fb61f45ff8d5996"
+    },
+    {
+      "path": "src/lib/content-language-policy.ts",
+      "before": null,
+      "after": "f572edf8024fd6adfcdc6a80141910c77693d5bd28d43ed82a8a86f913f6682c"
+    },
+    {
+      "path": "src/lib/publication-policy.ts",
+      "before": "57a5937330c7a7069ac0cdd92a11bbb1fb6790c4aa1dfc9ac28e59c8ff1040a0",
+      "after": "4a736bf5452eae2c321bd8b20f217e4289ca7452968f95cea5270ec9c0e739e5"
+    },
+    {
+      "path": "src/lib/review-content-policy.ts",
+      "before": null,
+      "after": "034272a07711f3d36cbc088a1a3d3c95085c8414946330e26a2223ec907d2d3f"
+    },
+    {
+      "path": "src/lib/review-moderation-server.ts",
+      "before": "e12ac9495cb9591dad3bb354397933dd5edada42eb90f27025282ddbe18337c3",
+      "after": "101bb70908b58a8ed744a005c6c5e382eb02939c43c35259b028e2569227a36c"
+    },
+    {
+      "path": "tests/moderation-language-cases.json",
+      "before": null,
+      "after": "65badee484b55e5828e0445b95bc0e869dc8ee7c52016511d029a3b31d125202"
+    },
+    {
+      "path": "tests/moderation.test.cjs",
+      "before": null,
+      "after": "3146cbc7c92088b7e9d9c14198aa177aff90d6367480bf09a47825ba65719321"
+    }
+  ]
+}

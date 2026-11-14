@@ -28,7 +28,8 @@ export async function requireBillingLaunch() {
 /** Eligibility is issued once, including across account deletion/re-registration. */
 export async function ensureBillingAccount(uid: string) {
   const launch = await requireBillingLaunch(), db = getAdminDb(), ref = billingAccountRef(uid);
-  if ((await ref.get()).exists) return;
+  const existing = await ref.get();
+  if (existing.exists) { if (existing.get("publicationPolicyVersion") !== 2) await reconcileCustomerAllowances(uid); return; }
   const user = await getAdminAuth().getUser(uid);
   const registeredAt = Date.parse(user.metadata.creationTime);
   await db.runTransaction(async tx => {
@@ -42,8 +43,33 @@ export async function ensureBillingAccount(uid: string) {
     const claims = identities.map(value => db.doc(`billingIntroIdentities/${createHmac("sha256", identitySecret).update(value).digest("hex")}`));
     const previous = claims.length ? await tx.getAll(...claims) : [];
     const eligible = Number.isFinite(registeredAt) && registeredAt >= launch.newAccountsFrom && identities.length > 0 && previous.every(d => !d.exists);
-    tx.create(ref, { uid, introEligible: eligible, introClaimed: {}, freeRenewalUsed: false, subscriptions: {}, pendingOrders: {}, appAccountToken: randomUUID(), createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+    tx.create(ref, { uid, introEligible: eligible, introClaimed: {}, freeRenewalUsed: false, publicationPolicyVersion: 2, subscriptions: {}, pendingOrders: {}, appAccountToken: randomUUID(), createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
     if (eligible) for (const claim of claims) tx.create(claim, { firstUid: uid, issuedAt: FieldValue.serverTimestamp() });
+  });
+}
+
+/** Once per existing account: customer requests no longer consume performer credits.
+ * Keep historical payment/usage records intact; no money is refunded by this migration.
+ * A transaction also serializes this correction with publication and renewal writes.
+ */
+async function reconcileCustomerAllowances(uid: string) {
+  const db = getAdminDb(), ref = billingAccountRef(uid);
+  await db.runTransaction(async tx => {
+    const saved = await tx.get(ref);
+    if (!saved.exists || saved.get("publicationPolicyVersion") === 2) return;
+    const usages = await tx.get(db.collection("billingUsages").where("uid", "==", uid));
+    const data = saved.data()!, subscriptions = { ...data.subscriptions };
+    for (const catalog of BILLING_CATALOGS) {
+      const period = subscriptions[catalog];
+      if (!period?.periodId) continue;
+      const customerUses = usages.docs.filter(d => d.get("kind") === "request" && d.get("catalog") === catalog && d.get("periodId") === period.periodId && ["intro", "paid"].includes(d.get("funding"))).length;
+      if (customerUses) subscriptions[catalog] = { ...period, used: Math.max(0, Number(period.used || 0) - customerUses) };
+    }
+    const customerRenewal = usages.docs.some(d => d.get("kind") === "request" && d.get("funding") === "free-renewal");
+    const performerRenewal = usages.docs.some(d => d.get("kind") === "listing" && d.get("funding") === "free-renewal");
+    tx.update(ref, { subscriptions, publicationPolicyVersion: 2,
+      ...(data.freeRenewalUsed === true && customerRenewal && !performerRenewal ? { freeRenewalUsed: false } : {}),
+      updatedAt: FieldValue.serverTimestamp() });
   });
 }
 
@@ -87,7 +113,7 @@ export async function activateIntro(uid: string, catalog: BillingCatalog) {
 }
 
 export type OwnedPublication = { id: string; kind: "listing" | "request"; data: DocumentData };
-/** Both publication types share the catalog allowance. No private profiles are enumerated. */
+/** Query only this owner's publications. Customer and performer allowances are separate. */
 export async function ownPublications(tx: Transaction, uid: string): Promise<OwnedPublication[]> {
   const db = getAdminDb();
   const fields = ["title", "description", "city", "category", "subcategory", "catalogSection", "catalogCategoryId", "catalogGroupId", "createdAt", "expiresAt", "publishedAt", "publicationTermDays", "moderationStatus", "status", "deleted", "isDeleted", "hidden", "isHidden", "archived", "isActive"];
@@ -120,17 +146,17 @@ export function publicationBillingPath(input: DocumentData) {
 }
 export function assertPublicationSlot(owned: OwnedPublication[], next: DocumentData, kind: "listing" | "request", limit: number, exceptId = "", now = Date.now()) {
   const catalog = publicationBillingPath(next).catalogSection;
-  const active = owned.filter(item => !(item.id === exceptId && item.kind === kind) && publicationActive(item.data, now));
+  const active = owned.filter(item => item.kind === kind && item.id !== exceptId && publicationActive(item.data, now));
   const inCatalog = active.filter(item => {
     try { return publicationBillingPath(item.data).catalogSection === catalog; } catch { return item.data.catalogSection === catalog; }
   });
   if (inCatalog.length >= limit) throw new AccountApiError(`Достигнут лимит ${limit} активных объявлений в этом каталоге`, 402, "active-limit");
   for (const item of inCatalog) {
     const old = canonicalCatalogFields(item.data);
-    if (catalog === "equipment" && catalogTextKey(old.subcategory) === catalogTextKey(next.subcategory)) throw new AccountApiError("В этой подкатегории техники уже есть активное объявление. Несколько машин одного типа укажите в одной анкете", 409, "equipment-duplicate");
+    if (kind === "listing" && catalog === "equipment" && catalogTextKey(old.subcategory) === catalogTextKey(next.subcategory)) throw new AccountApiError("В этой подкатегории техники уже есть активное объявление. Несколько машин одного типа укажите в одной анкете", 409, "equipment-duplicate");
     if (item.kind !== kind) continue;
     const identical = catalogTextKey(item.data.title) === catalogTextKey(next.title) && catalogTextKey(item.data.description) === catalogTextKey(next.description);
-    if (identical && (catalog === "materials" || (catalogTextKey(old.subcategory) === catalogTextKey(next.subcategory) && catalogTextKey(item.data.city) === catalogTextKey(next.city))))
+    if (identical && ((kind === "listing" && catalog === "materials") || (catalogTextKey(old.subcategory) === catalogTextKey(next.subcategory) && catalogTextKey(item.data.city) === catalogTextKey(next.city))))
       throw new AccountApiError("Такое объявление уже активно. Одинаковые объявления размещать нельзя", 409, "duplicate-publication");
   }
 }
@@ -167,7 +193,7 @@ export async function createBillingOrder(uid: string, input: Record<string, unkn
     const receiptEmail = String(input.receiptEmail || profile.get("email") || "").trim().toLowerCase();
     if (provider === "yookassa" && (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(receiptEmail) || receiptEmail.length > 254)) throw new AccountApiError("Укажите почту для чека");
     const owned = await ownPublications(tx, uid);
-    const activeCount = owned.filter(p => publicationActive(p.data, now) && (() => { try { return publicationBillingPath(p.data).catalogSection === catalog; } catch { return p.data.catalogSection === catalog; } })()).length;
+    const activeCount = owned.filter(p => p.kind === "listing" && publicationActive(p.data, now) && (() => { try { return publicationBillingPath(p.data).catalogSection === catalog; } catch { return p.data.catalogSection === catalog; } })()).length;
     if (activeCount > getBillingPlan(catalog, input.tier)!.limit) throw new AccountApiError("Активных объявлений больше лимита этого тарифа. Выберите тариф выше", 409);
     tx.create(ref, { ...quote, uid, provider, status: "created", receiptEmail, appAccountToken: data.appAccountToken, acceptRules: true, rulesVersion: 1, rulesAcceptedAt: now, remoteId: "", confirmationUrl: "", transactionId: "", createdAt: now, updatedAt: now, targetPeriodId: quote.action === "upgrade" ? quote.periodId : randomUUID() });
     tx.update(accountRef, { pendingOrders: { ...data.pendingOrders, [catalog]: ref.id }, updatedAt: FieldValue.serverTimestamp() });
@@ -243,7 +269,7 @@ export async function revokeBillingOrder(orderId: string, remoteId: string) {
     if (order.status === "refunded") return;
     const periodId = order.periodId || order.targetPeriodId;
     const usages = await tx.get(db.collection("billingUsages").where("uid", "==", order.uid));
-    const affected = usages.docs.filter(d => order.action === "upgrade" ? d.get("orderId") === orderId : d.get("periodId") === periodId);
+    const affected = usages.docs.filter(d => d.get("kind") === "listing" && (order.action === "upgrade" ? d.get("orderId") === orderId : d.get("periodId") === periodId));
     // Bound transaction writes; the catalog ceiling is 25, so a normal period stays well below 400.
     if (affected.length > 350) throw new AccountApiError("Возврат требует проверки поддержки", 409);
     const refs = affected.map(d => db.doc(`${d.get("kind") === "request" ? "customerRequests" : "listings"}/${d.get("publicationId")}`));

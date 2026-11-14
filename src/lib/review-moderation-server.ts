@@ -1,17 +1,10 @@
-import { randomUUID } from "crypto";
+import { randomUUID, createHash } from "crypto";
+import { reviewDecision, REVIEW_POLICY_VERSION } from "./review-content-policy";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { deliverServerNotification } from "@/lib/server-notifications";
 
 const REVIEW_LEASE_MS = 2 * 60 * 1000;
-const REVIEW_POLICY_VERSION = "review-2026-09-29.1";
-const PHONE_PATTERN = /(?:\+?7|8)[\s()\-]*\d{3}[\s()\-]*\d{3}[\s\-]*\d{2}[\s\-]*\d{2}/u;
-const EMAIL_PATTERN = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/u;
-const URL_PATTERN = /(?:https?:\/\/|www\.|t\.me\/|vk\.com\/|wa\.me\/)[^\s]+/iu;
-const PROFANITY_PATTERN = /(?<![\p{L}\p{N}])(?:бля(?:дь|дство)?|хуй[\p{L}\p{N}_]*|пизд[\p{L}\p{N}_]*|еб(?:ать|ан[\p{L}\p{N}_]*|уч[\p{L}\p{N}_]*)|мудак[\p{L}\p{N}_]*|шлюх[\p{L}\p{N}_]*)(?![\p{L}\p{N}])/iu;
-
-type ReviewDecision = "approved" | "rejected";
-
 function object(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -32,48 +25,9 @@ function millis(value: unknown) {
   return Number.isFinite(seconds) ? seconds * 1_000 : 0;
 }
 
-function reviewDecision(data: Record<string, unknown>): {
-  decision: ReviewDecision;
-  reason: string;
-  code: string;
-} {
-  const text = safeText(data.text, 2_000);
-  const rating = Number(data.rating);
-
-  if (!Number.isFinite(rating) || rating < 1 || rating > 5) {
-    return { decision: "rejected", code: "invalid-rating", reason: "Укажите оценку от 1 до 5." };
-  }
-  if (text.length < 3 || text.length > 1_000) {
-    return {
-      decision: "rejected",
-      code: "invalid-review-length",
-      reason: "Текст отзыва должен содержать от 3 до 1000 символов.",
-    };
-  }
-  if (PHONE_PATTERN.test(text) || EMAIL_PATTERN.test(text) || URL_PATTERN.test(text)) {
-    return {
-      decision: "rejected",
-      code: "contacts-in-review",
-      reason: "Удалите из отзыва телефон, почту или ссылку.",
-    };
-  }
-  if (PROFANITY_PATTERN.test(text)) {
-    return {
-      decision: "rejected",
-      code: "profanity-in-review",
-      reason: "Удалите оскорбления и нецензурную лексику.",
-    };
-  }
-  const normalized = text.toLocaleLowerCase("ru-RU").replace(/[^\p{L}\p{N}]+/gu, "");
-  if (/^(.)\1{7,}$/u.test(normalized)) {
-    return {
-      decision: "rejected",
-      code: "review-spam",
-      reason: "Отзыв похож на спам. Опишите результат работы обычным текстом.",
-    };
-  }
-
-  return { decision: "approved", code: "", reason: "" };
+export function reviewInputFingerprint(data: Record<string, unknown>) {
+  const fields = ["text", "rating", "authorId", "listingId", "requestId", "targetUserId", "listingAuthorId", "publicationId", "publicationKind"];
+  return createHash("sha256").update(JSON.stringify(fields.map(key => data[key] ?? null))).digest("hex");
 }
 
 async function recalculateListingRating(listingId: string) {
@@ -152,6 +106,7 @@ export async function processReview(reviewIdValue: string) {
   });
   if (!data) return { state: "skipped" as const, id: reviewId };
 
+  const inputFingerprint = reviewInputFingerprint(data);
   const authorId = safeText(data.authorId, 160);
   const profile = authorId && !authorId.includes("/")
     ? await getAdminDb().collection("users").doc(authorId).get()
@@ -175,7 +130,23 @@ export async function processReview(reviewIdValue: string) {
     ) {
       return false;
     }
+    if (reviewInputFingerprint(latestData) !== inputFingerprint) {
+      transaction.update(reference, {
+        moderationStage: "queued", moderationRunId: FieldValue.delete(),
+        moderationLeaseUntil: FieldValue.delete(),
+      });
+      return false;
+    }
+    // A block applied during classification takes effect before publication.
+    const currentAuthor = authorId && !authorId.includes("/")
+      ? await transaction.get(getAdminDb().collection("users").doc(authorId)) : null;
+    if (!currentAuthor?.exists || currentAuthor.get("moderationStatus") === "blocked") {
+      result.decision = "rejected";
+      result.code = "review-author-unavailable";
+      result.reason = "Отзыв не может быть опубликован для этого аккаунта.";
+    }
     transaction.update(reference, {
+      moderationInputFingerprint: inputFingerprint,
       moderationStatus: result.decision,
       moderationStage: "complete",
       moderationReason: result.reason,

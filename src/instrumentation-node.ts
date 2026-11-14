@@ -1,4 +1,6 @@
 declare global {
+  var __strovaReviewModerationTimer: ReturnType<typeof setInterval> | undefined;
+  var __strovaReviewModerationRunning: boolean | undefined;
   // Один таймер на процесс, в том числе при hot reload в разработке.
   var __stroikaModerationTimer: ReturnType<typeof setInterval> | undefined;
   var __stroikaModerationRunning: boolean | undefined;
@@ -28,6 +30,25 @@ export function registerNodeInstrumentation() {
     setTimeout(() => void notify(), 1_000).unref?.();
   }
 
+  // Reviews must not wait behind minutes of video processing.
+  if (!globalThis.__strovaReviewModerationTimer) {
+    const reviews = async () => {
+      if (globalThis.__strovaReviewModerationRunning) return;
+      globalThis.__strovaReviewModerationRunning = true;
+      try {
+        const { runReviewModerationBatch } = await import("@/lib/review-moderation-server");
+        await runReviewModerationBatch(20);
+      } catch {
+        console.error("scheduled review moderation will retry");
+      } finally {
+        globalThis.__strovaReviewModerationRunning = false;
+      }
+    };
+    globalThis.__strovaReviewModerationTimer = setInterval(() => void reviews(), 30_000);
+    globalThis.__strovaReviewModerationTimer.unref?.();
+    setTimeout(() => void reviews(), 5_000).unref?.();
+  }
+
   if (globalThis.__stroikaModerationTimer) return;
 
   const tick = async () => {
@@ -38,10 +59,6 @@ export function registerNodeInstrumentation() {
       const { runProfileAvatarSyncBatch } = await import("@/lib/profile-avatar-sync-server");
       await runProfileAvatarSyncBatch(10).catch(error => {
         console.error("scheduled avatar sync failed", error);
-      });
-      const { runReviewModerationBatch } = await import("@/lib/review-moderation-server");
-      await runReviewModerationBatch(20).catch(() => {
-        console.error("scheduled review moderation will retry");
       });
       const { runModerationBatch } = await import(
         "@/lib/publication-moderation-server"

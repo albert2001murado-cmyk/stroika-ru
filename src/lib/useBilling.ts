@@ -20,11 +20,14 @@ function readBilling(uid: string, force: boolean) {
   }
   return cachedRequest!;
 }
-export function useBilling() {
+export function useBilling(enabled = true) {
   const [uid, setUid] = useState("");
   const [value, setValue] = useState<{ uid: string; data: BillingState | null; loading: boolean; error: string }>({ uid: "", data: null, loading: true, error: "" });
   const generation = useRef(0);
-  useEffect(() => onAuthStateChanged(auth, user => setUid(user?.uid || "")), []);
+  useEffect(() => {
+    if (!enabled) { setUid(""); return; }
+    return onAuthStateChanged(auth, user => setUid(user?.uid || ""));
+  }, [enabled]);
   useEffect(() => {
     const listener = (accountUid: string, data: BillingState) => {
       if (uid && accountUid === uid && auth.currentUser?.uid === uid) setValue({ uid, data, loading: false, error: "" });
@@ -34,11 +37,11 @@ export function useBilling() {
   }, [uid]);
   const refresh = useCallback(async (force = true) => {
     const current = ++generation.current;
-    if (!uid || auth.currentUser?.uid !== uid) return;
+    if (!enabled || !uid || auth.currentUser?.uid !== uid) return null;
     setValue(previous => ({ uid, data: previous.uid === uid ? previous.data : null, loading: true, error: "" }));
-    try { const data = await readBilling(uid, force); if (current === generation.current && auth.currentUser?.uid === uid) setValue({ uid, data, loading: false, error: "" }); }
-    catch (error) { if (current === generation.current) setValue(previous => ({ uid, data: previous.uid === uid ? previous.data : null, loading: false, error: error instanceof Error ? error.message : "Не удалось загрузить тарифы" })); }
-  }, [uid]);
+    try { const data = await readBilling(uid, force); if (current === generation.current && auth.currentUser?.uid === uid) setValue({ uid, data, loading: false, error: "" }); return current === generation.current && auth.currentUser?.uid === uid ? data : null; }
+    catch (error) { if (current === generation.current) setValue(previous => ({ uid, data: previous.uid === uid ? previous.data : null, loading: false, error: error instanceof Error ? error.message : "Не удалось загрузить тарифы" })); return null; }
+  }, [uid, enabled]);
   useEffect(() => { void refresh(false); return () => { generation.current++; }; }, [refresh]);
   return { data: value.uid === uid ? value.data : null, loading: Boolean(uid) && (value.uid !== uid || value.loading), error: value.uid === uid ? value.error : "", refresh };
 }

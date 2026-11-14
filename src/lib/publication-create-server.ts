@@ -80,15 +80,15 @@ export async function editAccountPublication(uid: string, input: Record<string, 
   await db.runTransaction(async tx => {
     const [previous, profile] = await Promise.all([tx.get(ref), tx.get(db.doc(`users/${uid}`))]);
     if (!previous.exists || previous.get(kind === "listing" ? "authorId" : "customerId") !== uid) throw new AccountApiError("Объявление не найдено", 404);
-    if (!profile.exists || profile.get("moderationStatus") === "blocked" || ["blocked", "payment_required"].includes(previous.get("moderationStatus"))) throw new AccountApiError("Изменение объявления недоступно", 403);
+    if (!profile.exists || profile.get("moderationStatus") === "blocked" || previous.get("moderationStatus") === "blocked" || (kind === "listing" && previous.get("moderationStatus") === "payment_required")) throw new AccountApiError("Изменение объявления недоступно", 403);
     const source = previous.data()!, canonical = publicationBillingPath(source);
     const payload = payloadFor(kind, { ...source, ...input.publication, ...canonical }, profile.data()!, uid);
     const owned = await ownPublications(tx, uid);
-    if (!isExpired(source)) assertPublicationSlot(owned, payload, kind, canonical.catalogSection === "materials" ? 25 : 10, input.id);
+    if (!isExpired(source)) assertPublicationSlot(owned, payload, kind, kind === "request" ? Number.MAX_SAFE_INTEGER : canonical.catalogSection === "materials" ? 25 : 10, input.id);
     // Owner may edit content, but cannot restart the paid placement or move it to another catalog.
     const counters = kind === "listing" ? ["viewsCount", "favoritesCount"] : ["viewsCount", "offersCount", "responsesCount"];
     for (const key of counters) delete (payload as DocumentData)[key];
-    tx.update(ref, { ...payload, status: source.status || "active" });
+    tx.update(ref, { ...payload, status: kind === "request" && source.moderationStatus === "payment_required" && !isExpired(source) ? "active" : source.status || "active" });
   });
   return { id: input.id, kind };
 }
@@ -96,18 +96,19 @@ export async function createPublication(uid: string, input: Record<string, unkno
   if (input.kind !== "listing" && input.kind !== "request") throw new AccountApiError("Укажите тип объявления");
   const kind = input.kind, requestId = String(input.requestId || "");
   if (!/^[A-Za-z0-9_-]{16,80}$/.test(requestId) || !input.publication || typeof input.publication !== "object" || Array.isArray(input.publication)) throw new AccountApiError("Обновите форму публикации");
-  await ensureBillingAccount(uid);
+  if (kind === "listing") await ensureBillingAccount(uid);
   const db = getAdminDb(), id = billingHash(`${uid}:${kind}:${requestId}`).slice(0, 40), ref = db.doc(`${kind === "listing" ? "listings" : "customerRequests"}/${id}`), accountRef = billingAccountRef(uid);
   await db.runTransaction(async tx => {
-    const [existing, profile, saved] = await Promise.all([tx.get(ref), tx.get(db.doc(`users/${uid}`)), tx.get(accountRef)]);
+    const [existing, profile, saved] = await Promise.all([tx.get(ref), tx.get(db.doc(`users/${uid}`)), kind === "listing" ? tx.get(accountRef) : Promise.resolve(null)]);
     if (existing.exists) return; // A lost response never consumes another slot.
     if (!profile.exists || profile.get("moderationStatus") === "blocked") throw new AccountApiError("Аккаунту недоступна публикация", 403);
     const payload = payloadFor(kind, input.publication as DocumentData, profile.data()!, uid), now = Date.now();
     const owned = await ownPublications(tx, uid);
-    const consumed = consumePublicationAllowance(saved.data()!, payload.catalogSection, false, now);
+    const consumed = kind === "listing" ? consumePublicationAllowance(saved!.data()!, payload.catalogSection, false, now)
+      : { account: null, funding: "customer-free", periodId: "", orderId: "", limit: Number.MAX_SAFE_INTEGER };
     assertPublicationSlot(owned, payload, kind, consumed.limit, "", now);
-    tx.create(ref, { ...payload, publicationTermDays: 30, billingManaged: true, createdAt: Timestamp.fromMillis(now), expiresAt: Timestamp.fromMillis(now + BILLING_PERIOD_MS), renewalCount: 0 });
-    tx.set(accountRef, consumed.account);
+    tx.create(ref, { ...payload, publicationTermDays: 30, billingManaged: kind === "listing", createdAt: Timestamp.fromMillis(now), expiresAt: Timestamp.fromMillis(now + BILLING_PERIOD_MS), renewalCount: 0 });
+    if (consumed.account) tx.set(accountRef, consumed.account);
     tx.create(db.doc(`billingUsages/${billingHash(`${kind}:${id}:0`)}`), { uid, kind, publicationId: id, catalog: payload.catalogSection, funding: consumed.funding, periodId: consumed.periodId, orderId: consumed.orderId, createdAt: FieldValue.serverTimestamp() });
   });
   return { id, kind };

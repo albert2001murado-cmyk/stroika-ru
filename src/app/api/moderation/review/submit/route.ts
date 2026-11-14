@@ -1,48 +1,27 @@
-import { readJsonObject, RequestBodyError } from "@/lib/request-body";
-import { hasModeratorClaim } from "@/lib/security-policy";
-import { limitRequests, activeProfileGuard } from "@/lib/api-guard";
-import { NextRequest, NextResponse } from "next/server";
-import { getAdminAuth, getAdminDb } from "@/lib/firebase-admin";
+import { NextRequest } from "next/server";
+import { getAdminDb } from "@/lib/firebase-admin";
+import { accountActor, accountBody, accountFailure, accountJson, AccountApiError } from "@/lib/account-api-server";
 import { processReview } from "@/lib/review-moderation-server";
+import { hasModeratorClaim } from "@/lib/security-policy";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function bearer(request: NextRequest) {
-  const value = request.headers.get("authorization") || "";
-  return value.startsWith("Bearer ") ? value.slice(7).trim() : "";
-}
-
-
 export async function POST(request: NextRequest) {
-  const totalLimit = limitRequests("moderation/review/submit:total", 120);
-  if (totalLimit) return totalLimit;
   try {
-    const token = bearer(request);
-    if (!token) return NextResponse.json({ error: "Нужна авторизация." }, { status: 401 });
-    const decoded = await getAdminAuth().verifyIdToken(token, true);
-    const inactive = await activeProfileGuard(decoded.uid);
-    if (inactive) return inactive;
-    const throttled = limitRequests("moderation/reviews/submit:" + decoded.uid, 10);
-    if (throttled) return throttled;
-    const body = await readJsonObject(request);
-    const reviewId = String(body?.reviewId || "").trim().slice(0, 160);
-    if (!reviewId || reviewId.includes("/")) {
-      return NextResponse.json({ error: "Некорректный отзыв." }, { status: 400 });
+    const actor = await accountActor(request, "review-moderation");
+    const body = await accountBody(request);
+    const id = body.reviewId;
+    if (typeof id !== "string" || !/^[A-Za-z0-9_-]{1,160}$/.test(id)) {
+      throw new AccountApiError("Некорректный отзыв");
     }
-    const review = await getAdminDb().collection("reviews").doc(reviewId).get();
-    if (!review.exists) return NextResponse.json({ error: "Отзыв не найден." }, { status: 404 });
-    if (review.data()?.authorId !== decoded.uid && !hasModeratorClaim(decoded)) {
-      return NextResponse.json({ error: "Нет доступа." }, { status: 403 });
+    const review = await getAdminDb().collection("reviews").doc(id).get();
+    if (!review.exists) throw new AccountApiError("Отзыв не найден", 404);
+    if (review.get("authorId") !== actor.uid && !hasModeratorClaim(actor)) {
+      throw new AccountApiError("Нет доступа к отзыву", 403);
     }
-    const result = await processReview(reviewId);
-    return NextResponse.json({ ok: true, ...result });
+    return accountJson({ ok: true, ...await processReview(id) });
   } catch (error) {
-    if (error instanceof RequestBodyError) return NextResponse.json({ error: error.message }, { status: error.status });
-    console.error("review moderation submit error", error);
-    return NextResponse.json(
-      { error: "Отзыв поставлен в очередь и будет проверен автоматически." },
-      { status: 503 }
-    );
+    return accountFailure(error);
   }
 }

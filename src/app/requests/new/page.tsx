@@ -1,5 +1,4 @@
 "use client";
-import BillingAllowance from "@/components/BillingAllowance";
 import { createAccountPublication, newAccountRequestId } from "@/lib/accountClient";
 import PublicationTerm from "@/components/PublicationTerm";
 import { uploadAuthHeaders } from "@/lib/uploadAuth";
@@ -468,7 +467,7 @@ export default function NewRequestPage() {
             </p>
           ) : null}
 
-          <BillingAllowance catalog={catalogPath.catalogSection} />
+          <p className="my-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">Публикация заявки заказчика бесплатна. После окончания срока её можно снова разместить бесплатно.</p>
           <PublicationTerm />
           <button
             disabled={saving || locationBusy}

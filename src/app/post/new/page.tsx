@@ -1,5 +1,6 @@
 "use client";
-import BillingAllowance from "@/components/BillingAllowance";
+import PublicationTariffModal from "@/components/PublicationTariffModal";
+import { usePublicationTariff } from "@/lib/usePublicationTariff";
 import { createAccountPublication, newAccountRequestId } from "@/lib/accountClient";
 import PublicationTerm from "@/components/PublicationTerm";
 import { uploadAuthHeaders } from "@/lib/uploadAuth";
@@ -51,7 +52,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 type LocalMediaFile = {
   id: string;
@@ -174,6 +175,8 @@ export default function NewListingPage() {
   const [catalogSection, setCatalogSection] = useState(
     defaultCatalogPath.catalogSection
   );
+  const tariff = usePublicationTariff(catalogSection, Boolean(user) && !loading && canAccountPublish(profile));
+  const submissionLock = useRef(false);
   const [catalogCategoryId, setCatalogCategoryId] = useState(
     defaultCatalogPath.catalogCategoryId
   );
@@ -407,10 +410,13 @@ export default function NewListingPage() {
     if (profileBankError) { setError(`Сначала сохраните расчётный счёт в профиле: ${profileBankError}`); return; }
     const paymentError = paymentMethods[0] === "bank_account" ? validateBankOwner(paymentMethods, savedBankDetails, profile) : validatePayment(paymentMethods, bankDetails, profile?.accountType, bankConfirmed);
     if (paymentError) { setError(paymentError); return; }
+    if (submissionLock.current) return;
+    submissionLock.current = true;
     setIsSaving(true);
     setError("");
 
     try {
+      if (!await tariff.ensure()) return;
       const uploadedMedia: ListingMedia[] = [];
 
       for (const item of mediaFiles) {
@@ -522,14 +528,15 @@ export default function NewListingPage() {
       alert("Анкета проверяется автоматически. Обычно это занимает до 5 минут.");
       router.push("/profile");
     } catch (uploadError) {
+      if (tariff.handleDenied(uploadError)) return;
       console.error(uploadError);
-
       setError(
         uploadError instanceof Error
           ? uploadError.message
           : "Не получилось разместить объявление."
       );
     } finally {
+      submissionLock.current = false;
       setIsSaving(false);
     }
   }
@@ -539,6 +546,7 @@ export default function NewListingPage() {
 
   return (
     <main className="min-h-screen bg-[#f5f7fb] px-3 py-6 sm:px-5 sm:py-10">
+      <PublicationTariffModal {...tariff.modal} onCatalogChange={next => handleCatalogPathChange(getDefaultCatalogPath(next))}/>
       <div className="mx-auto max-w-7xl">
         <Link
           href="/"
@@ -852,7 +860,7 @@ export default function NewListingPage() {
               </div>
             </section>
 
-          <BillingAllowance catalog={catalogSection} />
+          <aside className="my-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4"><span className="text-sm text-slate-600">Тариф нужен только для анкеты исполнителя</span><button type="button" onClick={tariff.show} className="min-h-11 rounded-xl bg-white px-4 py-2 text-sm font-semibold text-slate-900 ring-1 ring-slate-200">Выбрать размещения</button></aside>
           <PublicationTerm />
             <button
               type="submit"

@@ -33,7 +33,8 @@ export const BILLING_RULES = [
   "Каждый каталог оплачивается отдельно",
   "Подписка и каждое новое размещение действуют 30 дней",
   "Подарочные объявления уже включены в общий лимит тарифа",
-  "Лимит учитывает размещения за период и одновременно активные объявления",
+  "Лимит тарифа учитывает анкеты исполнителя за период и одновременно активные анкеты",
+  "Публикация и повторная публикация заявок заказчика бесплатны и не расходуют тариф",
   "Неиспользованные размещения не переносятся в следующий период",
   "Одинаковые объявления запрещены",
   "Следующий период покупается вручную — автоматических списаний нет",
@@ -79,4 +80,10 @@ export function billingQuote(catalog: BillingCatalog, tier: BillingTier, subscri
     return { catalog, tier, action: "upgrade", priceKopeks: target.priceKopeks - current.priceKopeks, oldTier: current.tier, periodId: subscription.periodId, endsAt: subscription.endsAt, productId: appleProductId(catalog, tier, current.tier) };
   }
   return { catalog, tier, action: "purchase", priceKopeks: target.priceKopeks, oldTier: active ? "intro" : "", periodId: active ? subscription.periodId : "", endsAt: now + BILLING_PERIOD_MS, productId: appleProductId(catalog, tier) };
+}
+
+/** Only performer listings use a tariff; provider configuration does not affect an existing allowance. */
+export function hasPublicationAllowance(state: BillingState | null | undefined, catalog: BillingCatalog, now = Date.now()) {
+  const subscription = state?.subscriptions[catalog];
+  return Boolean(state?.enabled && subscription && !subscription.revoked && subscription.endsAt > now && subscription.used < subscription.limit);
 }
