@@ -135,12 +135,12 @@ export function useVerificationApplication(
                 message: request!.message,
                 patronymic: request!.patronymic || "",
                 birthYear: request!.birthYear || "",
-                companyRole: request!.companyRole || "owner",
+                companyRole: "owner",
                 // A prior portfolio is not an identity document. Keep history at the moderator, not in the new draft.
                 attachments: (request!.attachments || []).filter((file) =>
                   accountType === "individual"
                     ? file.kind === "passport"
-                    : file.kind === "registration" || file.kind === "authority",
+                    : file.kind === "registration",
                 ),
                 documentConsent: false,
               }

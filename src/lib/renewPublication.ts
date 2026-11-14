@@ -5,10 +5,10 @@ import { requestPublicationModeration } from "./publicationModerationClient";
 export type PublicationKind = "listing" | "request";
 export type PublicationRenewalResult = {
   kind: PublicationKind; publicationId: string; alreadyRenewed: boolean;
-  createdAt: number; expiresAt: number; renewalCount: number; moderationStatus: string;
+  createdAt: number; expiresAt: number; publicationTermDays?: 30 | null; renewalCount: number; moderationStatus: string;
 };
 
-export async function renewPublication(kind: PublicationKind, publicationId: string, expectedExpiresAt: number, funding: "free" | "plan"): Promise<PublicationRenewalResult> {
+export async function renewPublication(kind: PublicationKind, publicationId: string, expectedExpiresAt: number): Promise<PublicationRenewalResult> {
   const user = auth.currentUser;
   if (!user) throw new Error("Войдите в аккаунт для повторной публикации.");
   const token = await user.getIdToken();
@@ -18,7 +18,7 @@ export async function renewPublication(kind: PublicationKind, publicationId: str
   try {
     const response = await fetch(getApiUrl("/api/publications/renew"), {
       method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify({ kind, publicationId, expectedExpiresAt, funding }),
+      body: JSON.stringify({ kind, publicationId, expectedExpiresAt }),
       credentials: "omit", cache: "no-store", redirect: "error", signal: controller.signal,
     });
     const body = await response.json().catch(() => null);

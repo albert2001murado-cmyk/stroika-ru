@@ -25,6 +25,7 @@ type CatalogPathPickerProps = {
   value: CatalogPathValue;
   onChange: (value: CatalogPathValue) => void;
   mode: "executor" | "customer";
+  onChooseCatalog?: () => void;
 };
 
 const SECTION_ICONS = {
@@ -45,6 +46,7 @@ export default function CatalogPathPicker({
   value,
   onChange,
   mode,
+  onChooseCatalog,
 }: CatalogPathPickerProps) {
   const [query, setQuery] = useState("");
   const [showAll, setShowAll] = useState(false);
@@ -125,7 +127,7 @@ export default function CatalogPathPicker({
             <p className="text-xs font-bold text-slate-500">Выберите тип предложения или задачи</p>
           </div>
         </div>
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {onChooseCatalog ? <button type="button" onClick={onChooseCatalog} className="flex min-h-12 w-full items-center justify-between gap-3 rounded-xl border border-blue-200 bg-white px-4 text-sm font-bold text-slate-900"><span>{getCatalogSectionTitle(value.catalogSection)}</span><span className="text-blue-600">Сменить</span></button> : <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {CATALOG_FORM_SECTIONS.map((section) => {
             const Icon = SECTION_ICONS[section.id];
             const active = section.id === value.catalogSection;
@@ -157,7 +159,7 @@ export default function CatalogPathPicker({
               </button>
             );
           })}
-        </div>
+        </div>}
       </div>
 
       <div key={`${value.catalogSection}-${value.catalogCategoryId}`} className="catalog-picker-reveal mt-7">

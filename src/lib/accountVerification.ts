@@ -162,16 +162,10 @@ export function verificationFormError(value: VerificationForm): string {
       return "Приложите разворот паспорта с фотографией.";
   } else if (value.accountType === "ip" || value.accountType === "ooo") {
     if (value.name.trim().length < 2 || value.name.trim().length > 120)
-      return "Укажите имя представителя — от 2 до 120 символов.";
-    if (!["owner", "representative"].includes(value.companyRole))
-      return "Выберите вашу связь с компанией.";
+      return "Укажите ФИО владельца или руководителя";
+    if (value.companyRole !== "owner") return "Проверка доступна владельцу или руководителю компании";
     if (!value.attachments.some((file) => file.kind === "registration"))
-      return "Приложите документ о регистрации ИП или ООО.";
-    if (
-      value.companyRole === "representative" &&
-      !value.attachments.some((file) => file.kind === "authority")
-    )
-      return "Приложите документ, подтверждающий ваши полномочия.";
+      return "Приложите документ о регистрации ИП или ООО";
   } else return "Не удалось определить тип аккаунта. Обновите профиль.";
   if (
     value.attachments.length > VERIFICATION_MAX_FILES ||

@@ -13,8 +13,6 @@ import { ListingCard } from "@/components/ListingCard";
 import { isAccountVerified, verificationButtonLabel } from "@/lib/accountVerification";
 import { useAuth } from "@/components/AuthProvider";
 import { db } from "@/lib/firebase";
-import PaymentFields from "@/components/PaymentFields";
-import { EMPTY_BANK_DETAILS, bankDetailsFromProfile, normalizeBankDetails, validatePayment, type BankDetails } from "@/lib/payments";
 import { formatRussianPhoneInput, needsRussianPhoneUpdate, normalizeRussianPhone, russianPhoneError } from "@/lib/phone";
 import type { AccountType, CustomerRequest, Listing } from "@/types";
 import { updateProfile } from "firebase/auth";
@@ -70,8 +68,6 @@ export default function ProfilePage() {
   const [companyName, setCompanyName] = useState("");
   const [city, setCity] = useState("");
   const [phone, setPhone] = useState("");
-  const [bankDetails, setBankDetails] = useState<BankDetails>({ ...EMPTY_BANK_DETAILS });
-  const [bankConfirmed, setBankConfirmed] = useState(false);
   const legacyPhonePrompted = useRef(false);
 
   const [avatarUrl, setAvatarUrl] = useState("");
@@ -95,8 +91,6 @@ export default function ProfilePage() {
     setCity(profile?.city || "");
     const oldPhone = profile?.phone || "";
     setPhone(formatRussianPhoneInput(oldPhone));
-    setBankDetails(bankDetailsFromProfile(profile));
-    setBankConfirmed(profile?.bankDetailsConfirmed === true);
     if (needsRussianPhoneUpdate(oldPhone) && !legacyPhonePrompted.current) {
       legacyPhonePrompted.current = true;
       window.alert("Поменяйте номер на формат +7 — это актуальный код страны. Мы уже подготовили правильный формат, сохраните профиль.");
@@ -210,13 +204,6 @@ export default function ProfilePage() {
       setMessage(phoneError);
       return;
     }
-    if (accountType === "ip" || accountType === "ooo" || bankConfirmed) {
-      const bankError = validatePayment(["bank_account"], bankDetails, accountType, bankConfirmed);
-      if (bankError) {
-        setMessage(`Заполните расчётный счёт: ${bankError}`);
-        return;
-      }
-    }
 
     setSaving(true);
     setMessage("");
@@ -262,9 +249,6 @@ export default function ProfilePage() {
           displayName: safeDisplayName,
           city: city.trim(),
           phone: normalizeRussianPhone(phone),
-          bankDetails: normalizeBankDetails(bankDetails),
-          bankDetailsConfirmed: bankConfirmed,
-          bankDetailsConfirmedAt: serverTimestamp(),
           avatarUrl: finalAvatarUrl,
           avatarPath: finalAvatarPath,
           updatedAt: serverTimestamp(),
@@ -554,20 +538,6 @@ export default function ProfilePage() {
                 />
               </div>
 
-              <div className="rounded-[24px] border border-blue-100 bg-blue-50/40 p-4 sm:p-5">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-lg font-black text-slate-950">Расчётный счёт</p>
-                  <span className={`rounded-full px-3 py-1 text-xs font-black ${businessAccount ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-500"}`}>
-                    {businessAccount ? "Обязательно" : "По желанию"}
-                  </span>
-                </div>
-                <p className="mt-1 text-sm font-semibold leading-6 text-slate-500">
-                  {businessAccount
-                    ? "Для ИП и ООО реквизиты обязательны. Они используются в анкетах и их можно отправить клиенту в чате."
-                    : "Для физлица заполнение необязательно. Добавьте реквизиты, если хотите отправлять их клиентам в чате."}
-                </p>
-                <PaymentFields methods={["bank_account"]} onMethod={() => undefined} bank={bankDetails} onBank={setBankDetails} confirmed={bankConfirmed} onConfirm={setBankConfirmed} accountType={accountType} bankOnly />
-              </div>
             </div>
 
             {message && (

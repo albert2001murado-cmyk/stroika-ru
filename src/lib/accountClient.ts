@@ -18,7 +18,7 @@ export async function accountRequest<T = any>(path: string, body?: unknown): Pro
     const data = await response.json().catch(() => null);
     if (auth.currentUser?.uid !== user.uid) throw new AccountRequestError("Аккаунт изменился. Повторите вход", 401);
     if (!response.ok) throw new AccountRequestError(typeof data?.error === "string" ? data.error : "Действие не выполнено. Повторите позже", response.status, data?.code);
-    if (body !== undefined && /^\/api\/(?:billing|publications)\//.test(path)) accountMutationRevision++;
+    if (body !== undefined && /^\/api\/publications\//.test(path)) accountMutationRevision++;
     return data as T;
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") throw new AccountRequestError("Ответ задерживается. Проверьте результат перед повторной попыткой", 408);

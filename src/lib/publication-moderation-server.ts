@@ -1,4 +1,3 @@
-import { validatePayment, validateBankOwner } from "./payments";
 import { isPublicationExpired, publicationExpiryMillis } from "./publication-lifetime";
 import { moderationReasonDetails, publicationModerationReason, publicationModerationNotice, validateManualModerationReason } from "./publication-moderation-feedback";
 import { createHash, randomUUID } from "crypto";
@@ -116,7 +115,6 @@ function moderationInputFingerprint(data: Record<string, unknown>) {
       authorId: data.authorId, customerId: data.customerId, status: data.status,
       placementDate: timestampMillis(data.createdAt), renewalCount: data.renewalCount || 0,
       priceFrom: data.priceFrom, budgetFrom: data.budgetFrom, budgetTo: data.budgetTo,
-      paymentMethods: data.paymentMethods, bankDetails: data.bankDetails, bankDetailsConfirmed: data.bankDetailsConfirmed,
       media,
     }))
     .digest("hex");
@@ -288,11 +286,7 @@ export async function processPublication(kind: PublicationKind, idValue: string)
     const blockedOwner = !profile?.exists || !canAccountPublish(profile.data());
     if (blockedOwner) local.flags.push({ code: "owner-unavailable", field: "owner", severity: "review",
       message: "Аккаунту автора недоступна публикация. Обратитесь в поддержку." });
-    const ownerPaymentError = kind === "listing" && Array.isArray(data.paymentMethods) && data.paymentMethods.includes("bank_account")
-      ? validatePayment(data.paymentMethods, data.bankDetails, profile?.data()?.accountType, data.bankDetailsConfirmed)
-        || validateBankOwner(data.paymentMethods, data.bankDetails, profile?.data()) : null;
-    if (ownerPaymentError) local.flags.push({ code: "bank-recipient-mismatch", field: "payment", severity: "changes", message: ownerPaymentError });
-    const localDecision: FinalDecision = duplicate || ownerPaymentError ? "rejected" : blockedOwner ? "manual_review" : local.decision;
+    const localDecision: FinalDecision = duplicate ? "rejected" : blockedOwner ? "manual_review" : local.decision;
     const external =
       localDecision === "rejected"
         ? { decision: "approved" as const, flags: [], provider: "local-only" as const, mediaChecked: 0 }
