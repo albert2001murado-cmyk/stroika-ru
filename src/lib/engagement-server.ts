@@ -4,7 +4,7 @@ import { getAdminDb } from "./firebase-admin";
 import { AccountApiError } from "./account-api-server";
 import { DEFAULT_ENGAGEMENT, DISCOVERY_PROMPTS, ENGAGEMENT_INTERVAL_MS, inEngagementQuietHours, type EngagementPreferences } from "./engagement";
 import { appNotificationSettingsRef, activeAppPushTokens, saveAppNotificationPreferences } from "./app-notifications-server";
-import { billingHash, publicationBillingPath } from "./billing-server";
+import { publicationHash, publicationCatalogPath } from "./publication-slot-server";
 import { publicationDateMillis, publicationExpiryMillis } from "./publication-lifetime";
 import { eligiblePublication } from "./nearby-match-policy";
 import { catalogTextKey } from "../data/catalogUpdates";
@@ -31,7 +31,7 @@ export async function trackEngagementListing(uid: string, listingId: string) {
   await db.runTransaction(async tx => {
     const [preferences, listing, settings] = await Promise.all([tx.get(ref), tx.get(db.doc(`listings/${listingId}`)), tx.get(appNotificationSettingsRef(uid))]);
     if (!mobileConsent(preferences.data() || {}) || settings.get("enabled") === false || !listing.exists || listing.get("authorId") === uid || !eligiblePublication(listing.data()!, "listing")) return;
-    const path = publicationBillingPath(listing.data()!), key = billingHash(`${path.catalogSection}:${path.catalogCategoryId}:${path.subcategory}`), data = preferences.data()!;
+    const path = publicationCatalogPath(listing.data()!), key = publicationHash(`${path.catalogSection}:${path.catalogCategoryId}:${path.subcategory}`), data = preferences.data()!;
     const topics = Array.isArray(data.topics) ? data.topics.filter((t: any) => t.key !== key && t.viewedAt > now - MAX_TOPIC_AGE).slice(0, 5) : [];
     topics.unshift({ key, label: path.subcategory, city: String(listing.get("city") || "").slice(0, 200), viewedAt: now });
     tx.update(ref, { topics, updatedAt: FieldValue.serverTimestamp() });

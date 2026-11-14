@@ -1,15 +1,13 @@
 "use client";
-import PublicationTariffModal from "@/components/PublicationTariffModal";
-import { usePublicationTariff } from "@/lib/usePublicationTariff";
+import FreePlacementDialog from "@/components/FreePlacementDialog";
+import { useFreePlacement } from "@/lib/useFreePlacement";
 import { createAccountPublication, newAccountRequestId } from "@/lib/accountClient";
 import PublicationTerm from "@/components/PublicationTerm";
 import { uploadAuthHeaders } from "@/lib/uploadAuth";
 
 
 import PublicationLocationPicker, { type PublicationLocation } from "@/components/PublicationLocationPicker";
-import { EMPTY_BANK_DETAILS, bankDetailsFromProfile, normalizeBankDetails, normalizePaymentChoice, paymentLabel, validatePayment, validateBankOwner, type BankDetails } from "@/lib/payments";
 import { formatRussianPhoneInput, normalizeRussianPhone, russianPhoneError } from "@/lib/phone";
-import PaymentFields from "@/components/PaymentFields";
 import { checkCatalogConsistency, type CatalogConsistencyInput } from "@/lib/catalogConsistency";
 import CatalogConsistencyHint from "@/components/CatalogConsistencyHint";
 
@@ -33,14 +31,12 @@ import {
   getOfferGroupInfo,
   legacyCapabilitiesFromOffer,
 } from "@/lib/listingOffer";
-import type { ListingMedia, PaymentMethod } from "@/types";
+import type { ListingMedia } from "@/types";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import {
   ArrowLeft,
-  Banknote,
   Camera,
   Check,
-  CreditCard,
   Loader2,
   MapPin,
   Phone,
@@ -169,13 +165,15 @@ export default function NewListingPage() {
 
   const defaultCatalogPath = getDefaultCatalogPath("services");
 
-  const [publicationRequestId] = useState(newAccountRequestId);
+  const [publicationRequestId, setPublicationRequestId] = useState(newAccountRequestId);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [catalogSection, setCatalogSection] = useState(
     defaultCatalogPath.catalogSection
   );
-  const tariff = usePublicationTariff(catalogSection, Boolean(user) && !loading && canAccountPublish(profile));
+  const access = useFreePlacement(!loading && canAccountPublish(profile) ? user?.uid : undefined);
+  const [catalogChosen, setCatalogChosen] = useState(false);
+  const [chooserOpen, setChooserOpen] = useState(true);
   const submissionLock = useRef(false);
   const [catalogCategoryId, setCatalogCategoryId] = useState(
     defaultCatalogPath.catalogCategoryId
@@ -198,15 +196,10 @@ export default function NewListingPage() {
   const [priceFrom, setPriceFrom] = useState("");
   const [minimumWorkAmount, setMinimumWorkAmount] = useState("");
   const [minimumWorkUnit, setMinimumWorkUnit] = useState("м²");
-  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>(["cash_or_transfer"]);
-  const [bankDetails, setBankDetails] = useState<BankDetails>({ ...EMPTY_BANK_DETAILS });
-  const [bankConfirmed, setBankConfirmed] = useState(false);
   useEffect(() => {
-    const defaults = bankDetailsFromProfile(profile);
-    setBankDetails(current => ({ ...defaults, ...current, recipientName: current.recipientName || defaults.recipientName, inn: current.inn || defaults.inn, kpp: current.kpp || defaults.kpp }));
-    setBankConfirmed(profile?.bankDetailsConfirmed === true);
-    if (!phone && profile?.phone) setPhone(formatRussianPhoneInput(profile.phone));
-  }, [profile?.bankDetails, profile?.bankDetailsConfirmed, profile?.companyOfficialName, profile?.companyName, profile?.companyInn, profile?.companyKpp, profile?.displayName, profile?.phone]);
+    if (profile?.phone) setPhone(current => current || formatRussianPhoneInput(profile.phone));
+  }, [profile?.phone]);
+  useEffect(() => { setCatalogChosen(false); setChooserOpen(true); setPublicationRequestId(newAccountRequestId()); }, [user?.uid]);
 
   const initialOfferGroup = getOfferGroup(defaultCatalogPath.category);
   const [offerAction, setOfferAction] = useState(
@@ -281,13 +274,6 @@ export default function NewListingPage() {
     }));
   }
 
-  function togglePaymentMethod(method: PaymentMethod) {
-    setPaymentMethods([method]); setBankConfirmed(false);
-    if (method === "bank_account") {
-      const defaults = bankDetailsFromProfile(profile);
-      setBankDetails(current => ({ ...current, recipientName: current.recipientName || defaults.recipientName, inn: current.inn || defaults.inn, kpp: current.kpp || defaults.kpp }));
-    }
-  }
 
   function handleMediaSelect(event: ChangeEvent<HTMLInputElement>) {
     setError("");
@@ -403,20 +389,13 @@ export default function NewListingPage() {
       return;
     }
 
-    const savedBankDetails = bankDetailsFromProfile(profile);
-    const profileBankError = paymentMethods[0] === "bank_account"
-      ? validatePayment(paymentMethods, savedBankDetails, profile?.accountType, profile?.bankDetailsConfirmed)
-      : null;
-    if (profileBankError) { setError(`Сначала сохраните расчётный счёт в профиле: ${profileBankError}`); return; }
-    const paymentError = paymentMethods[0] === "bank_account" ? validateBankOwner(paymentMethods, savedBankDetails, profile) : validatePayment(paymentMethods, bankDetails, profile?.accountType, bankConfirmed);
-    if (paymentError) { setError(paymentError); return; }
     if (submissionLock.current) return;
     submissionLock.current = true;
     setIsSaving(true);
     setError("");
 
     try {
-      if (!await tariff.ensure()) return;
+      if (!await access.ensure(catalogSection)) { setChooserOpen(true); return; }
       const uploadedMedia: ListingMedia[] = [];
 
       for (const item of mediaFiles) {
@@ -473,11 +452,6 @@ export default function NewListingPage() {
 
         phone: normalizeRussianPhone(phone),
         priceFrom: priceFrom.trim() ? Number(priceFrom) : null,
-        paymentMethods,
-        paymentSchemaVersion: 2,
-        bankDetails: paymentMethods[0] === "bank_account" ? normalizeBankDetails(savedBankDetails) : null,
-        bankDetailsConfirmed: paymentMethods[0] === "bank_account" && bankConfirmed,
-        bankDetailsConfirmedAt: paymentMethods[0] === "bank_account" ? serverTimestamp() : null,
 
         catalogSection,
         catalogCategoryId,
@@ -523,12 +497,15 @@ export default function NewListingPage() {
         moderationSource: "web",
         createdAt: serverTimestamp(),
       }, publicationRequestId);
+      setPublicationRequestId(newAccountRequestId());
 
       void requestPublicationModeration("listing", listingRef.id);
       alert("Анкета проверяется автоматически. Обычно это занимает до 5 минут.");
       router.push("/profile");
     } catch (uploadError) {
-      if (tariff.handleDenied(uploadError)) return;
+      if (["activation-required", "free-limit-used"].includes((uploadError as { code?: string })?.code || "")) {
+        void access.refresh(); setChooserOpen(true); return;
+      }
       console.error(uploadError);
       setError(
         uploadError instanceof Error
@@ -546,7 +523,10 @@ export default function NewListingPage() {
 
   return (
     <main className="min-h-screen bg-[#f5f7fb] px-3 py-6 sm:px-5 sm:py-10">
-      <PublicationTariffModal {...tariff.modal} onCatalogChange={next => handleCatalogPathChange(getDefaultCatalogPath(next))}/>
+      {chooserOpen && user && <FreePlacementDialog access={access} initial={catalogChosen ? catalogSection : null}
+        onClose={() => { setChooserOpen(false); if (!catalogChosen) router.replace("/"); }}
+        onContinue={next => { if (!catalogChosen || next !== catalogSection) handleCatalogPathChange(getDefaultCatalogPath(next)); setCatalogChosen(true); setChooserOpen(false); }}/>}
+      {!user ? <div className="mx-auto max-w-lg rounded-3xl bg-white p-6"><h1 className="text-xl font-bold">Войдите, чтобы разместить объявление</h1><Link href="/auth?next=/post/new" className="mt-4 inline-block font-bold text-blue-600">Войти в аккаунт</Link></div> : !catalogChosen ? null : <>
       <div className="mx-auto max-w-7xl">
         <Link
           href="/"
@@ -599,7 +579,7 @@ export default function NewListingPage() {
           <CatalogConsistencyHint value={catalogCheckValue} />
 
               <CatalogPathPicker
-                mode="executor"
+                mode="executor" onChooseCatalog={() => { void access.refresh(); setChooserOpen(true); }}
                 value={{
                   catalogSection,
                   catalogCategoryId,
@@ -843,7 +823,7 @@ export default function NewListingPage() {
             </section>
 
             <section className="mt-6 rounded-[24px] sm:mt-8 sm:rounded-[28px] border border-gray-100 bg-white p-5">
-              <h2 className="text-2xl font-black text-gray-950">Цена и оплата</h2>
+              <h2 className="text-2xl font-black text-gray-950">Цена</h2>
 
               <div className="mt-5 grid gap-5 md:grid-cols-2">
                 <input
@@ -855,12 +835,10 @@ export default function NewListingPage() {
                   className="input"
                 />
 
-                <div className="md:col-span-2"><PaymentFields methods={paymentMethods} onMethod={togglePaymentMethod}
-                  bank={bankDetails} onBank={setBankDetails} confirmed={bankConfirmed} onConfirm={setBankConfirmed} accountType={profile?.accountType} useProfileBank /></div>
               </div>
             </section>
 
-          <aside className="my-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4"><span className="text-sm text-slate-600">Тариф нужен только для анкеты исполнителя</span><button type="button" onClick={tariff.show} className="min-h-11 rounded-xl bg-white px-4 py-2 text-sm font-semibold text-slate-900 ring-1 ring-slate-200">Выбрать размещения</button></aside>
+
           <PublicationTerm />
             <button
               type="submit"
@@ -916,12 +894,6 @@ export default function NewListingPage() {
                 <span className="text-gray-950">{videoCount}/{MAX_VIDEOS}</span>
               </div>
 
-              <div className="flex items-center justify-between">
-                <span>Оплата</span>
-                <span className="text-gray-950">
-                  {paymentLabel(paymentMethods)}
-                </span>
-              </div>
             </div>
 
             <div className="mt-6 rounded-3xl bg-blue-50 p-5 text-sm font-bold leading-6 text-[#0057ff]">
@@ -947,6 +919,7 @@ export default function NewListingPage() {
           </aside>
         </div>
       </div>
+    </>}
     </main>
   );
 }

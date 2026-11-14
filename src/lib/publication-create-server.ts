@@ -3,10 +3,10 @@ import { getAdminDb } from "./firebase-admin";
 import { AccountApiError } from "./account-api-server";
 import { publicationVerificationFields } from "./accountVerification";
 import { normalizeRussianPhone } from "./phone";
-import { bankDetailsFromProfile, normalizeBankDetails, validateBankOwner, validatePayment } from "./payments";
-import { isPublicationExpired as isExpired } from "./publication-lifetime";
-import { BILLING_PERIOD_MS } from "./billing";
-import { billingAccountRef, billingHash, ensureBillingAccount, publicationBillingPath, ownPublications, assertPublicationSlot, consumePublicationAllowance } from "./billing-server";
+import { isPublicationExpired as isExpired, oneCalendarMonthAfter } from "./publication-lifetime";
+import { FREE_LIMIT } from "./free-placement";
+import { freePlacementRef, assertFreeCatalog, recordFreePlacement } from "./free-placement-server";
+import { publicationHash, publicationCatalogPath, ownPublications, assertPublicationSlot } from "./publication-slot-server";
 
 const text = (v: unknown, max: number) => typeof v === "string" ? v.trim().slice(0, max) : "";
 function money(value: unknown) {
@@ -25,7 +25,7 @@ function mediaUrl(value: unknown) {
 function payloadFor(kind: "listing" | "request", body: DocumentData, profile: DocumentData, uid: string) {
   const title = text(body.title, 161), description = text(body.description, 6001), city = text(body.city, 201);
   if (title.length < 5 || title.length > 160 || description.length < 20 || description.length > 6000 || city.length < 2 || city.length > 200) throw new AccountApiError("Название — 5–160 символов, описание — 20–6000; укажите город");
-  const catalog = publicationBillingPath(body);
+  const catalog = publicationCatalogPath(body);
   const phone = normalizeRussianPhone(profile.phone);
   if (!phone) throw new AccountApiError("Сохраните телефон в настройках профиля");
   const images = Array.isArray(body.imageUrls) ? body.imageUrls : [], videos = Array.isArray(body.videoUrls) ? body.videoUrls : [];
@@ -46,7 +46,7 @@ function payloadFor(kind: "listing" | "request", body: DocumentData, profile: Do
     moderationSubmittedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
     ...publicationVerificationFields(profile),
     searchText: [title, description, catalog.category, catalog.subcategory, city].join(" ").slice(0, 10000),
-    engagementTopicKey: billingHash(`${catalog.catalogSection}:${catalog.catalogCategoryId}:${catalog.subcategory}`),
+    engagementTopicKey: publicationHash(`${catalog.catalogSection}:${catalog.catalogCategoryId}:${catalog.subcategory}`),
   };
   const name = text(profile.displayName || profile.name || profile.companyName, 180) || "Пользователь", avatar = text(profile.avatarUrl || profile.photoURL, 2000);
   if (kind === "request") {
@@ -54,19 +54,11 @@ function payloadFor(kind: "listing" | "request", body: DocumentData, profile: Do
     if (from !== null && to !== null && from > to) throw new AccountApiError("Бюджет «от» не может превышать бюджет «до»");
     return { ...common, customerId: uid, customerName: name, customerAvatar: avatar, customerPhone: phone, accountType: profile.accountType || "individual", latitude: hasLocation ? lat : null, longitude: hasLocation ? lng : null, budget: from, budgetFrom: from, budgetTo: to, deadline: text(body.deadline, 200), urgency: body.urgency === "urgent" ? "urgent" : "normal", contactPreference: ["both", "messages", "calls"].includes(body.contactPreference) ? body.contactPreference : "both", offersCount: 0, responsesCount: 0, viewsCount: 0 };
   }
-  const paymentMethods = Array.isArray(body.paymentMethods) ? body.paymentMethods : [];
-  const bank = bankDetailsFromProfile(profile);
-  const paymentError = validatePayment(paymentMethods, bank, profile.accountType, profile.bankDetailsConfirmed) || validateBankOwner(paymentMethods, bank, profile);
-  if (paymentError) throw new AccountApiError(paymentError);
   const features = Object.fromEntries(Object.entries(body.offerFeatures || {}).slice(0, 30).filter(([key, value]) => /^[a-zA-Z0-9_-]{1,80}$/.test(key) && typeof value === "boolean"));
   const strings = (value: unknown, max: number) => Array.isArray(value) ? value.slice(0, max).filter(v => typeof v === "string" && v.length <= 100) : [];
   return {
     ...common, authorId: uid, authorName: name, authorAvatarUrl: avatar, accountType: profile.accountType || "individual", phone,
     priceFrom: money(body.priceFrom), minimumWorkAmount: money(body.minimumWorkAmount), minimumWorkUnit: text(body.minimumWorkUnit, 80),
-    paymentMethods, paymentSchemaVersion: 2,
-    bankDetails: paymentMethods[0] === "bank_account" ? normalizeBankDetails(bank) : null,
-    bankDetailsConfirmed: paymentMethods[0] === "bank_account" && profile.bankDetailsConfirmed === true,
-    bankDetailsConfirmedAt: paymentMethods[0] === "bank_account" ? FieldValue.serverTimestamp() : null,
     searchGroup: catalog.catalogSection === "materials" ? "materials" : catalog.catalogSection === "equipment" ? "equipment" : "services",
     capabilities: strings(body.capabilities, 30), offerAction: text(body.offerAction, 80), offerActions: strings(body.offerActions, 15),
     offerActionLabel: text(body.offerActionLabel, 400), offerFeatures: features, searchTags: strings(body.searchTags, 50), searchVersion: 1,
@@ -80,15 +72,15 @@ export async function editAccountPublication(uid: string, input: Record<string, 
   await db.runTransaction(async tx => {
     const [previous, profile] = await Promise.all([tx.get(ref), tx.get(db.doc(`users/${uid}`))]);
     if (!previous.exists || previous.get(kind === "listing" ? "authorId" : "customerId") !== uid) throw new AccountApiError("Объявление не найдено", 404);
-    if (!profile.exists || profile.get("moderationStatus") === "blocked" || previous.get("moderationStatus") === "blocked" || (kind === "listing" && previous.get("moderationStatus") === "payment_required")) throw new AccountApiError("Изменение объявления недоступно", 403);
-    const source = previous.data()!, canonical = publicationBillingPath(source);
+    if (!profile.exists || profile.get("moderationStatus") === "blocked" || previous.get("moderationStatus") === "blocked") throw new AccountApiError("Изменение объявления недоступно", 403);
+    const source = previous.data()!, canonical = publicationCatalogPath(source);
     const payload = payloadFor(kind, { ...source, ...input.publication, ...canonical }, profile.data()!, uid);
     const owned = await ownPublications(tx, uid);
-    if (!isExpired(source)) assertPublicationSlot(owned, payload, kind, kind === "request" ? Number.MAX_SAFE_INTEGER : canonical.catalogSection === "materials" ? 25 : 10, input.id);
-    // Owner may edit content, but cannot restart the paid placement or move it to another catalog.
+    if (!isExpired(source)) assertPublicationSlot(owned, payload, kind, kind === "listing" && ["rejected", "payment_required"].includes(String(source.moderationStatus || "")) ? FREE_LIMIT : Number.MAX_SAFE_INTEGER, input.id);
+    // Owner may edit content, but cannot restart the placement or move it to another catalog.
     const counters = kind === "listing" ? ["viewsCount", "favoritesCount"] : ["viewsCount", "offersCount", "responsesCount"];
     for (const key of counters) delete (payload as DocumentData)[key];
-    tx.update(ref, { ...payload, status: kind === "request" && source.moderationStatus === "payment_required" && !isExpired(source) ? "active" : source.status || "active" });
+    tx.update(ref, { ...payload, ...(kind === "listing" ? { paymentMethods: FieldValue.delete(), paymentSchemaVersion: FieldValue.delete(), bankDetails: FieldValue.delete(), bankDetailsConfirmed: FieldValue.delete(), bankDetailsConfirmedAt: FieldValue.delete() } : {}), status: kind === "request" && source.moderationStatus === "payment_required" && !isExpired(source) ? "active" : source.status || "active" });
   });
   return { id: input.id, kind };
 }
@@ -96,20 +88,17 @@ export async function createPublication(uid: string, input: Record<string, unkno
   if (input.kind !== "listing" && input.kind !== "request") throw new AccountApiError("Укажите тип объявления");
   const kind = input.kind, requestId = String(input.requestId || "");
   if (!/^[A-Za-z0-9_-]{16,80}$/.test(requestId) || !input.publication || typeof input.publication !== "object" || Array.isArray(input.publication)) throw new AccountApiError("Обновите форму публикации");
-  if (kind === "listing") await ensureBillingAccount(uid);
-  const db = getAdminDb(), id = billingHash(`${uid}:${kind}:${requestId}`).slice(0, 40), ref = db.doc(`${kind === "listing" ? "listings" : "customerRequests"}/${id}`), accountRef = billingAccountRef(uid);
+  const db = getAdminDb(), id = publicationHash(`${uid}:${kind}:${requestId}`).slice(0, 40), ref = db.doc(`${kind === "listing" ? "listings" : "customerRequests"}/${id}`), accountRef = freePlacementRef(uid);
   await db.runTransaction(async tx => {
     const [existing, profile, saved] = await Promise.all([tx.get(ref), tx.get(db.doc(`users/${uid}`)), kind === "listing" ? tx.get(accountRef) : Promise.resolve(null)]);
     if (existing.exists) return; // A lost response never consumes another slot.
     if (!profile.exists || profile.get("moderationStatus") === "blocked") throw new AccountApiError("Аккаунту недоступна публикация", 403);
     const payload = payloadFor(kind, input.publication as DocumentData, profile.data()!, uid), now = Date.now();
+    if (kind === "listing") assertFreeCatalog(saved?.data(), payload.catalogSection, true);
     const owned = await ownPublications(tx, uid);
-    const consumed = kind === "listing" ? consumePublicationAllowance(saved!.data()!, payload.catalogSection, false, now)
-      : { account: null, funding: "customer-free", periodId: "", orderId: "", limit: Number.MAX_SAFE_INTEGER };
-    assertPublicationSlot(owned, payload, kind, consumed.limit, "", now);
-    tx.create(ref, { ...payload, publicationTermDays: 30, billingManaged: kind === "listing", createdAt: Timestamp.fromMillis(now), expiresAt: Timestamp.fromMillis(now + BILLING_PERIOD_MS), renewalCount: 0 });
-    if (consumed.account) tx.set(accountRef, consumed.account);
-    tx.create(db.doc(`billingUsages/${billingHash(`${kind}:${id}:0`)}`), { uid, kind, publicationId: id, catalog: payload.catalogSection, funding: consumed.funding, periodId: consumed.periodId, orderId: consumed.orderId, createdAt: FieldValue.serverTimestamp() });
+    assertPublicationSlot(owned, payload, kind, kind === "listing" ? FREE_LIMIT : Number.MAX_SAFE_INTEGER, "", now);
+    tx.create(ref, { ...payload, createdAt: Timestamp.fromMillis(now), expiresAt: Timestamp.fromMillis(oneCalendarMonthAfter(now)), renewalCount: 0 });
+    if (kind === "listing") recordFreePlacement(tx, uid, payload.catalogSection, true);
   });
   return { id, kind };
 }

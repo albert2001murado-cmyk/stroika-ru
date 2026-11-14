@@ -1,6 +1,4 @@
 "use client";
-import { useBilling } from "@/lib/useBilling";
-import Link from "next/link";
 import { CalendarDays, Clock3, Loader2, RotateCcw } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { publicationTermDisplay } from "@/lib/publication-lifetime";
@@ -8,6 +6,8 @@ import { isPublicationOwner } from "@/lib/publication-owner";
 import { usePublicationClock } from "@/lib/usePublicationExpiry";
 import { usePublicationRenewal } from "@/lib/usePublicationRenewal";
 import type { PublicationKind } from "@/lib/renewPublication";
+
+import { canRenewFree } from "@/lib/free-placement";
 
 type Props = {
   kind: PublicationKind; publicationId: string; publication: unknown;
@@ -21,10 +21,10 @@ export default function PublicationPlacementCard(props: Props) {
 
 function OwnedPublicationPlacementCard({ kind, publicationId, publication }: Props) {
   const customer = kind === "request";
-  const billing = useBilling(!customer);
   const renewal = usePublicationRenewal(kind, publicationId, publication);
   usePublicationClock([renewal.publication], 60_000);
   const term = publicationTermDisplay(renewal.publication);
+  const canRenew = customer || canRenewFree(renewal.publication);
   const tone = term.expired ? "border-slate-200 bg-slate-50" : term.endingSoon ? "border-amber-200 bg-amber-50/70" : "border-blue-100 bg-blue-50/60";
   return <section aria-label="Срок размещения объявления" className={`mt-3 rounded-[22px] border p-4 sm:p-5 ${tone}`}>
     <div className="flex items-center gap-3">
@@ -39,13 +39,13 @@ function OwnedPublicationPlacementCard({ kind, publicationId, publication }: Pro
       <p className="inline-flex items-center gap-1.5 text-sm font-bold text-slate-600"><Clock3 size={14} aria-hidden="true" />{term.time}</p>
     </div> : null}
     {!term.expired && term.deadline > 0 ? <div className="mt-4 h-1 overflow-hidden rounded-full bg-white" aria-hidden="true"><div className={`h-full rounded-full ${term.endingSoon ? "bg-amber-400" : "bg-[#3d7be0]"}`} style={{ width: `${term.remainingPercent}%` }} /></div> : null}
-    {term.expired ? <div className="mt-4">
-      <button type="button" onClick={() => void renewal.renew(customer || billing.data?.freeRenewalAvailable ? "free" : "plan").then(() => { if (!customer) void billing.refresh(); })} disabled={renewal.busy || (!customer && (billing.loading || !billing.data))} aria-busy={renewal.busy} className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#0057ff] px-4 py-3 text-sm font-extrabold text-white transition hover:bg-[#004de6] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-wait disabled:opacity-65">
-        {renewal.busy ? <Loader2 size={18} className="animate-spin" /> : <RotateCcw size={18} />}{renewal.busy ? "Отправляем…" : customer || billing.data?.freeRenewalAvailable ? "Продлить бесплатно на 30 дней" : "Продлить по тарифу на 30 дней"}
+    {term.expired && canRenew ? <div className="mt-4">
+      <button type="button" onClick={() => void renewal.renew()} disabled={renewal.busy} aria-busy={renewal.busy} className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#0057ff] px-4 py-3 text-sm font-extrabold text-white transition hover:bg-[#004de6] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-wait disabled:opacity-65">
+        {renewal.busy ? <Loader2 size={18} className="animate-spin" /> : <RotateCcw size={18} />}{renewal.busy ? "Отправляем…" : "Продлить бесплатно на месяц"}
       </button>
-      <p className="mt-2 text-center text-xs leading-5 text-slate-500">{customer ? "Заявки заказчика публикуются и продлеваются бесплатно" : billing.data?.freeRenewalAvailable ? "Один подарок на весь аккаунт — для этого объявления" : "Используется одно размещение из тарифа"}</p>
+      <p className="mt-2 text-center text-xs leading-5 text-slate-500">{customer ? "Заявки заказчика публикуются и продлеваются бесплатно" : "После проверки объявление снова появится в каталоге"}</p>
     </div> : null}
-    {term.expired && !customer && <Link href="/plans" className="mt-3 block text-sm font-bold text-blue-600">Тарифы и условия →</Link>}
+    {term.expired && !canRenew && <p className="mt-3 text-sm text-slate-600">Бесплатное продление уже использовано</p>}
     {renewal.error ? <p role="alert" className="mt-3 text-sm font-semibold leading-6 text-red-600">{renewal.error}</p> : null}
   </section>;
 }

@@ -11,7 +11,6 @@ import UserBlockButton from "@/components/UserBlockButton";
 import CustomerRequestCard from "@/components/CustomerRequestCard";
 import { ListingCard } from "@/components/ListingCard";
 import VerifiedBadge from "@/components/VerifiedBadge";
-import BankDetailsCard from "@/components/BankDetailsCard";
 import ProfileReviews from "@/components/ProfileReviews";
 import { db } from "@/lib/firebase";
 import { isPublicationApproved, isPublicationModerationApproved } from "@/lib/moderation";
@@ -816,11 +815,6 @@ export default function PublicUserPage() {
           </section>
         ) : null}
 
-        {profile.bankDetailsConfirmed ? (
-          <div className="public-profile-reveal mt-6" style={{ animationDelay: "270ms" }}>
-            <BankDetailsCard value={profile.bankDetails} />
-          </div>
-        ) : null}
 
         <ProfileReviews
           userId={uid}

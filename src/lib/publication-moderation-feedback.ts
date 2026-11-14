@@ -4,7 +4,7 @@ import { onlyTemporaryModerationFlags } from "./publication-moderation-retry";
 type Decision = "approved" | "rejected" | "manual_review";
 const fieldNames: Record<string, string> = {
   title: "Название", description: "Описание", category: "Каталог и категория",
-  city: "Город", media: "Фото и видео", content: "Содержание", payment: "Оплата и реквизиты", owner: "Профиль автора",
+  city: "Город", media: "Фото и видео", content: "Содержание", payment: "Условия объявления", owner: "Профиль автора",
 };
 function clean(value: unknown, max = 500) {
   return typeof value === "string" ? value.replace(/[\u0000-\u001F\u007F]/g, " ").trim().slice(0, max) : "";

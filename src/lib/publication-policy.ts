@@ -1,7 +1,6 @@
 import { containsProhibitedLanguage, containsExplicitAdultText } from "./content-language-policy";
 export { containsProhibitedLanguage } from "./content-language-policy";
 import { canonicalCatalogFields } from "../data/catalogUpdates";
-import { validatePayment } from "./payments";
 import { checkCatalogConsistency } from "./catalogConsistency";
 import {
   CATALOG_FORM_SECTIONS,
@@ -372,10 +371,6 @@ export function evaluatePublicationLocally(
   const media = collectMedia(data);
   const flags: ModerationFlag[] = [];
   const add = (flag: ModerationFlag) => flags.push(flag);
-  if (kind === "listing" && (data.paymentSchemaVersion === 2 || (Array.isArray(data.paymentMethods) && data.paymentMethods.includes("bank_account")))) {
-    const paymentError = validatePayment(data.paymentMethods, data.bankDetails, data.accountType, data.bankDetailsConfirmed);
-    if (paymentError) add({ code: "invalid-payment", field: "payment", severity: "changes", message: paymentError, legalBasis: SERVICE_RULES });
-  }
   const catalogIssue = checkCatalogConsistency(data);
   if (catalogIssue) add({ ...catalogIssue, field: "category", severity: "changes", legalBasis: SERVICE_RULES });
 

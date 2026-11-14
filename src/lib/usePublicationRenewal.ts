@@ -15,12 +15,12 @@ export function usePublicationRenewal(kind: PublicationKind, publicationId: stri
   const effective = current.result && publicationDateMillis(source.createdAt) < current.result.createdAt
     ? { ...source, ...current.result } : publication;
 
-  async function renew(funding: "free" | "plan") {
+  async function renew() {
     if (working.current === key || !isPublicationExpired(effective)) return;
     working.current = key;
     setState(previous => ({ key, busy: true, error: "", result: previous.key === key ? previous.result : null }));
     try {
-      const result = await renewPublication(kind, publicationId, publicationExpiryMillis(effective), funding);
+      const result = await renewPublication(kind, publicationId, publicationExpiryMillis(effective));
       if (scope.current === key) setState({ key, busy: false, error: "", result });
     } catch (error) {
       if (scope.current === key) setState(previous => ({ key, busy: false,

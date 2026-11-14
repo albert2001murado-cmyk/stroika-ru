@@ -259,9 +259,9 @@ export default function AccountVerificationForm() {
                         </p>
                       </div>
                       <label className="block text-sm font-bold">
-                        ФИО представителя
+                        ФИО владельца или руководителя
                         <input
-                          aria-label="ФИО представителя"
+                          aria-label="ФИО владельца или руководителя"
                           required
                           maxLength={120}
                           value={form.name}
@@ -275,23 +275,7 @@ export default function AccountVerificationForm() {
                       <p className="text-sm font-bold">
                         Ваша связь с компанией
                       </p>
-                      <div className="flex flex-wrap gap-2">
-                        {(["owner", "representative"] as const).map((role) => (
-                          <button
-                            key={role}
-                            type="button"
-                            onClick={() => change("companyRole", role)}
-                            aria-pressed={form.companyRole === role}
-                            className={`rounded-xl border px-3 py-2 text-sm font-semibold ${form.companyRole === role ? "border-blue-500 bg-white text-blue-700" : "border-slate-200 text-slate-500"}`}
-                          >
-                            {role === "representative"
-                              ? "Представитель"
-                              : form.accountType === "ip"
-                                ? "Я — предприниматель"
-                                : "Владелец / руководитель"}
-                          </button>
-                        ))}
-                      </div>
+                      <p className="w-fit rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-800">Владелец или руководитель</p>
                     </section>
                   )}
                   <div className="grid gap-5 sm:grid-cols-2">
