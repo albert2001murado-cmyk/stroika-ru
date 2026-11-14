@@ -6,8 +6,6 @@ import { usePublicationClock } from "@/lib/usePublicationExpiry";
 import PublicationTerm from "@/components/PublicationTerm";
 import { getPublicProfile } from "@/lib/publicProfiles";
 
-import BankDetailsCard from "@/components/BankDetailsCard";
-import { paymentLabel, normalizePaymentChoice } from "@/lib/payments";
 import SharePublicationButton from "@/components/SharePublicationButton";
 import { catalogCategoryLabel, catalogLabel } from "@/data/catalogLabels";
 
@@ -25,11 +23,9 @@ import { isPublicationApproved, isReviewApproved } from "@/lib/moderation";
 import { requestReviewModeration } from "@/lib/reviewModeration";
 import type { Listing, Review, UserProfile } from "@/types";
 import {
-  Banknote,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
-  CreditCard,
   ImageIcon,
   Loader2,
   MapPin,
@@ -56,17 +52,6 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
-function paymentText(listing: Listing) { return paymentLabel(listing.paymentMethods); }
-
-function paymentIcon(listing: Listing) {
-  const methods = listing.paymentMethods || [];
-
-  if (normalizePaymentChoice(methods) === "bank_account") {
-    return <CreditCard size={20} />;
-  }
-
-  return <Banknote size={20} />;
-}
 
 function getChatId(listingId: string, ownerId: string, clientId: string) {
   return `${listingId}_${[ownerId, clientId].sort().join("_")}`;
@@ -722,15 +707,6 @@ export default function ListingPage() {
               </p>
             </div>
 
-            <div className="mt-4 rounded-3xl bg-blue-50 p-5 text-[#0057ff]">
-              <p className="flex items-center gap-2 font-black">
-                {paymentIcon(listing)}
-                Оплата
-              </p>
-
-              <p className="mt-2 font-bold">{paymentText(listing)}</p>
-              {listing.paymentMethods?.includes("bank_account") ? <BankDetailsCard value={listing.bankDetails} /> : null}
-            </div>
 
             {user?.uid === listing.authorId && (
               <Link

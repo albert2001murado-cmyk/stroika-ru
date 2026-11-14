@@ -56,7 +56,7 @@ export function nextPublicationExpiry(items: readonly unknown[], now: number): n
 
 export function publicationTermText(item: unknown, now = Date.now()): string {
   const deadline = publicationExpiryMillis(item);
-  if (!deadline) return "Срок размещения — 30 дней.";
+  if (!deadline) return "Срок размещения: один месяц";
   const date = new Date(deadline + MOSCOW_OFFSET_MS);
   const pad = (value: number) => String(value).padStart(2, "0");
   const formatted = `${pad(date.getUTCDate())}.${pad(date.getUTCMonth() + 1)}.${date.getUTCFullYear()} в ${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())} МСК`;
@@ -83,7 +83,7 @@ export function publicationTermDisplay(item: unknown, now = Date.now()) {
     deadline, expired, endingSoon: !expired && remaining > 0 && remaining <= 3 * 86_400_000,
     date: deadline ? `${date.getUTCDate()} ${months[date.getUTCMonth()]} ${date.getUTCFullYear()}` : "",
     time: deadline ? `в ${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())} МСК` : "",
-    countdown: deadline ? countdown : "Срок размещения — 30 дней",
+    countdown: deadline ? countdown : "Срок размещения: один месяц",
     remainingPercent: !deadline || expired ? 0 : Math.max(0, Math.min(100, remaining / Math.max(1, deadline - start) * 100)),
   };
 }

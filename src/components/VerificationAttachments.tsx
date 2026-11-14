@@ -38,16 +38,9 @@ export default function VerificationAttachments({
   const { user } = useAuth();
   const individual = accountType === "individual",
     editable = Boolean(onChange);
-  const [kind, setKind] = useState<VerificationAttachmentKind>(
-    individual ? "passport" : "registration",
-  );
   const [busy, setBusy] = useState(false),
     [error, setError] = useState("");
-  const activeKind = individual
-    ? "passport"
-    : kind !== "registration" && kind !== "authority"
-      ? "registration"
-      : kind;
+  const activeKind: VerificationAttachmentKind = individual ? "passport" : "registration";
   function working(value: boolean) {
     setBusy(value);
     onBusyChange?.(value);
@@ -151,31 +144,13 @@ export default function VerificationAttachments({
           <p className="mt-2 text-sm leading-6 text-slate-500">
             {individual
               ? "Приложите чёткое фото или скан разворота паспорта с фотографией. Достаточно этого разворота — другие страницы не требуются."
-              : "Приложите уставные или регистрационные документы, чтобы подтвердить организацию, и документ о полномочиях, если действуете как представитель."}
+              : "Приложите регистрационный документ, чтобы подтвердить компанию"}
           </p>
           {!individual ? (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {(["registration", "authority"] as const).map((kind) => (
-                <button
-                  key={kind}
-                  type="button"
-                  disabled={busy || disabled}
-                  onClick={() => setKind(kind)}
-                  aria-pressed={activeKind === kind}
-                  className={`rounded-xl border px-3 py-2 text-xs font-bold ${activeKind === kind ? "border-blue-500 bg-white text-blue-700" : "border-slate-200 text-slate-500"}`}
-                >
-                  {verificationAttachmentLabel(kind)}
-                </button>
-              ))}
-            </div>
-          ) : null}
-          {!individual ? (
             <p className="mt-3 text-xs leading-5 text-slate-500">
-              {activeKind === "registration"
-                ? accountType === "ip"
+              {accountType === "ip"
                   ? "Например, лист записи ЕГРИП или свидетельство о регистрации ИП. Устав для ИП не нужен."
-                  : "Например, лист записи ЕГРЮЛ, выписка или устав ООО. Документ должен позволять сопоставить компанию и заявителя."
-                : "Представителю подойдёт доверенность, приказ или другой документ, подтверждающий связь с компанией и полномочия действовать от её имени."}
+                  : "Например, лист записи ЕГРЮЛ, выписка или устав ООО. Документ должен позволять сопоставить компанию и заявителя."}
             </p>
           ) : null}
           <label

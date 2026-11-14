@@ -9,7 +9,7 @@ import ReportDialog from "@/components/ReportDialog";
 import UserBlockButton from "@/components/UserBlockButton";
 import { db } from "@/lib/firebase";
 import { getApiUrl } from "@/lib/getApiUrl";
-import { bankDetailsFromProfile, bankDetailsMessageText, formatBankDetailsMessage, isBankDetailsMessage, validatePayment } from "@/lib/payments";
+import { bankDetailsMessageText, isBankDetailsMessage } from "@/lib/payments";
 import { GROUP_INVITE_URL_PATTERN } from "@/lib/brand";
 import type { Timestamp } from "firebase/firestore";
 import { arrayUnion, collection, deleteDoc, doc, getDoc, increment, onSnapshot, orderBy, query, serverTimestamp, updateDoc, writeBatch } from "firebase/firestore";
@@ -600,7 +600,7 @@ export default function ChatPage() {
       profile?.displayName || user.displayName || user.email || "Пользователь";
     const senderAvatarUrl = profile?.avatarUrl || user.photoURL || "";
     const preview = isBankDetailsMessage(clean)
-      ? "Реквизиты для оплаты"
+      ? "Реквизиты получателя"
       : clean
       ? clean
       : type === "audio"
@@ -725,25 +725,6 @@ export default function ChatPage() {
           ? sendError.message
           : "Не получилось отправить сообщение."
       );
-    } finally {
-      setSending(false);
-    }
-  }
-
-  async function shareBankDetails() {
-    if (!user || !chat || sending) return;
-    const bank = bankDetailsFromProfile(profile as any);
-    const validation = validatePayment(["bank_account"], bank, profile?.accountType, profile?.bankDetailsConfirmed);
-    if (validation) {
-      setError(`${validation} Откройте профиль и сохраните актуальные реквизиты.`);
-      return;
-    }
-    setSending(true);
-    setError("");
-    try {
-      await createMessage({ text: formatBankDetailsMessage(bank) });
-    } catch (sendError) {
-      setError(sendError instanceof Error ? sendError.message : "Не получилось отправить реквизиты.");
     } finally {
       setSending(false);
     }
@@ -1007,7 +988,7 @@ export default function ChatPage() {
       {blockedEither ? <div className={styles.errorBar}>Отправка сообщений заблокирована</div> : recording ? <div className={styles.recording}>
         <span><i />Идёт запись<time>{formatDuration(recordSeconds)}</time></span><button type="button" className={styles.iconButton} onClick={() => stopRecording(false)} aria-label="Отменить запись"><X size={20} /></button><button type="button" className={styles.send} onClick={() => stopRecording(true)} aria-label="Отправить голосовое"><Send size={18} /></button>
       </div> : <form onSubmit={handleSend} className={styles.composer}>
-        {!editingId ? <><label className={styles.composerControl} title="Прикрепить файл"><ImagePlus size={20} /><input type="file" accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.rtf,.csv,.zip,.rar,.7z" hidden onChange={handleMediaChange} aria-label="Прикрепить файл" /></label><button type="button" className={styles.composerControl} onClick={shareBankDetails} disabled={sending} title="Поделиться реквизитами" aria-label="Поделиться реквизитами"><Landmark size={19} /></button></> : null}
+        {!editingId ? <><label className={styles.composerControl} title="Прикрепить файл"><ImagePlus size={20} /><input type="file" accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.rtf,.csv,.zip,.rar,.7z" hidden onChange={handleMediaChange} aria-label="Прикрепить файл" /></label></> : null}
         <textarea rows={1} placeholder={editingId ? "Изменить сообщение" : "Напишите сообщение…"} aria-label="Сообщение" value={text} onChange={(event) => { setText(event.target.value); event.currentTarget.style.height = "auto"; event.currentTarget.style.height = `${Math.min(event.currentTarget.scrollHeight, 120)}px`; }} onKeyDown={handleComposerKeyDown} />
         {text.trim() || mediaFile || editingId ? <button type="submit" className={styles.send} disabled={sending || voiceUploading} aria-label={editingId ? "Сохранить сообщение" : "Отправить сообщение"}>{sending ? <Loader2 size={19} className={styles.spinner} /> : editingId ? <Check size={20} /> : <Send size={18} />}</button> : <button type="button" className={styles.send} onClick={startRecording} disabled={voiceUploading} aria-label="Записать голосовое сообщение">{voiceUploading ? <Loader2 size={19} className={styles.spinner} /> : <Mic size={19} />}</button>}
       </form>}

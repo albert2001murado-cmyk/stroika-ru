@@ -4,7 +4,6 @@ import {
   publicationSearchRelevanceScore,
 } from "@/lib/searchKeywords";
 import { getCatalogSearchSuggestions, type CatalogSearchSuggestion as MainSearchSuggestion } from "@/lib/catalogSearch";
-import { normalizePaymentChoice } from "@/lib/payments";
 import { publicationMatchesCatalogPath } from "@/lib/catalogSelection";
 
 import CustomerRequestCard from "@/components/CustomerRequestCard";
@@ -39,10 +38,8 @@ import { firestoreDateToMillis } from "@/types";
 import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
 import {
   BadgeCheck,
-  Banknote,
   Building2,
   ClipboardList,
-  CreditCard,
   ChevronRight,
   HardHat,
   Image as ImageIcon,
@@ -58,7 +55,6 @@ import { useDeferredValue, useEffect, useMemo, useState } from "react";
 type SearchableListing = Listing & SearchableListingFields;
 type FeedMode = "contractors" | "customers";
 type AccountTypeFilter = "" | "individual" | "ip" | "ooo";
-type PaymentFilter = "" | "cash_or_transfer" | "bank_account";
 
 const POPULAR_CITIES = [
   "Москва",
@@ -349,7 +345,6 @@ export default function HomePage() {
   const [priceFrom, setPriceFrom] = useState(0);
   const [priceTo, setPriceTo] = useState<number | null>(null);
   const [accountType, setAccountType] = useState<AccountTypeFilter>("");
-  const [paymentMethod, setPaymentMethod] = useState<PaymentFilter>("");
   const [verifiedOnly, setVerifiedOnly] = useState(false);
   const [urgentOnly, setUrgentOnly] = useState(false);
   const [withPhotosOnly, setWithPhotosOnly] = useState(false);
@@ -483,9 +478,6 @@ export default function HomePage() {
       const matchesAccount = accountType
         ? listing.accountType === accountType
         : true;
-      const matchesPayment = paymentMethod
-        ? normalizePaymentChoice(listing.paymentMethods) === paymentMethod
-        : true;
       const matchesVerified = verifiedOnly ? isListingVerified(listing) : true;
       const matchesPhotos = withPhotosOnly ? hasImages(listing) : true;
 
@@ -495,7 +487,6 @@ export default function HomePage() {
         matchesCity &&
         matchesPrice &&
         matchesAccount &&
-        matchesPayment &&
         matchesVerified &&
         matchesPhotos
       );
@@ -519,7 +510,6 @@ export default function HomePage() {
     priceFrom,
     priceTo,
     accountType,
-    paymentMethod,
     verifiedOnly,
     withPhotosOnly,
     selectedCatalogCategory,
@@ -601,7 +591,6 @@ export default function HomePage() {
       ? Number(Boolean(selectedOfferAction)) +
         Number(requiredOfferFeatures.length > 0) +
         Number(Boolean(accountType)) +
-        Number(Boolean(paymentMethod)) +
         Number(verifiedOnly)
       : Number(urgentOnly));
 
@@ -644,7 +633,6 @@ export default function HomePage() {
     setPriceFrom(0);
     setPriceTo(null);
     setAccountType("");
-    setPaymentMethod("");
     setVerifiedOnly(false);
     setUrgentOnly(false);
     setWithPhotosOnly(false);
@@ -677,7 +665,6 @@ export default function HomePage() {
     setPriceFrom(0);
     setPriceTo(null);
     setAccountType("");
-    setPaymentMethod("");
     setVerifiedOnly(false);
     setUrgentOnly(false);
     setWithPhotosOnly(false);
@@ -1070,24 +1057,6 @@ export default function HomePage() {
                         </select>
                       </label>
 
-                      <label className="group flex cursor-pointer items-center gap-3 rounded-2xl bg-white p-3.5 shadow-sm ring-1 ring-gray-200 transition hover:-translate-y-0.5 hover:ring-blue-200">
-                        {paymentMethod === "bank_account" ? (
-                          <CreditCard size={20} className="text-[#0057ff]" />
-                        ) : (
-                          <Banknote size={20} className="text-[#0057ff]" />
-                        )}
-                        <select
-                          value={paymentMethod}
-                          onChange={(event) =>
-                            setPaymentMethod(event.target.value as PaymentFilter)
-                          }
-                          className="min-w-0 flex-1 cursor-pointer border-0 bg-transparent text-sm font-black text-gray-800 outline-none"
-                        >
-                          <option value="">Любой способ оплаты</option>
-                          <option value="cash_or_transfer">Наличка или перевод</option>
-                          <option value="bank_account">Оплата на расчётный счёт</option>
-                        </select>
-                      </label>
 
                       <button
                         type="button"

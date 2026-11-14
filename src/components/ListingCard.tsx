@@ -1,5 +1,4 @@
 "use client";
-import { paymentLabel, normalizePaymentChoice } from "@/lib/payments";
 
 import FavoriteButton from "@/components/FavoriteButton";
 import ListingAuthorVerifiedBadge from "@/components/ListingAuthorVerifiedBadge";
@@ -12,8 +11,6 @@ import {
 import type { Listing } from "@/types";
 import { isCreatedWithinHours } from "@/types";
 import {
-  Banknote,
-  CreditCard,
   MapPin,
   Star,
   UserRound,
@@ -33,15 +30,6 @@ function getImageUrl(listing: Listing) {
   );
 }
 
-function paymentText(listing: Listing) { return paymentLabel(listing.paymentMethods); }
-
-function paymentIcon(listing: Listing) {
-  if (normalizePaymentChoice(listing.paymentMethods) === "bank_account") {
-    return <CreditCard size={14} />;
-  }
-
-  return <Banknote size={14} />;
-}
 
 function ListingCard({ listing }: ListingCardProps) {
   const imageUrl = getImageUrl(listing);
@@ -98,10 +86,6 @@ function ListingCard({ listing }: ListingCardProps) {
                 : "Физлицо"}
             </span>
 
-            <span className="flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 text-[#0057ff]">
-              {paymentIcon(listing)}
-              {paymentText(listing)}
-            </span>
           </div>
 
           <h3 className="mt-3 line-clamp-2 text-lg font-black leading-tight text-gray-950 sm:text-xl">

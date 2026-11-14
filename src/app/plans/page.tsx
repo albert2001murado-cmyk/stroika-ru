@@ -1,3 +1,2 @@
-"use client";
-import TariffPlans from "@/components/TariffPlans";
-export default function PlansPage() { return <TariffPlans/>; }
+import { redirect } from "next/navigation";
+export default function PreviousPlansLink() { redirect("/post/new"); }

@@ -28,7 +28,7 @@ export function isReviewApproved(item: { moderationStatus?: unknown } | null | u
 }
 
 export function moderationLabel(status?: unknown) {
-  if (status === "payment_required") return "Оплата возвращена";
+  if (status === "payment_required") return "Объявление приостановлено";
   if (status === "pending") return "На модерации";
   if (status === "manual_review") return "Дополнительная проверка";
   if (status === "rejected") return "Нужно исправить";

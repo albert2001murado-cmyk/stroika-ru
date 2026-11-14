@@ -1,5 +1,4 @@
 import { catalogCategoryLabel, catalogLabel } from "../data/catalogLabels";
-import { paymentLabel } from "./payments";
 
 export const MAX_COMPARISON_LISTINGS = 3;
 export const COMPARISON_SCHEMA_VERSION = 2;
@@ -28,7 +27,7 @@ export function comparisonOwnerId(data: Record<string, any>) {
 
 export type ComparisonListing = {
   id: string; title: string; image: string; category: string; subcategory: string;
-  city: string; price: string; minimum: string; payment: string; description: string;
+  city: string; price: string; minimum: string; description: string;
   ownerName: string; verified: boolean; rating: string; reviewsCount: number;
 };
 
@@ -44,7 +43,7 @@ export function comparisonListing(id: string, data: Record<string, any>, author:
     city: String(data.city || "Не указан"),
     price: Number.isFinite(amount) && amount > 0 ? `от ${amount.toLocaleString("ru-RU")} ₽` : "Договорная",
     minimum: Number(data.minimumWorkAmount) > 0 ? `${Number(data.minimumWorkAmount).toLocaleString("ru-RU")} ${data.minimumWorkUnit || "ед."}` : "Не указан",
-    payment: paymentLabel(data.paymentMethods), description: String(data.description || "Описание не добавлено"),
+    description: String(data.description || "Описание не добавлено"),
     ownerName: String(author?.displayName || author?.companyName || author?.name || data.authorName || "Исполнитель"),
     verified: trusted.verified === true || trusted.isVerified === true || trusted.verificationStatus === "approved" || trusted.verificationStatus === "verified",
     rating: ratings.length ? (ratings.reduce((sum, n) => sum + n, 0) / ratings.length).toFixed(1) : "Нет отзывов",
@@ -52,9 +51,9 @@ export function comparisonListing(id: string, data: Record<string, any>, author:
   };
 }
 
-export const COMPARISON_ROWS: { key: "price" | "rating" | "city" | "subcategory" | "minimum" | "payment" | "description"; title: string }[] = [
+export const COMPARISON_ROWS: { key: "price" | "rating" | "city" | "subcategory" | "minimum" | "description"; title: string }[] = [
   { key: "price", title: "Стоимость" }, { key: "rating", title: "Отзывы об анкете" },
   { key: "city", title: "Город" }, { key: "subcategory", title: "Направление" },
-  { key: "minimum", title: "Минимальный объём" }, { key: "payment", title: "Оплата" },
+  { key: "minimum", title: "Минимальный объём" },
   { key: "description", title: "Об услуге" },
 ];
