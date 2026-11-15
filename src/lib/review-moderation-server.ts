@@ -30,6 +30,11 @@ export function reviewInputFingerprint(data: Record<string, unknown>) {
   return createHash("sha256").update(JSON.stringify(fields.map(key => data[key] ?? null))).digest("hex");
 }
 
+async function updateExistingRating(collection: string, id: string, data: Record<string, unknown>) {
+  const db = getAdminDb(), target = db.collection(collection).doc(id);
+  await db.runTransaction(async tx => { if ((await tx.get(target)).exists) tx.update(target, data); });
+}
+
 async function recalculateListingRating(listingId: string) {
   if (!listingId || listingId.includes("/")) return;
   const snapshot = await getAdminDb()
@@ -48,14 +53,13 @@ async function recalculateListingRating(listingId: string) {
   const average = ratings.length
     ? Math.round((ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length) * 10) / 10
     : 0;
-  await getAdminDb().collection("listings").doc(listingId).set(
+  await updateExistingRating("listings", listingId,
     {
       averageRating: average,
       ratingAverage: average,
       reviewsCount: ratings.length,
       updatedAt: FieldValue.serverTimestamp(),
     },
-    { merge: true }
   );
 }
 
@@ -74,11 +78,11 @@ async function recalculateUserRating(targetUserId: string) {
   const average = ratings.length
     ? Math.round((ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length) * 10) / 10
     : 0;
-  await getAdminDb().collection("users").doc(targetUserId).set({
+  await updateExistingRating("users", targetUserId, {
     ratingAverage: average,
     reviewsCount: ratings.length,
     updatedAt: FieldValue.serverTimestamp(),
-  }, { merge: true });
+  });
 }
 
 export async function processReview(reviewIdValue: string) {

@@ -7,6 +7,8 @@ export class SecurityError extends Error {
 
 /** Shared by EVERY API token check, including moderation, billing and uploads. */
 export async function assertAccountSession(db: Firestore, token: DecodedIdToken) {
+  if ((await db.doc(`accountDeletionJobs/${token.uid}`).get()).exists)
+    throw new SecurityError("Аккаунт удаляется", "security/account-deleting", 403);
   const state = (await db.doc("accountSecurity/" + token.uid).get()).data();
   if (!state?.epoch && state?.enabled !== true) return; // Unenrolled accounts keep existing sign-in.
   if (typeof state?.epoch !== "string" || !/^[a-f0-9]{48}$/.test(state.epoch))

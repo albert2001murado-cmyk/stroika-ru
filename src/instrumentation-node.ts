@@ -1,4 +1,6 @@
 declare global {
+  var __strovaDeletionTimer: ReturnType<typeof setInterval> | undefined;
+  var __strovaDeletionRunning: boolean | undefined;
   var __strovaReviewModerationTimer: ReturnType<typeof setInterval> | undefined;
   var __strovaReviewModerationRunning: boolean | undefined;
   // Один таймер на процесс, в том числе при hot reload в разработке.
@@ -9,6 +11,19 @@ declare global {
 }
 
 export function registerNodeInstrumentation() {
+  if (process.env.NEXT_PHASE !== "phase-production-build" && !globalThis.__strovaDeletionTimer) {
+    const tick = async () => {
+      if (globalThis.__strovaDeletionRunning) return;
+      globalThis.__strovaDeletionRunning = true;
+      try { const { runAccountDeletionBatch } = await import("./lib/account-deletion-server"); await runAccountDeletionBatch(); }
+      catch { console.error("Account deletion scheduler will retry"); }
+      finally { globalThis.__strovaDeletionRunning = false; }
+    };
+    globalThis.__strovaDeletionTimer = setInterval(() => void tick(), 15_000);
+    globalThis.__strovaDeletionTimer.unref?.();
+    setTimeout(() => void tick(), 2_000).unref?.();
+  }
+
   if (process.env.MODERATION_SCHEDULER_ENABLED !== "true" || process.env.NEXT_PHASE === "phase-production-build") return;
 
   if (!globalThis.__stroikaOwnerNotificationTimer) {

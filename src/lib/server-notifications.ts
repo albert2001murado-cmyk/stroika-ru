@@ -126,6 +126,12 @@ export async function deliverServerNotification(
     ? db.doc(`${type.startsWith("engagement_") ? "engagementDeliveries" : "nearbyMatchDeliveries"}/${stableId}`) : null;
 
   const created = await db.runTransaction(async (transaction) => {
+    const [profile, recipientDeletion, actorDeletion] = await Promise.all([
+      transaction.get(db.doc(`users/${recipientId}`)),
+      transaction.get(db.doc(`accountDeletionJobs/${recipientId}`)),
+      actorId && actorId !== "system" ? transaction.get(db.doc(`accountDeletionJobs/${actorId}`)) : null,
+    ]);
+    if (!profile.exists || recipientDeletion.exists || actorDeletion?.exists) return false;
     if (receipt && (await transaction.get(receipt)).exists) return false;
     if (stableId && !raw.pushOnly) {
       const existing = await transaction.get(reference);

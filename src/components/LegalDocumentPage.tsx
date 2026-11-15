@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { LEGAL_PLACEHOLDER_NOTICE, type LegalDocument } from "@/legal/documents";
+import { type LegalDocument } from "@/legal/documents";
 
 export default function LegalDocumentPage({ document }: { document: LegalDocument }) {
   return (
@@ -16,10 +16,6 @@ export default function LegalDocumentPage({ document }: { document: LegalDocumen
         </header>
 
         <article className="space-y-10 px-6 py-10 sm:px-10 sm:py-12">
-          <div className="rounded-3xl border border-amber-200 bg-amber-50 p-5 text-sm font-bold leading-6 text-amber-900">
-            {LEGAL_PLACEHOLDER_NOTICE}
-          </div>
-
           {document.sections.map((section) => (
             <section key={section.title} className="border-t border-slate-100 pt-8 first:border-0 first:pt-0">
               <h2 className="text-2xl font-black tracking-tight text-slate-950">{section.title}</h2>

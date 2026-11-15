@@ -27,6 +27,10 @@ export const isVerificationFileId = (id: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
     id,
   );
+export async function purgeVerificationFile(id: string) {
+  if (!isVerificationFileId(id)) throw new Error('deletion/invalid-private-file');
+  await rm(/* turbopackIgnore: true */ path.join(/* turbopackIgnore: true */ privateRoot(), id), { force: true });
+}
 const kinds = ["registration", "authority", "passport"];
 
 export function verificationAttachmentView(

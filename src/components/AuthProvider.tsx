@@ -1,4 +1,5 @@
 "use client";
+import { usePathname } from "next/navigation";
 
 import { ContactRequestError, contactRequest } from "@/lib/contact-request";
 import { checkAccountSession, securityLogin, securityRequest } from "@/lib/accountSecurityClient";
@@ -52,6 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const pathname = usePathname();
   const [sessionProblem, setSessionProblem] = useState("");
   const [sessionRetry, setSessionRetry] = useState(0);
 
@@ -159,7 +161,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [user, profile, loading]
   );
 
-  return <AuthContext.Provider value={value}>{sessionProblem ? <main className="mx-auto max-w-md px-5 py-20"><h1 className="text-2xl font-black">Подтвердите вход</h1><p role="alert" className="mt-4 leading-7 text-slate-600">{sessionProblem}</p><button onClick={() => setSessionRetry(v => v + 1)} className="mt-6 rounded-2xl bg-blue-600 px-5 py-4 font-bold text-white">Повторить проверку</button><button onClick={() => void signOut(auth).then(() => { window.location.assign("/auth"); })} className="mt-3 block p-3 font-bold text-blue-600">Войти заново</button></main> : children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={value}>{sessionProblem && pathname !== "/delete-account" ? <main className="mx-auto max-w-md px-5 py-20"><h1 className="text-2xl font-black">Подтвердите вход</h1><p role="alert" className="mt-4 leading-7 text-slate-600">{sessionProblem}</p><button onClick={() => setSessionRetry(v => v + 1)} className="mt-6 rounded-2xl bg-blue-600 px-5 py-4 font-bold text-white">Повторить проверку</button><button onClick={() => void signOut(auth).then(() => { window.location.assign("/auth"); })} className="mt-3 block p-3 font-bold text-blue-600">Войти заново</button></main> : children}</AuthContext.Provider>;
 }
 
 export function useAuth() {

@@ -1,3 +1,4 @@
+import { recordAccountUpload } from "@/lib/account-deletion-media";
 import { uploadGuard, limitedFormData, UploadSizeError, acquireUploadSlot, UploadTimeoutError } from "@/lib/api-guard";
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { randomUUID } from "crypto";
@@ -90,10 +91,12 @@ export async function POST(request: NextRequest) {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
+    const uploadOwner = await recordAccountUpload(request, key);
     await s3.send(
       new PutObjectCommand({
         Bucket: bucket,
         Key: key,
+        Metadata: { owneruid: uploadOwner },
         Body: buffer,
         ContentType: file.type,
         // Each upload has a new UUID key; a URL's bytes are never overwritten.

@@ -1,3 +1,4 @@
+import { recordAccountUpload } from "@/lib/account-deletion-media";
 import { uploadGuard, limitedFormData, UploadSizeError, acquireUploadSlot, UploadTimeoutError } from "@/lib/api-guard";
 import { safeFileExtension } from "@/lib/security-policy";
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
@@ -159,10 +160,12 @@ export async function POST(request: NextRequest) {
       : "documents";
     const key = `chats/${folder}/${randomUUID()}.${extension}`;
 
+    const uploadOwner = await recordAccountUpload(request, key);
     await s3.send(
       new PutObjectCommand({
         Bucket: bucket,
         Key: key,
+        Metadata: { owneruid: uploadOwner },
         Body: body,
         ContentType: mediaType === "document" ? "application/octet-stream" : contentType,
         ContentDisposition: mediaType === "document" ? "attachment" : undefined,

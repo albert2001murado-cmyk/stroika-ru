@@ -33,6 +33,8 @@ export async function securityActor(request: Request) {
   let actor: DecodedIdToken;
   try { actor = await getRawAdminAuth().verifyIdToken(header.slice(7).trim(), true); }
   catch { throw expired(); }
+  if ((await getAdminDb().doc(`accountDeletionJobs/${actor.uid}`).get()).exists)
+    throw new SecurityError("Аккаунт удаляется", "security/account-deleting", 403);
   const [profile, revocation] = await Promise.all([
     getAdminDb().doc("users/" + actor.uid).get(), getAdminDb().doc("authRevocations/" + actor.uid).get(),
   ]);
@@ -89,6 +91,8 @@ async function firebasePassword(email: string, password: string) {
   return { legacyMfa: false as const, uid: token.uid };
 }
 async function liveUser(uid: string) {
+  if ((await getAdminDb().doc(`accountDeletionJobs/${uid}`).get()).exists)
+    throw new SecurityError("Аккаунт удаляется", "security/account-deleting", 403);
   const user = await getRawAdminAuth().getUser(uid);
   const profile = await getAdminDb().doc("users/" + uid).get();
   if (user.disabled || profile.get("moderationStatus") === "blocked") throw invalidLogin();
@@ -278,4 +282,39 @@ export async function manageSecurity(actor: DecodedIdToken, body: Record<string,
   }
   if (action === "reauthenticate") return mintSession(actor.uid, result.epoch!, true);
   return { recoveryCodes: recovery.codes };
+}
+
+/** Confirm ownership without issuing another long-lived session. */
+export async function authorizeAccountDeletion(request: Request, body: Record<string, unknown>) {
+  const header = request.headers.get('authorization') || '';
+  if (!header.startsWith('Bearer ') || header.length > 8192) throw expired();
+  let actor: DecodedIdToken;
+  try { actor = await getRawAdminAuth().verifyIdToken(header.slice(7).trim(), true); }
+  catch { throw expired(); }
+  await assertAccountSession(getAdminDb(), actor);
+  await securityRate('deletion:' + actor.uid, 6);
+  const ref = stateRef(actor.uid), state = (await ref.get()).data();
+  if (state?.enabled === true) {
+    if (!validPassword(body.password) || !await checkPassword(body.password, state.passwordHash || '')) throw invalidLogin();
+    const result = await getAdminDb().runTransaction(async tx => {
+      const current = (await tx.get(ref)).data();
+      if (!current?.enabled || current.epoch !== state.epoch || current.passwordHash !== state.passwordHash) return expired();
+      const factor = factorChange(actor.uid, current, typeof body.code === 'string' ? body.code.trim().slice(0, 48) : '', Date.now());
+      if (factor.update) tx.update(ref, factor.update);
+      return factor.error || null;
+    });
+    if (result) throw result;
+  } else {
+    const user = await getRawAdminAuth().getUser(actor.uid);
+    if (user.providerData.some(p => p.providerId === 'password')) {
+      if (!user.email || !validPassword(body.password)) throw invalidLogin();
+      const check = await firebasePassword(user.email, body.password);
+      if (check?.legacyMfa) {
+        if (!actor.firebase?.sign_in_second_factor || Date.now() / 1000 - actor.auth_time > 300) throw expired();
+      } else if (!check || check.uid !== actor.uid) throw invalidLogin();
+    } else if (!['phone', 'apple.com', 'google.com'].includes(actor.firebase.sign_in_provider) || Date.now() / 1000 - actor.auth_time > 300) {
+      throw new SecurityError('Войдите в аккаунт заново и вернитесь к удалению', 'auth/requires-recent-login', 401);
+    }
+  }
+  return actor;
 }
