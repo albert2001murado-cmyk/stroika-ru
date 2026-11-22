@@ -202,6 +202,7 @@ export async function runAccountDeletionBatch() {
   // Older releases parked Auth identities behind a 65-minute token drain.
   // Wake those jobs once, with a durable cursor so a large backlog is covered.
   const upgradeRef = db.doc('jobLeases/deletionIdentityUpgrade'), upgrade = await upgradeRef.get();
+  if (upgrade.get('complete') !== true || now() - Number(upgrade.get('checkedAt') || 0) >= 3_600_000) {
   let legacyQuery = db.collection('accountDeletionJobs').orderBy(FieldPath.documentId()).limit(20);
   if (upgrade.get('cursor')) legacyQuery = legacyQuery.startAfter(upgrade.get('cursor'));
   const legacy = await legacyQuery.get();
@@ -209,8 +210,9 @@ export async function runAccountDeletionBatch() {
   for (const item of legacy.docs) if (item.get('stage') === 'drain' && !item.get('identitiesReleasedAt') && !item.get('identityReleaseUpgradeRequestedAt')) {
     migration.update(item.ref, { nextAttemptAt: Timestamp.fromMillis(now()), identityReleaseUpgradeRequestedAt: Timestamp.fromMillis(now()) });
   }
-  migration.set(upgradeRef, { cursor: legacy.size === 20 ? legacy.docs.at(-1)!.id : '' });
+  migration.set(upgradeRef, { cursor: legacy.size === 20 ? legacy.docs.at(-1)!.id : '', complete: legacy.size < 20, checkedAt: now() });
   await migration.commit();
+  }
   const jobs = await db.collection('accountDeletionJobs').where('nextAttemptAt', '<=', Timestamp.fromMillis(now())).orderBy('nextAttemptAt').limit(3).get();
   for (const job of jobs.docs) await processAccountDeletion(job.id, 10_000, deps);
   const expired = await db.collection('accountDeletionReceipts').where('expiresAt', '<=', Timestamp.fromMillis(now())).limit(100).get();

@@ -5,6 +5,7 @@ import { getAdminDb, getRawAdminAuth } from "./firebase-admin";
 import { assertAccountSession, SecurityError } from "./account-security-session";
 import { normalizeRussianPhone } from "./phone";
 import { phoneLoginAccount } from "./phone-login-server";
+import { clientErrorCode } from "./clientErrorCode";
 import {
   assertSecurityConfigured, checkPassword, decryptSecret, digest, encryptSecret, hashPassword,
   newRecoveryCodes, newTotp, opaqueId, recoveryDigest, safeEqual, totpCounter, validPassword,
@@ -34,7 +35,11 @@ export async function securityActor(request: Request) {
   if (!header.startsWith("Bearer ") || header.length > 8192) throw expired();
   let actor: DecodedIdToken;
   try { actor = await getRawAdminAuth().verifyIdToken(header.slice(7).trim(), true); }
-  catch { throw expired(); }
+  catch (error) {
+    if (["auth/id-token-expired", "auth/id-token-revoked", "auth/invalid-id-token", "auth/argument-error",
+      "auth/user-disabled", "auth/user-not-found"].includes(clientErrorCode(error))) throw expired();
+    throw error;
+  }
   if ((await getAdminDb().doc(`accountDeletionJobs/${actor.uid}`).get()).exists)
     throw new SecurityError("Аккаунт удаляется", "security/account-deleting", 403);
   const [profile, revocation] = await Promise.all([
@@ -48,7 +53,11 @@ export async function securityActor(request: Request) {
 export async function securityStatus(actor: DecodedIdToken) {
   const state = (await stateRef(actor.uid).get()).data();
   let sessionValid = true;
-  try { await assertAccountSession(getAdminDb(), actor); } catch { sessionValid = false; }
+  try { await assertAccountSession(getAdminDb(), actor); }
+  catch (error) {
+    if (error instanceof SecurityError && [401, 403].includes(error.status)) sessionValid = false;
+    else throw error;
+  }
   return { enabled: state?.enabled === true, sessionValid, recoveryRemaining: sessionValid && state?.enabled ? state.recoveryHashes?.length || 0 : 0 };
 }
 export async function endSecuritySession(actor: DecodedIdToken) {

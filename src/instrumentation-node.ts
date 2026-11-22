@@ -1,97 +1,18 @@
 import { startNotificationSchedulers } from "./lib/notification-scheduler";
-
-declare global {
-  var __strovaDeletionTimer: ReturnType<typeof setInterval> | undefined;
-  var __strovaDeletionRunning: boolean | undefined;
-  var __strovaReviewModerationTimer: ReturnType<typeof setInterval> | undefined;
-  var __strovaReviewModerationRunning: boolean | undefined;
-  // Один таймер на процесс, в том числе при hot reload в разработке.
-  var __stroikaModerationTimer: ReturnType<typeof setInterval> | undefined;
-  var __stroikaModerationRunning: boolean | undefined;
-  var __stroikaOwnerNotificationTimer: ReturnType<typeof setInterval> | undefined;
-  var __stroikaOwnerNotificationRunning: boolean | undefined;
-}
+import { BACKGROUND_INTERVALS, backgroundWorkersEnabled, startBackgroundWorker } from "./lib/background-worker-runtime";
 
 export function registerNodeInstrumentation() {
-  if (process.env.NEXT_PHASE !== "phase-production-build") startNotificationSchedulers();
-  if (process.env.NEXT_PHASE !== "phase-production-build" && !globalThis.__strovaDeletionTimer) {
-    const tick = async () => {
-      if (globalThis.__strovaDeletionRunning) return;
-      globalThis.__strovaDeletionRunning = true;
-      try { const { runAccountDeletionBatch } = await import("./lib/account-deletion-server"); await runAccountDeletionBatch(); }
-      catch { console.error("Account deletion scheduler will retry"); }
-      finally { globalThis.__strovaDeletionRunning = false; }
-    };
-    globalThis.__strovaDeletionTimer = setInterval(() => void tick(), 15_000);
-    globalThis.__strovaDeletionTimer.unref?.();
-    setTimeout(() => void tick(), 2_000).unref?.();
-  }
-
-  if (process.env.MODERATION_SCHEDULER_ENABLED !== "true" || process.env.NEXT_PHASE === "phase-production-build") return;
-
-  if (!globalThis.__stroikaOwnerNotificationTimer) {
-    const notify = async () => {
-      if (globalThis.__stroikaOwnerNotificationRunning) return;
-      globalThis.__stroikaOwnerNotificationRunning = true;
-      try {
-        const { runPublicationOwnerNotificationJobs } = await import("@/lib/publication-moderation-server");
-        await runPublicationOwnerNotificationJobs();
-      } catch {
-        console.error("scheduled owner notification recovery will retry");
-      } finally {
-        globalThis.__stroikaOwnerNotificationRunning = false;
-      }
-    };
-    const timer = setInterval(() => void notify(), 5_000);
-    timer.unref?.();
-    globalThis.__stroikaOwnerNotificationTimer = timer;
-    setTimeout(() => void notify(), 1_000).unref?.();
-  }
-
-  // Reviews must not wait behind minutes of video processing.
-  if (!globalThis.__strovaReviewModerationTimer) {
-    const reviews = async () => {
-      if (globalThis.__strovaReviewModerationRunning) return;
-      globalThis.__strovaReviewModerationRunning = true;
-      try {
-        const { runReviewModerationBatch } = await import("@/lib/review-moderation-server");
-        await runReviewModerationBatch(20);
-      } catch {
-        console.error("scheduled review moderation will retry");
-      } finally {
-        globalThis.__strovaReviewModerationRunning = false;
-      }
-    };
-    globalThis.__strovaReviewModerationTimer = setInterval(() => void reviews(), 30_000);
-    globalThis.__strovaReviewModerationTimer.unref?.();
-    setTimeout(() => void reviews(), 5_000).unref?.();
-  }
-
-  if (globalThis.__stroikaModerationTimer) return;
-
-  const tick = async () => {
-    if (globalThis.__stroikaModerationRunning) return;
-    globalThis.__stroikaModerationRunning = true;
-
-    try {
-      const { runProfileAvatarSyncBatch } = await import("@/lib/profile-avatar-sync-server");
-      await runProfileAvatarSyncBatch(10).catch(error => {
-        console.error("scheduled avatar sync failed", error);
-      });
-      const { runModerationBatch } = await import(
-        "@/lib/publication-moderation-server"
-      );
-      await runModerationBatch(30);
-    } catch (error) {
-      console.error("scheduled publication moderation failed", error);
-    } finally {
-      globalThis.__stroikaModerationRunning = false;
-    }
-  };
-
-  const timer = setInterval(() => void tick(), 60_000);
-  timer.unref?.();
-  globalThis.__stroikaModerationTimer = timer;
-  setTimeout(() => void tick(), 10_000).unref?.();
+  if (!backgroundWorkersEnabled()) return;
+  startNotificationSchedulers();
+  startBackgroundWorker("account-deletion", BACKGROUND_INTERVALS.deletion, 2_000,
+    async () => (await import("./lib/account-deletion-server")).runAccountDeletionBatch());
+  if (process.env.MODERATION_SCHEDULER_ENABLED !== "true") return;
+  startBackgroundWorker("owner-notifications", BACKGROUND_INTERVALS.ownerNotifications, 1_000,
+    async () => (await import("./lib/publication-moderation-server")).runPublicationOwnerNotificationJobs());
+  startBackgroundWorker("review-moderation", BACKGROUND_INTERVALS.reviews, 5_000,
+    async () => (await import("./lib/review-moderation-server")).runReviewModerationBatch(20));
+  startBackgroundWorker("avatar-sync", BACKGROUND_INTERVALS.avatars, 10_000,
+    async () => (await import("./lib/profile-avatar-sync-server")).runProfileAvatarSyncBatch(10));
+  startBackgroundWorker("publication-moderation", BACKGROUND_INTERVALS.publications, 12_000,
+    async () => (await import("./lib/publication-moderation-server")).runModerationBatch(30));
 }
-

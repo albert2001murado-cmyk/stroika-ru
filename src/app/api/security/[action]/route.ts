@@ -3,6 +3,7 @@ import { readVerificationBody } from "@/lib/verification-api-server";
 import { SecurityError } from "@/lib/account-security-session";
 import { AUTH_PROTOCOL, AUTH_RELEASE } from "@/lib/account-security-protocol";
 import { assertAuthDeployment, authDeploymentHealth } from "@/lib/account-security-deployment";
+import { noteFirestoreQuota } from "@/lib/background-worker-runtime";
 import {
   beginSecurityEnrollment, completeSecurityLogin, finishSecurityEnrollment, manageSecurity,
   endSecuritySession, securityActor, securityRate, securityStatus, startSecurityLogin,
@@ -11,7 +12,7 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 const json = (body: unknown, status = 200) => NextResponse.json(body, {
-  status, headers: { "Cache-Control": "private, no-store, max-age=0", Pragma: "no-cache", Vary: "Authorization, Origin", "X-Content-Type-Options": "nosniff", "X-Strova-Auth-Protocol": AUTH_PROTOCOL, "X-Strova-Auth-Release": AUTH_RELEASE, ...(status === 429 ? { "Retry-After": "600" } : {}) },
+  status, headers: { "Cache-Control": "private, no-store, max-age=0", Pragma: "no-cache", Vary: "Authorization, Origin", "X-Content-Type-Options": "nosniff", "X-Strova-Auth-Protocol": AUTH_PROTOCOL, "X-Strova-Auth-Release": AUTH_RELEASE, ...(status === 429 ? { "Retry-After": "600" } : status === 503 ? { "Retry-After": "900" } : {}) },
 });
 function sameOrigin(request: NextRequest) {
   const origin = request.headers.get("origin");
@@ -21,6 +22,7 @@ function sameOrigin(request: NextRequest) {
   if (!allowed.has(origin)) throw new SecurityError("Недопустимый источник запроса", "security/origin", 403);
 }
 function failure(error: unknown) {
+  if (noteFirestoreQuota(error)) return json({ error: "Сервис временно недоступен. Повторите попытку позже", code: "security/database-unavailable" }, 503);
   if (error instanceof SecurityError) return json({ error: error.message, code: error.code }, error.status);
   const status = Number((error as { status?: number })?.status);
   if ([400, 408, 413, 415].includes(status))

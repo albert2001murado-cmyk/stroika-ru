@@ -20,10 +20,12 @@ export async function syncModeratorRecipients() {
   if (cursor === null) return;
   try {
     const page = await getRawAdminAuth().listUsers(200, cursor || undefined), batch = db.batch();
+    const existing = new Set((await db.collection("moderatorRecipients").get()).docs.map(item => item.id));
     for (const account of page.users) {
       const recipient = db.doc(`moderatorRecipients/${account.uid}`);
-      if (!account.disabled && hasModeratorClaim(account.customClaims || {})) batch.set(recipient, { uid: account.uid, updatedAt: FieldValue.serverTimestamp() });
-      else batch.delete(recipient);
+      if (!account.disabled && hasModeratorClaim(account.customClaims || {})) {
+        if (!existing.has(account.uid)) batch.set(recipient, { uid: account.uid, updatedAt: FieldValue.serverTimestamp() });
+      } else if (existing.has(account.uid)) batch.delete(recipient);
     }
     batch.set(ref, { token, cursor: page.pageToken || "", until: 0, nextScanAt: page.pageToken ? 0 : now + 300_000 });
     await batch.commit();
@@ -52,7 +54,8 @@ async function discoverReviewJobs() {
           deliveredTo: [], createdAt: FieldValue.serverTimestamp(), nextAttemptAt: Timestamp.now() });
       });
     }
-    await cursorRef.set({ cursor: page.size === 20 ? page.docs.at(-1)!.id : "" });
+    const nextCursor = page.size === 20 ? page.docs.at(-1)!.id : "";
+    if (nextCursor !== cursor) await cursorRef.set({ cursor: nextCursor });
   }
 }
 

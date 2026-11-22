@@ -1,64 +1,96 @@
 {
-  "release": "2026-11-22.sessions-1",
+  "release": "2026-11-22.quota-1",
   "files": [
     {
-      "path": "src/components/AuthProvider.tsx",
+      "path": "src/instrumentation-node.ts",
       "before": [
-        "a59c934206e26c25121b8c81bc34cded433a68826218eab7564b1cf6324e8a2c",
-        "1a4c77ca008c14148795fc0f37524da0df0f2e2ed6c82f05c9a2200e07dc9cf6"
+        "90a9c9e15edc9ccb36e03ad033489bf9783e097174157901003e46f7097b2f96",
+        "c26d68fa5dc4d6fcb7e06499f02271560259c7953ac363a4e62293b2e143a1bf"
       ],
-      "after": "5aa0209973dc425bd8a8f79657506e14b09bf848f276894b1d3ce307303db2da"
+      "after": "1208b8f6e06abb9eac5c359c8d6b3289da12a5dee1c4c5d3287cbb840f53dc72"
     },
     {
-      "path": "src/lib/accountSecurityClient.ts",
+      "path": "src/lib/notification-scheduler.ts",
       "before": [
-        "77c9720342378c90483cb40e3b44062a4dad0258ee93732b6ec0954069dfe86f",
-        "830efd64bc324b1bf90d2afa777f864bcad84f09625ff5127c9c7161e0c6c0fd"
+        "b70a7bcd59d1d8f32e323017a1344cd17bf74455c11aab69e8890c3d19f3f270"
       ],
-      "after": "0d85d3d0a709a2f3ae9984269d6921e3b8359fb1b53f11f012cd879ba3ca1a52"
+      "after": "d88427d51d82171885c748eea6a0be28ec5712db03dc4c8ed131ac7948d85771"
     },
     {
-      "path": "src/lib/account-security-protocol.ts",
+      "path": "src/lib/background-worker-runtime.ts",
       "before": [
-        "9781d953238dc570162187328f998fac349cc0aaca50913a4d87dc829fb13102",
-        "5971d93088e8a3702351810e0f0b05ec53bfc0ab025ee4cfca0449b541db6bee"
+        null
       ],
-      "after": "837677ad2b6572f26aadb91892cf6ab4468e43dd8b6b80309b6aa4020b712076"
+      "after": "dd2ca96b556692e15ab73bd6acd44418be1e1ddd61d51d29dc9be53a52674bd2"
+    },
+    {
+      "path": "src/lib/account-deletion-server.ts",
+      "before": [
+        "7040e6834251dcf3351ef30d1d4cb7edfbecf193c20d43b464d3b256984de422",
+        "05a3cb1caee78e15006a990e462c794679c10f05cd267bddd3d99651af4f3965"
+      ],
+      "after": "b51cf2dcb219435e212cfebab62bb28442894f382a53455e821c9d5276f093ed"
+    },
+    {
+      "path": "src/lib/moderator-notifications-server.ts",
+      "before": [
+        "878a1f32ffed211377b4fb6349c7fd46b3d2a054427896bfefa8133687c49784"
+      ],
+      "after": "535b2b85b099396273ac77690c380067929ce7cbc17146be395cc21b0f105b3f"
+    },
+    {
+      "path": "src/lib/account-security-server.ts",
+      "before": [
+        "b5481eee1fcab5ae98a0aed7405bf1c34311b6f832b47383892ffc5788d40202",
+        "c550330be29bfbaeb9db25347438f4a996e8334eb54eba91a596f6b596a4313d"
+      ],
+      "after": "3377a9f9315da23ac7da88037a7684508fd0d4235874419595aacc58a9128c06"
     },
     {
       "path": "src/lib/clientErrorCode.ts",
       "before": [
-        null
+        null,
+        "54bca8cb7b00ed25c519ff83d69cd2af2866d946aa0e7d255ecaa3220582e1f8"
       ],
       "after": "54bca8cb7b00ed25c519ff83d69cd2af2866d946aa0e7d255ecaa3220582e1f8"
     },
     {
-      "path": "src/lib/requestDeadline.ts",
+      "path": "src/app/api/security/[action]/route.ts",
       "before": [
-        null
+        "82dbb99c3f676183b2a6fbec40462b1d05d3c705e5a7e18f14aa202f83b18c30"
       ],
-      "after": "edce526940afba10860e2cf5f492ce3fe1a60981aad17a29a13e127e92cc42e8"
+      "after": "715f16e8ad82d6fc6c3331f21cd9181404e8559453c9d538b19b3a98f8f9d4bb"
     },
     {
-      "path": "src/lib/accountSessionObserver.ts",
+      "path": "src/lib/account-security-protocol.ts",
       "before": [
-        null
+        "837677ad2b6572f26aadb91892cf6ab4468e43dd8b6b80309b6aa4020b712076",
+        "5971d93088e8a3702351810e0f0b05ec53bfc0ab025ee4cfca0449b541db6bee",
+        "9781d953238dc570162187328f998fac349cc0aaca50913a4d87dc829fb13102"
       ],
-      "after": "2b364a35c9e6756314950179d6f308ca107e01027ea86a7e79381afa86089fef"
+      "after": "ef0cfdea5ca873314087d1ed035e2a792348f965900c7b53d217982bb5c82733"
     },
     {
-      "path": "tests/login-client.test.cjs",
+      "path": "src/lib/account-security-deployment.ts",
       "before": [
-        null
+        "8cec923b8833b5dbe83fc0b7029802e044ec2aac0df02a36b5df3cba01b72368"
       ],
-      "after": "fbb46392117b31e14d9ba82089c81b6528b27d74d2d6b0abff75cc7c1f8c9541"
+      "after": "24d6a9b13eb54977c1938f194022ce725bc2c826d43fddec76680f5860e46d7a"
     },
     {
-      "path": "tests/account-session.test.cjs",
+      "path": "tests/background-workers.test.cjs",
       "before": [
         null
       ],
-      "after": "0713a19a6fae8fe345784b9286fef73b89f5025b538d97102f1df60c3903de45"
+      "after": "62b3213578c246b8a68be0c6421771a2557f065b910b99a7351600c243a8fc1a"
+    },
+    {
+      "path": "tests/account-lifecycle.emulator.cjs",
+      "before": [
+        null,
+        "8711118cbf6d7f57303a76d17117141e29ecdd824d202bbbc02c2c5fdfacb2af"
+      ],
+      "after": "2a47f74c9c26a14e0075a480b98be9d6be0f21bf6ed06a08e20ce608a3e8b55d"
     }
   ]
 }

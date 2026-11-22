@@ -2,6 +2,7 @@ import { getFirebaseAdminApp } from "./firebase-admin";
 import { assertSecurityConfigured } from "./account-security-crypto";
 import { SecurityError } from "./account-security-session";
 import { AUTH_PROTOCOL, AUTH_RELEASE } from "./account-security-protocol";
+import { firestoreQuotaPause } from "./background-worker-runtime";
 
 export function assertAuthDeployment(clientProject?: string | null) {
   const projectId = getFirebaseAdminApp().options.projectId;
@@ -21,5 +22,5 @@ export function assertAuthDeployment(clientProject?: string | null) {
 export function authDeploymentHealth() {
   const projectId = assertAuthDeployment();
   assertSecurityConfigured();
-  return { protocol: AUTH_PROTOCOL, release: AUTH_RELEASE, projectId, ready: true };
+  return { protocol: AUTH_PROTOCOL, release: AUTH_RELEASE, projectId, ready: true, ...firestoreQuotaPause() };
 }

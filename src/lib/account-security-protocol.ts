@@ -1,3 +1,3 @@
 // Public compatibility markers, never a secret or an authentication credential.
 export const AUTH_PROTOCOL = "strova-auth-v2";
-export const AUTH_RELEASE = "2026-11-22.sessions-1";
+export const AUTH_RELEASE = "2026-11-22.quota-1";
