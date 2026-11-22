@@ -1,4 +1,4 @@
-import { ContactError, checkPhoneAvailable, contactPhone, preparePhoneChange } from "@/lib/unique-phone-server";
+import { ContactError, checkPhoneAvailable, contactPhone, preparePhoneChange, authIdentityExists } from "@/lib/unique-phone-server";
 import { contactResponseData, contactApiError } from "@/lib/contact-api-server";
 import { normalizeRussianPhone } from "@/lib/phone";
 import { readJsonObject, RequestBodyError } from "@/lib/request-body";
@@ -75,7 +75,10 @@ export async function POST(request: Request) {
         claimSnapshot.exists &&
         claimSnapshot.get("ownerUid") !== decoded.uid
       ) {
-        throw new Error("INN_ALREADY_CLAIMED");
+        const ownerUid = claimSnapshot.get("ownerUid");
+        // Background deletion may still be erasing the former company profile.
+        // Its orphaned claim must not block a returning owner after Auth deletion.
+        if (typeof ownerUid !== "string" || !ownerUid || await authIdentityExists(adminAuth, ownerUid)) throw new Error("INN_ALREADY_CLAIMED");
       }
 
       const phoneChange = await preparePhoneChange(adminDb, adminAuth, transaction, authUser, phone);

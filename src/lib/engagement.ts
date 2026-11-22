@@ -12,12 +12,12 @@ export function inEngagementQuietHours(value: Pick<EngagementPreferences, "quiet
 }
 /** Invitations, not invented claims about new listings, prices or user activity. */
 export const DISCOVERY_PROMPTS = [
-  { id: "finishing", title: "Есть планы на отделку?", body: "Найдите мастера под свою задачу и сравните предложения в Строве", url: "/(tabs)/search?section=services&q=отделка" },
-  { id: "materials", title: "Что нужно для следующего этапа?", body: "Загляните в каталог материалов — от небольшого ремонта до большой стройки", url: "/(tabs)/search?section=materials" },
-  { id: "equipment", title: "Большим задачам — подходящая техника", body: "Посмотрите предложения аренды техники для вашего проекта", url: "/(tabs)/search?section=equipment" },
-  { id: "solutions", title: "Хотите решить задачу целиком?", body: "В комплексных решениях можно найти команду для ремонта, стройки и проектирования", url: "/(tabs)/search?section=solutions" },
-  { id: "masters", title: "Мастер для вашей идеи", body: "Посмотрите услуги в Строве — возможно, здесь начнётся ваш следующий проект", url: "/(tabs)/search?section=services" },
-  { id: "compare", title: "Выбрать проще, когда есть с чем сравнить", body: "Добавляйте подходящие объявления в сравнение и возвращайтесь к ним из профиля", url: "/compare" },
-  { id: "publish", title: "Расскажите, с чем можете помочь", body: "Разместите своё предложение или задачу — так вы сможете найти друг друга", url: "/(tabs)/profile" },
-  { id: "project", title: "От идеи до первого шага", body: "Материалы, мастера и техника — найдите нужное для своего проекта в Строве", url: "/(tabs)/search" },
+  { id: "finishing", title: "🛠️ Есть планы на ремонт?", body: "Посмотрите мастеров по отделке и выберите, кому доверить работу", url: "/(tabs)/search?section=services&q=отделка" },
+  { id: "materials", title: "🧱 Что нужно для следующего этапа?", body: "Загляните в материалы, возможно, найдётся то, что вы искали", url: "/(tabs)/search?section=materials" },
+  { id: "equipment", title: "🚜 Техника для ваших задач", body: "Экскаватор, кран или самосвал? Посмотрите предложения аренды рядом", url: "/(tabs)/search?section=equipment" },
+  { id: "solutions", title: "🏡 Пора заняться своим проектом?", body: "Найдите команду для ремонта, строительства или проектирования", url: "/(tabs)/search?section=solutions" },
+  { id: "masters", title: "🛠️ Найдётся мастер для вашей идеи", body: "Посмотрите услуги в Строве и сохраните подходящие предложения", url: "/(tabs)/search?section=services" },
+  { id: "compare", title: "Выбираете между несколькими мастерами?", body: "Добавьте объявления в сравнение, так будет удобнее определиться", url: "/compare" },
+  { id: "publish", title: "👋 Расскажите, чем можете помочь", body: "Разместите объявление, чтобы заказчики могли вас найти", url: "/(tabs)/profile" },
+  { id: "project", title: "🏗️ Что у вас в планах?", body: "Мастера, материалы и техника для следующего шага уже в каталоге", url: "/(tabs)/search" },
 ] as const;

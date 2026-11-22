@@ -31,6 +31,9 @@ export async function queueAccountDeletion(uid: string, receipt: string, deps = 
     tx.set(db.doc(`authRevocations/${uid}`), { validAfter: 253402300799 });
     tx.create(proof, { status: 'pending', createdAt: Timestamp.fromMillis(now()) });
   });
+  // Release Firebase email/phone identities during the accepting request. The
+  // durable job still retries failures and erases publications/media in the background.
+  await processAccountDeletion(uid, 1, deps);
   return { status: 'pending' as const, receipt };
 }
 export async function deletionStatus(receipt: string, db = getAdminDb()) {
@@ -129,9 +132,17 @@ export async function processAccountDeletion(uid: string, budgetMs = 20_000, dep
       const state = (await job.get()).data(); if (!state || state.lease !== token) return;
       await job.update({ leaseUntil: Timestamp.fromMillis(now() + LEASE_MS) });
       const proof = db.doc(`accountDeletionReceipts/${state.receiptHash}`);
+      if (!state.identitiesReleasedAt) {
+        // This also upgrades jobs queued by older releases, including jobs
+        // already waiting for the token drain. Never remove the revocation guard.
+        try {
+          await auth.updateUser(uid, { disabled: true });
+          await auth.revokeRefreshTokens(uid);
+          await auth.deleteUser(uid);
+        } catch (error) { if ((error as { code?: string }).code !== 'auth/user-not-found') throw error; }
+        await job.update({ identitiesReleasedAt: Timestamp.fromMillis(now()) });
+      }
       if (state.stage === 'disable') {
-        try { await auth.updateUser(uid, { disabled: true }); await auth.revokeRefreshTokens(uid); }
-        catch (error) { if ((error as { code?: string }).code !== 'auth/user-not-found') throw error; }
         await seedScans(job, uid, db);
         await job.update({ stage: 'scan', drainUntil: Timestamp.fromMillis(now() + TOKEN_DRAIN_MS), pass: 0 });
       } else if (state.stage === 'scan') {
@@ -188,6 +199,18 @@ export async function processAccountDeletion(uid: string, budgetMs = 20_000, dep
 }
 export async function runAccountDeletionBatch() {
   const deps = defaults(), { db, now } = deps;
+  // Older releases parked Auth identities behind a 65-minute token drain.
+  // Wake those jobs once, with a durable cursor so a large backlog is covered.
+  const upgradeRef = db.doc('jobLeases/deletionIdentityUpgrade'), upgrade = await upgradeRef.get();
+  let legacyQuery = db.collection('accountDeletionJobs').orderBy(FieldPath.documentId()).limit(20);
+  if (upgrade.get('cursor')) legacyQuery = legacyQuery.startAfter(upgrade.get('cursor'));
+  const legacy = await legacyQuery.get();
+  const migration = db.batch();
+  for (const item of legacy.docs) if (item.get('stage') === 'drain' && !item.get('identitiesReleasedAt') && !item.get('identityReleaseUpgradeRequestedAt')) {
+    migration.update(item.ref, { nextAttemptAt: Timestamp.fromMillis(now()), identityReleaseUpgradeRequestedAt: Timestamp.fromMillis(now()) });
+  }
+  migration.set(upgradeRef, { cursor: legacy.size === 20 ? legacy.docs.at(-1)!.id : '' });
+  await migration.commit();
   const jobs = await db.collection('accountDeletionJobs').where('nextAttemptAt', '<=', Timestamp.fromMillis(now())).orderBy('nextAttemptAt').limit(3).get();
   for (const job of jobs.docs) await processAccountDeletion(job.id, 10_000, deps);
   const expired = await db.collection('accountDeletionReceipts').where('expiresAt', '<=', Timestamp.fromMillis(now())).limit(100).get();

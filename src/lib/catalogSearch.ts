@@ -30,7 +30,7 @@ export function getCatalogSearchSuggestions(
   value: string,
   section?: CatalogSectionId | "",
   categoryId?: string,
-  limit = 4
+  limit = 10
 ): CatalogSearchSuggestion[] {
   const query = normalizeSearchText(value);
   if (!query) return [];

@@ -1,3 +1,5 @@
+import { startNotificationSchedulers } from "./lib/notification-scheduler";
+
 declare global {
   var __strovaDeletionTimer: ReturnType<typeof setInterval> | undefined;
   var __strovaDeletionRunning: boolean | undefined;
@@ -11,6 +13,7 @@ declare global {
 }
 
 export function registerNodeInstrumentation() {
+  if (process.env.NEXT_PHASE !== "phase-production-build") startNotificationSchedulers();
   if (process.env.NEXT_PHASE !== "phase-production-build" && !globalThis.__strovaDeletionTimer) {
     const tick = async () => {
       if (globalThis.__strovaDeletionRunning) return;
@@ -91,3 +94,4 @@ export function registerNodeInstrumentation() {
   globalThis.__stroikaModerationTimer = timer;
   setTimeout(() => void tick(), 10_000).unref?.();
 }
+

@@ -7,8 +7,9 @@ export const DELETION_ROOTS = [
   'billingUsages', 'billingIntroIdentities', 'companyInnClaims', 'phoneClaims', 'appPushTokenOwners', 'engagementProfiles',
   'engagementDeliveries', 'nearbyMatchDeliveries', 'publicationNotificationJobs', 'profileAvatarSyncJobs', 'moderationLogs',
   'accountSecurity', 'accountSecuritySessions', 'accountSecurityChallenges', 'appleExternalTokens', 'appleExternalReports', 'accountMedia',
+  'notificationPushJobs', 'moderatorNotificationJobs', 'moderatorNotificationDeliveries', 'moderatorRecipients',
 ] as const;
-const UID_DOCUMENTS = new Set(['users', 'availability', 'comparisonSelections', 'freePlacementAccounts', 'billingAccounts', 'engagementProfiles', 'profileAvatarSyncJobs', 'accountSecurity', 'verificationUploadLimits']);
+const UID_DOCUMENTS = new Set(['users', 'availability', 'comparisonSelections', 'freePlacementAccounts', 'billingAccounts', 'engagementProfiles', 'profileAvatarSyncJobs', 'accountSecurity', 'verificationUploadLimits', 'moderatorRecipients']);
 const OWNER_FIELDS: Record<string, string[]> = { listings: ['authorId', 'userId', 'ownerId', 'creatorId', 'uid'], customerRequests: ['customerId', 'userId', 'ownerId', 'uid'], portfolio: ['userId', 'ownerId', 'uid'], reviews: ['authorId', 'userId'] };
 export type DeletedEntities = { listings: Set<string>; requests: Set<string>; reviews: Set<string>; chats: Set<string> };
 export const emptyEntities = (): DeletedEntities => ({ listings: new Set(), requests: new Set(), reviews: new Set(), chats: new Set() });

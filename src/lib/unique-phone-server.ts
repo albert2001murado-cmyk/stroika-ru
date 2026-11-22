@@ -30,7 +30,7 @@ export async function phoneIndexReady(db: Firestore, transaction?: Transaction) 
     throw new ContactError("registration/phone-index-not-ready", "Проверка номеров обновляется. Попробуйте зарегистрироваться немного позже.", 503);
   }
 }
-async function authExists(auth: Auth, uid: string) {
+export async function authIdentityExists(auth: Auth, uid: string) {
   try { await auth.getUser(uid); return true; }
   catch (error) { if ((error as { code?: string }).code === "auth/user-not-found") return false; throw error; }
 }
@@ -44,9 +44,10 @@ async function checkOwners(db: Firestore, auth: Auth, values: string[], uid: str
   for (const owner of values) {
     if (owner === uid) continue;
     const ref = db.collection("users").doc(owner);
-    const [profile, existingAuth] = await Promise.all([transaction ? transaction.get(ref) : ref.get(), authExists(auth, owner)]);
-    // Reuse a number only after BOTH the profile and Auth account were deleted.
-    if (profile.exists || existingAuth) taken();
+    // Watch the profile in a transaction, but a leftover profile is not a live
+    // identity. Deletion releases Auth before its background data sweep finishes.
+    const [, existingAuth] = await Promise.all([transaction ? transaction.get(ref) : ref.get(), authIdentityExists(auth, owner)]);
+    if (existingAuth) taken();
   }
 }
 export async function checkPhoneAvailable(db: Firestore, auth: Auth, value: unknown, uid = "") {
@@ -62,7 +63,8 @@ export async function preparePhoneChange(db: Firestore, auth: Auth, transaction:
   const phone = contactPhone(value), uid = user.uid;
   const userRef = db.collection("users").doc(uid), claimRef = db.collection(PHONE_CLAIMS).doc(phone);
   await phoneIndexReady(db, transaction);
-  const [profile, claim] = await Promise.all([transaction.get(userRef), transaction.get(claimRef)]);
+  const [profile, claim, deletion] = await Promise.all([transaction.get(userRef), transaction.get(claimRef), transaction.get(db.doc(`accountDeletionJobs/${uid}`))]);
+  if (deletion.exists) throw new ContactError("registration/account-deleting", "Аккаунт удаляется. Зарегистрируйтесь заново после подтверждения удаления", 403);
   if (profile.get("moderationStatus") === "blocked") throw new ContactError("registration/blocked", "Аккаунту недоступно это действие.", 403);
   const oldPhone = normalizeRussianPhone(profile.get("phone"));
   const oldRef = oldPhone && oldPhone !== phone ? db.collection(PHONE_CLAIMS).doc(oldPhone) : null;

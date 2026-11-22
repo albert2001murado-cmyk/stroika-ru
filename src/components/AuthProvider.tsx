@@ -42,7 +42,7 @@ type AuthContextValue = {
   profile: UserProfile | null;
   loading: boolean;
   register: (data: RegisterData) => Promise<void>;
-  login: (email: string, password: string, remember?: boolean) => Promise<void>;
+  login: (identifier: string, password: string, remember?: boolean, method?: "email" | "phone") => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   logout: () => Promise<void>;
 };
@@ -88,12 +88,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  async function login(email: string, password: string, remember = true) {
+  async function login(identifier: string, password: string, remember = true, method: "email" | "phone" = "email") {
     await setPersistence(
       auth,
       remember ? browserLocalPersistence : browserSessionPersistence
     );
-    await securityLogin(email.trim().toLocaleLowerCase("en-US"), password, remember);
+    await securityLogin(identifier.trim(), password, remember, method);
   }
 
   async function resetPassword(email: string) {

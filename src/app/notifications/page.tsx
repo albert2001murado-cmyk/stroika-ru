@@ -50,8 +50,10 @@ function meta(type?: NotificationType) {
     case "message":
       return { Icon: MessageCircle, iconClass: "bg-blue-50 text-[#0057ff]", stripe: "bg-[#0057ff]" };
     case "moderation":
+    case "moderator_publication":
       return { Icon: ShieldCheck, iconClass: "bg-violet-50 text-violet-600", stripe: "bg-violet-500" };
     case "verification":
+    case "moderator_verification":
       return { Icon: ShieldCheck, iconClass: "bg-blue-50 text-[#0057ff]", stripe: "bg-[#0057ff]" };
     case "nearby_request":
     case "match":

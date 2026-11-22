@@ -152,12 +152,27 @@ export async function saveVerificationAttachment(
     documentConsentAt: FieldValue.serverTimestamp(),
     createdAt: FieldValue.serverTimestamp(),
   };
-  await mkdir(/* turbopackIgnore: true */ privateRoot(), { recursive: true, mode: 0o700 });
-  await writeFile(/* turbopackIgnore: true */ target, bytes, { mode: 0o600, flag: "wx" });
+  const rollbackBudget = async () => db.runTransaction(async tx => {
+    const current = await tx.get(budgetRef);
+    if (current.get("day") === day) tx.update(budgetRef, { count: Math.max(0, Number(current.get("count") || 0) - 1), bytes: Math.max(0, Number(current.get("bytes") || 0) - bytes.length) });
+  });
+  try {
+    await mkdir(/* turbopackIgnore: true */ privateRoot(), { recursive: true, mode: 0o700 });
+    await writeFile(/* turbopackIgnore: true */ target, bytes, { mode: 0o600, flag: "wx" });
+  } catch (error) {
+    await rollbackBudget();
+    console.error("Verification storage unavailable", { code: String((error as NodeJS.ErrnoException).code || "storage").slice(0, 40) });
+    throw new VerificationError("Сервер временно не может сохранить документ. Повторите загрузку немного позже", 503);
+  }
   try {
     await db.doc(`verificationAttachments/${id}`).create(data);
   } catch (error) {
+    // A lost commit response must not leave a submitted metadata record pointing
+    // at an erased file. Confirm whether the create committed before cleanup.
+    const existing = await db.doc(`verificationAttachments/${id}`).get();
+    if (existing.exists && existing.get("ownerUid") === uid) return verificationAttachmentView(id, existing.data()!);
     await rm(/* turbopackIgnore: true */ target, { force: true });
+    await rollbackBudget();
     throw error;
   }
   return verificationAttachmentView(id, data);

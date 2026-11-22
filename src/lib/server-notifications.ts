@@ -1,8 +1,6 @@
-import { pushPreview } from "./security-policy";
 import { createHash } from "crypto";
 import { FieldValue, type Transaction } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase-admin";
-import { activeAppPushTokens } from "./app-notifications-server";
 
 export type ServerNotificationInput = {
   recipientId: string;
@@ -18,6 +16,7 @@ export type ServerNotificationInput = {
   durableDedupe?: boolean;
   /** Discovery belongs only on the phone; it must not create website inbox entries. */
   pushOnly?: boolean;
+  reviewTarget?: { collection: "listings" | "customerRequests" | "reviews" | "verificationRequests"; id: string; revision: string };
   match?: { requestId: string; listingId: string; distanceKm: number };
 };
 
@@ -50,53 +49,6 @@ async function blocked(recipientId: string, actorId: string) {
   return byRecipient.exists || byActor.exists;
 }
 
-async function sendExpoPush(
-  tokens: string[],
-  input: Required<Pick<ServerNotificationInput, "title" | "body" | "url" | "type">> & {
-    entityId: string;
-    chatId: string;
-    notificationId: string;
-    recipientId: string;
-  }
-) {
-  let sent = 0;
-  for (let offset = 0; offset < tokens.length; offset += 100) {
-    const chunk = tokens.slice(offset, offset + 100);
-    const messages = chunk.map((to) => ({
-      to,
-      sound: "default",
-      ...(input.type.startsWith("engagement_") ? { ttl: 1800 } : {}),
-      ...(input.type.startsWith("engagement_") ? { categoryId: "STROVA_RECOMMENDATIONS" } : {}),
-      channelId: input.type.startsWith("engagement_") ? "recommendations" : input.type === "message" ? "messages" : input.type === "nearby_request" ? "nearby-orders" : "default",
-      ...pushPreview(input.type, input.title, input.body),
-      data: {
-        url: input.url,
-        chatId: input.chatId,
-        type: input.type,
-        entityId: input.entityId,
-        notificationId: input.notificationId,
-        recipientId: input.recipientId,
-      },
-    }));
-    try {
-      const response = await fetch("https://exp.host/--/api/v2/push/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify(messages),
-        signal: AbortSignal.timeout(10_000),
-      });
-      if (response.ok) {
-        const result = await response.json();
-        const tickets = Array.isArray(result.data) ? result.data : [];
-        sent += tickets.filter((ticket: { status?: string }) => ticket.status === "ok").length;
-      }
-    } catch {
-      // The in-app event has already been stored and remains visible.
-    }
-  }
-  return sent;
-}
-
 export async function deliverServerNotification(
   raw: ServerNotificationInput,
   guard?: (transaction: Transaction) => Promise<boolean>
@@ -123,7 +75,8 @@ export async function deliverServerNotification(
     ? db.doc(`users/${recipientId}/notifications/${stableId}`)
     : db.collection(`users/${recipientId}/notifications`).doc();
   const receipt = raw.durableDedupe && stableId
-    ? db.doc(`${type.startsWith("engagement_") ? "engagementDeliveries" : "nearbyMatchDeliveries"}/${stableId}`) : null;
+    ? db.doc(`${type.startsWith("engagement_") ? "engagementDeliveries" : type.startsWith("moderator_") ? "moderatorNotificationDeliveries" : "nearbyMatchDeliveries"}/${stableId}`) : null;
+  const pushJob = db.doc(`notificationPushJobs/${createHash("sha256").update(`${recipientId}:${reference.id}`).digest("hex")}`);
 
   const created = await db.runTransaction(async (transaction) => {
     const [profile, recipientDeletion, actorDeletion] = await Promise.all([
@@ -131,7 +84,7 @@ export async function deliverServerNotification(
       transaction.get(db.doc(`accountDeletionJobs/${recipientId}`)),
       actorId && actorId !== "system" ? transaction.get(db.doc(`accountDeletionJobs/${actorId}`)) : null,
     ]);
-    if (!profile.exists || recipientDeletion.exists || actorDeletion?.exists) return false;
+    if (!profile.exists || profile.get("moderationStatus") === "blocked" || recipientDeletion.exists || actorDeletion?.exists) return false;
     if (receipt && (await transaction.get(receipt)).exists) return false;
     if (stableId && !raw.pushOnly) {
       const existing = await transaction.get(reference);
@@ -158,6 +111,15 @@ export async function deliverServerNotification(
       recipientId, entityId, notificationId: raw.pushOnly ? "" : reference.id,
       createdAt: FieldValue.serverTimestamp(),
     });
+    // An atomic outbox survives process restarts and temporary Expo failures.
+    transaction.create(pushJob, {
+      recipientId, actorId, title, body, url, type, entityId, chatId,
+      notificationId: raw.pushOnly ? "" : reference.id,
+      receiptPath: receipt?.path || "", attempts: 0, accepted: 0,
+      nextAttemptAt: FieldValue.serverTimestamp(), createdAt: FieldValue.serverTimestamp(),
+      expiresAt: Date.now() + (type.startsWith("engagement_") ? 30 * 60_000 : 24 * 60 * 60_000),
+      ...(raw.reviewTarget ? { reviewTarget: raw.reviewTarget } : {}),
+    });
     return true;
   });
 
@@ -165,25 +127,7 @@ export async function deliverServerNotification(
     return { ok: true, sent: 0, duplicate: true, notificationId: reference.id } as const;
   }
 
-  const tokens = await activeAppPushTokens(recipientId);
-  const sent = await sendExpoPush(tokens, {
-    title,
-    body,
-    url,
-    type,
-    entityId,
-    chatId,
-    notificationId: raw.pushOnly ? "" : reference.id,
-    recipientId,
-  });
-  const deliveryRecord = raw.pushOnly ? receipt : reference;
-  if (deliveryRecord) await deliveryRecord.set(
-    {
-      pushAttemptedAt: FieldValue.serverTimestamp(),
-      pushTokenCount: tokens.length,
-      pushSentCount: sent,
-    },
-    { merge: true }
-  );
+  const { processNotificationPushJob } = await import("./notification-push-server");
+  const sent = await processNotificationPushJob(pushJob.id).catch(() => 0);
   return { ok: true, sent, notificationId: reference.id } as const;
 }

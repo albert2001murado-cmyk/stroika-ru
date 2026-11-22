@@ -1,0 +1,187 @@
+{
+  "release": "2026-11-22.accounts-1",
+  "version": "1.0.1",
+  "source": "e032fa3625c0d2fb74efc8066c5f8bc4e877cc15",
+  "files": [
+    {
+      "path": "firebase.account-tests.json",
+      "before": null,
+      "after": "81f486c65b7e232426b01915127c4bea7692bfd5e6431833074d3559d557c01c"
+    },
+    {
+      "path": "ops/account-update/bundle.py",
+      "before": null,
+      "after": "18d420783d838ec1ddb7b466948c95a62d59ae4a2da3d04fccbee7641bbf0167"
+    },
+    {
+      "path": "ops/account-update/install.sh",
+      "before": null,
+      "after": "d8bbc301bcefdddc689db079e8429a33cd0d19704e73770b8543ded7f4fada04"
+    },
+    {
+      "path": "ops/account-update/test_bundle.py",
+      "before": null,
+      "after": "20ae8aa8ccd81fc21261d8d4418dc9f92323abe683acc54749f3fdf84c0c906f"
+    },
+    {
+      "path": "package-lock.json",
+      "before": "8c55c9422deeb4441342a2593fdccda316f8a1598a951a7ace1b9a62fe3e9e14",
+      "after": "3b3661d286aa29fd93629be71f918dace4e4328c6794bce30a6c02fb1358cacc"
+    },
+    {
+      "path": "package.json",
+      "before": "02f966de0f2a05c97241a3313d04dc0ff9d3b91c113b96bef4225e198ada9e3c",
+      "after": "c25a19f3d4989ceceadd84fe8d83e28650c3c87fb5a63bb5dd3cb2216a2e32e4"
+    },
+    {
+      "path": "public/verification-viewer/index.html",
+      "before": null,
+      "after": "c459a3f46973c4f6cb6487f4065d7dc61f4999414c7335445e245df889c8d565"
+    },
+    {
+      "path": "scripts/check-verification-storage.cjs",
+      "before": null,
+      "after": "f99dd10ffd921f793b04609b8b07552ae0cc54f456acdc4dab878f19e47164a8"
+    },
+    {
+      "path": "scripts/prepare-verification-viewer.mjs",
+      "before": null,
+      "after": "6b5ef35d808cb09d32d805cb21d78093841f949d8cbe4e9df84fcbca5c1b768f"
+    },
+    {
+      "path": "src/app/api/register-business/route.ts",
+      "before": "84443c0331193936d9a1b621d173e81d39101bf9cf9fe0987369f23dd2cab448",
+      "after": "a54c6eefe797e7d9ce45a6941112d16e3231d19de078e6e3b96136a712a67cfc"
+    },
+    {
+      "path": "src/app/auth/page.tsx",
+      "before": "4f9bba62ba51c2c04913d74d4c2ac460044808a4b2212ffea29528c840ca622b",
+      "after": "a29bceb23aac9600d12cc706aedde0360a0477d937ba441b833f0de20e3c0196"
+    },
+    {
+      "path": "src/app/delete-account/page.tsx",
+      "before": "5ce5f3c2389da9ca74d4cd4651c798a068450a7208b004317690f8c0d2f4959e",
+      "after": "8257e1efc782f81f301a6f0d26c1d7d587713ba04e0955299978d63473e1778b"
+    },
+    {
+      "path": "src/app/moderator/reports/page.tsx",
+      "before": "e68dbe99fc8a8f4a2ecdf1061b162ba7bff58237105573acf7ffe2c221d7b306",
+      "after": "eb0928d1dffb425dfce5ea9ded28c846b792d96b3821b4f38956a14df06564cd"
+    },
+    {
+      "path": "src/app/notifications/page.tsx",
+      "before": "30815f83a7f6880a74c8a7f16e49579a0a994604cec35a4cf425382f70c60d51",
+      "after": "a29f1d758ffd5202c55dc4a4529df449db01404710c519ea37b3daa8cfd98f0a"
+    },
+    {
+      "path": "src/app/page.tsx",
+      "before": "f20ac983f2294d6be283f52f3bf6b7b211f117784e2d99ad2343d8fe0dee92f4",
+      "after": "ea86e3788a04b8dcce67d45429a3e686c18bdaf89aa6fc2376ed3727ab61cb87"
+    },
+    {
+      "path": "src/components/AuthProvider.tsx",
+      "before": "1a4c77ca008c14148795fc0f37524da0df0f2e2ed6c82f05c9a2200e07dc9cf6",
+      "after": "a59c934206e26c25121b8c81bc34cded433a68826218eab7564b1cf6324e8a2c"
+    },
+    {
+      "path": "src/instrumentation-node.ts",
+      "before": "c26d68fa5dc4d6fcb7e06499f02271560259c7953ac363a4e62293b2e143a1bf",
+      "after": "90a9c9e15edc9ccb36e03ad033489bf9783e097174157901003e46f7097b2f96"
+    },
+    {
+      "path": "src/lib/account-deletion-policy.ts",
+      "before": "95af9c03218f2cda0a778ab64f25fdb8191fc970b4934b2f41231a2db5399c61",
+      "after": "e8cfe2c2d8994ee9e869f5ca46477fe6109e94d858bdb867b59a96126a8f74f0"
+    },
+    {
+      "path": "src/lib/account-deletion-server.ts",
+      "before": "05a3cb1caee78e15006a990e462c794679c10f05cd267bddd3d99651af4f3965",
+      "after": "7040e6834251dcf3351ef30d1d4cb7edfbecf193c20d43b464d3b256984de422"
+    },
+    {
+      "path": "src/lib/account-security-protocol.ts",
+      "before": "5971d93088e8a3702351810e0f0b05ec53bfc0ab025ee4cfca0449b541db6bee",
+      "after": "9781d953238dc570162187328f998fac349cc0aaca50913a4d87dc829fb13102"
+    },
+    {
+      "path": "src/lib/account-security-server.ts",
+      "before": "c550330be29bfbaeb9db25347438f4a996e8334eb54eba91a596f6b596a4313d",
+      "after": "b5481eee1fcab5ae98a0aed7405bf1c34311b6f832b47383892ffc5788d40202"
+    },
+    {
+      "path": "src/lib/accountSecurityClient.ts",
+      "before": "830efd64bc324b1bf90d2afa777f864bcad84f09625ff5127c9c7161e0c6c0fd",
+      "after": "77c9720342378c90483cb40e3b44062a4dad0258ee93732b6ec0954069dfe86f"
+    },
+    {
+      "path": "src/lib/catalogSearch.ts",
+      "before": "79a58407476e869950a1258a8cadc4511b41dc1b28d7a99678cdea3cd7ddd694",
+      "after": "e312a146954e4cb70c81fdd31c2a6a6b611c80c63ddf3ed6715854d2ecb70ee8"
+    },
+    {
+      "path": "src/lib/engagement-server.ts",
+      "before": "dc10575d8d18b4b24591933bbfc4e9572f73aca445d9d1fac840c5ecf59c87da",
+      "after": "30ab98f03480cc7c40f3dd3f4de8b19a479c38e57012ad6c9ddf83dde12c7be5"
+    },
+    {
+      "path": "src/lib/engagement.ts",
+      "before": "07fbc118a7c0493c5f5f31950af5fc2d619d3fd40cb705a406d494995add7efc",
+      "after": "74bad33a17d7f4ba7baaaa5e0d458088647642c9bab3798e2aa0ea5c4c974cf9"
+    },
+    {
+      "path": "src/lib/moderator-notifications-server.ts",
+      "before": null,
+      "after": "878a1f32ffed211377b4fb6349c7fd46b3d2a054427896bfefa8133687c49784"
+    },
+    {
+      "path": "src/lib/notification-push-server.ts",
+      "before": null,
+      "after": "90953dad887b167d13e85d1521595f2783a7a2432081058b3cc3d323e1b5f1ba"
+    },
+    {
+      "path": "src/lib/notification-scheduler.ts",
+      "before": null,
+      "after": "b70a7bcd59d1d8f32e323017a1344cd17bf74455c11aab69e8890c3d19f3f270"
+    },
+    {
+      "path": "src/lib/phone-login-server.ts",
+      "before": null,
+      "after": "05e9cfb5db292682ab2fb0c3a128e86cde3d280742afa2a5eb1a3dae44554ce7"
+    },
+    {
+      "path": "src/lib/server-notifications.ts",
+      "before": "bd3c0274fe4214bbd27be9287c1f2ca3a0971675c1688ddadab1bccb82a190f0",
+      "after": "393ff93fabe7e8ec95a090696c1399c9159a282b38b361ebba3581be486cf95d"
+    },
+    {
+      "path": "src/lib/unique-phone-server.ts",
+      "before": "eed5090c3ad122517e74347d708aea4b36d5a40299d118a743cd743fce15bed9",
+      "after": "aa49acb0007a5a4785c56a9f4768156c163caea99794a5236dfb7fc687841810"
+    },
+    {
+      "path": "src/lib/verification-files-server.ts",
+      "before": "3163bbdfe49c3d773c690f296f5ab2d95d9aabb1c949c89d67ee2965f9741b15",
+      "after": "079b7f94f0644353bbaf18ac504ec8b35545db52cc00faa1221516e5ba28e544"
+    },
+    {
+      "path": "src/lib/verificationFilesClient.ts",
+      "before": "c564a9773918bba085f1a5de33a03a8943e196829a6db4d6670aa39ab4744e00",
+      "after": "0a2f8c14e2585f18ecaae6c0af6e414006630d02d0d3aaac17b4b86517dfa35a"
+    },
+    {
+      "path": "tests/account-lifecycle.emulator.cjs",
+      "before": null,
+      "after": "8711118cbf6d7f57303a76d17117141e29ecdd824d202bbbc02c2c5fdfacb2af"
+    },
+    {
+      "path": "tests/account-policy.test.cjs",
+      "before": null,
+      "after": "f2bda2d495327493bf2446f24bec311664a5bd2a9907e06cb03413caa1e5e165"
+    },
+    {
+      "path": "tests/firestore.test.rules",
+      "before": null,
+      "after": "f3c89c2262f26ae917a01afbaf5d6186cb3f9f0bc31d9ff9efc740552a2a14d3"
+    }
+  ]
+}

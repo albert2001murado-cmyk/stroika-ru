@@ -2,30 +2,14 @@
 import MfaChallenge from "@/components/MfaChallenge";
 import { useMfaChallenge } from "@/lib/useMfaChallenge";
 
-import { ContactRequestError, contactRequest } from "@/lib/contact-request";
 import { useAuth } from "@/components/AuthProvider";
 import { formatRussianPhoneInput, normalizeRussianPhone as normalizePhoneForStorage, russianPhoneError } from "@/lib/phone";
-import { auth, db } from "@/lib/firebase";
 import {
   expectedInnLength,
   isValidRussianInn,
   normalizeInn,
 } from "@/lib/company-verification";
 import type { AccountType, CompanyLookupResult } from "@/types";
-import {
-  deleteUser,
-  getAdditionalUserInfo,
-  browserLocalPersistence,
-  browserSessionPersistence,
-  type ConfirmationResult,
-  RecaptchaVerifier,
-  setPersistence,
-  signInWithPhoneNumber,
-} from "firebase/auth";
-import {
-  doc,
-  getDoc,
-} from "firebase/firestore";
 import {
   ArrowLeft,
   BadgeCheck,
@@ -46,7 +30,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
 type LookupState = "idle" | "loading" | "success" | "error";
 
@@ -76,11 +60,11 @@ function readableAuthError(error: unknown) {
     ? String((error as { code?: unknown }).code || "")
     : "";
   if (code === "auth/email-already-in-use") return "Эта почта уже используется другим аккаунтом. Перейдите во вкладку «Вход».";
-  if (code === "auth/phone-number-already-in-use") return "Этот номер телефона уже используется другим аккаунтом. Войдите по почте.";
+  if (code === "auth/phone-number-already-in-use") return "Этот номер телефона уже используется другим аккаунтом. Войдите в свой аккаунт.";
   if (code.includes("invalid-phone-number")) return "Проверьте номер телефона.";
   if (code.includes("invalid-verification-code")) return "Неверный SMS-код.";
   if (code.includes("too-many-requests")) return "Слишком много попыток. Попробуйте немного позже.";
-  if (code.includes("invalid-credential")) return "Неверная почта или пароль.";
+  if (code.includes("invalid-credential")) return "Неверный телефон, почта или пароль.";
   if (error instanceof Error) return error.message;
   return "Не получилось войти или зарегистрироваться.";
 }
@@ -94,9 +78,6 @@ export default function AuthPage() {
   const [loginMethod, setLoginMethod] = useState<"email" | "phone">("email");
   const [rememberMe, setRememberMe] = useState(true);
   const [loginPhone, setLoginPhone] = useState("");
-  const [smsCode, setSmsCode] = useState("");
-  const [confirmation, setConfirmation] = useState<ConfirmationResult | null>(null);
-  const recaptchaRef = useRef<RecaptchaVerifier | null>(null);
   const [displayName, setDisplayName] = useState("");
   const [accountType, setAccountType] = useState<AccountType>("individual");
   const [inn, setInn] = useState("");
@@ -112,13 +93,6 @@ export default function AuthPage() {
   const [resetSending, setResetSending] = useState(false);
   const [resetSent, setResetSent] = useState(false);
   const [legalAccepted, setLegalAccepted] = useState(false);
-
-  useEffect(() => {
-    return () => {
-      recaptchaRef.current?.clear();
-      recaptchaRef.current = null;
-    };
-  }, []);
 
   const isBusiness = accountType === "ip" || accountType === "ooo";
   const innLength = useMemo(() => expectedInnLength(accountType), [accountType]);
@@ -241,55 +215,9 @@ export default function AuthPage() {
           city,
           phone: normalizePhoneForStorage(phone),
         });
-      } else if (loginMethod === "email") {
-        await login(email, password, rememberMe);
       } else {
-        if (loginPhone.length !== 10) {
-          throw new Error("Введите 10 цифр номера после +7.");
-        }
-
-        if (!confirmation) {
-          await setPersistence(
-            auth,
-            rememberMe ? browserLocalPersistence : browserSessionPersistence
-          );
-
-          recaptchaRef.current?.clear();
-          recaptchaRef.current = new RecaptchaVerifier(
-            auth,
-            "phone-login-recaptcha",
-            { size: "invisible" }
-          );
-
-          const nextConfirmation = await signInWithPhoneNumber(
-            auth,
-            `+7${loginPhone}`,
-            recaptchaRef.current
-          );
-          setConfirmation(nextConfirmation);
-          setSmsCode("");
-          return;
-        }
-
-        if (smsCode.replace(/\D/g, "").length < 6) {
-          throw new Error("Введите шестизначный код из SMS.");
-        }
-
-        const credential = await confirmation.confirm(
-          smsCode.replace(/\D/g, "").slice(0, 6)
-        );
-        const phoneNumber = credential.user.phoneNumber || `+7${loginPhone}`;
-        const profileSnapshot = await getDoc(doc(db, "users", credential.user.uid));
-        try {
-          await contactRequest(profileSnapshot.exists() ? "/api/profile/contact" : "/api/registration/profile", {
-            phone: phoneNumber, displayName: credential.user.displayName || "Пользователь",
-          }, credential.user);
-        } catch (error) {
-          if (getAdditionalUserInfo(credential)?.isNewUser && error instanceof ContactRequestError && error.notCommitted && error.status < 500) {
-            await deleteUser(credential.user).catch(() => undefined);
-          }
-          throw error;
-        }
+        if (loginMethod === "phone" && loginPhone.length !== 10) throw new Error("Введите номер телефона полностью");
+        await login(loginMethod === "phone" ? `+7${loginPhone}` : email, password, rememberMe, loginMethod);
       }
 
       const nextPath = typeof window !== "undefined"
@@ -299,11 +227,6 @@ export default function AuthPage() {
     } catch (submitError) {
       if (mfa.capture(submitError)) { setPassword(""); return; }
       console.error(submitError);
-
-      if (mode === "login" && loginMethod === "phone" && !confirmation) {
-        recaptchaRef.current?.clear();
-        recaptchaRef.current = null;
-      }
 
       setError(readableAuthError(submitError));
     } finally {
@@ -353,7 +276,7 @@ export default function AuthPage() {
   const phoneLoginBlocked =
     mode === "login" &&
     loginMethod === "phone" &&
-    (loginPhone.length !== 10 || (Boolean(confirmation) && smsCode.length !== 6));
+    (loginPhone.length !== 10 || !password);
 
   if (mfa.resolver) return <main className="app-page px-4 py-8"><MfaChallenge value={mfa} onConfirm={() => void mfa.confirm(() => {
     const next = new URLSearchParams(window.location.search).get("next") || "/";
@@ -447,10 +370,6 @@ export default function AuthPage() {
                       setMode(item);
                       setError("");
                       setResetSent(false);
-                      setConfirmation(null);
-                      setSmsCode("");
-                      recaptchaRef.current?.clear();
-                      recaptchaRef.current = null;
                     }}
                     className={`rounded-[17px] px-4 py-3.5 text-sm font-black transition duration-300 hover:-translate-y-0.5 active:scale-[0.98] sm:text-base ${
                       mode === item
@@ -476,10 +395,6 @@ export default function AuthPage() {
                         setLoginMethod(id);
                         setError("");
                         setResetSent(false);
-                        setConfirmation(null);
-                        setSmsCode("");
-                        recaptchaRef.current?.clear();
-                        recaptchaRef.current = null;
                       }}
                       className={`flex items-center justify-center gap-2 rounded-2xl px-3 py-3 text-sm font-black transition duration-300 active:scale-[0.98] ${
                         loginMethod === id
@@ -754,62 +669,20 @@ export default function AuthPage() {
                           value={formatRussianPhone(loginPhone)}
                           onChange={(event) => {
                             setLoginPhone(normalizeRussianPhone(event.target.value));
-                            setConfirmation(null);
-                            setSmsCode("");
                             setError("");
                           }}
-                          disabled={Boolean(confirmation)}
                           required
                         />
                       </div>
                     </div>
 
-                    {confirmation ? (
-                      <div className="company-result-enter">
-                        <label className="mb-2 block text-sm font-black text-slate-700">
-                          Код из SMS
-                        </label>
-                        <div className="relative">
-                          <ShieldCheck
-                            className="absolute left-4 top-1/2 -translate-y-1/2 text-[#0057ff]"
-                            size={20}
-                          />
-                          <input
-                            className="input w-full tracking-[0.34em]"
-                            style={{ paddingLeft: "58px" }}
-                            inputMode="numeric"
-                            autoComplete="one-time-code"
-                            maxLength={6}
-                            placeholder="000000"
-                            value={smsCode}
-                            onChange={(event) =>
-                              setSmsCode(event.target.value.replace(/\D/g, "").slice(0, 6))
-                            }
-                            required
-                            autoFocus
-                          />
-                        </div>
-                        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs font-bold">
-                          <span className="text-emerald-700">Код отправлен на +7 {formatRussianPhone(loginPhone)}</span>
-                          <button
-                            type="button"
-                            className="text-[#0057ff] underline-offset-4 hover:underline"
-                            onClick={() => {
-                              setConfirmation(null);
-                              setSmsCode("");
-                              recaptchaRef.current?.clear();
-                              recaptchaRef.current = null;
-                            }}
-                          >
-                            Изменить номер
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <p className="text-sm font-bold leading-6 text-slate-500">
-                        Пришлём одноразовый код. Пароль не нужен, номер всегда начинается с +7.
-                      </p>
-                    )}
+                    <div className="relative">
+                      <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                      <input className="input w-full" style={{ paddingLeft: "58px" }}
+                        type="password" autoComplete="current-password" placeholder="Пароль аккаунта"
+                        value={password} onChange={event => setPassword(event.target.value)} required />
+                    </div>
+
                   </div>
                 )}
               </div>
@@ -867,7 +740,6 @@ export default function AuthPage() {
                 </button>
               ) : null}
 
-              <div id="phone-login-recaptcha" />
 
               {error ? (
                 <p className="mt-5 rounded-2xl bg-red-50 p-4 text-sm font-black text-red-600 ring-1 ring-red-100">
@@ -886,10 +758,6 @@ export default function AuthPage() {
                   ? "Подождите..."
                   : mode === "register"
                   ? "Создать аккаунт"
-                  : loginMethod === "phone"
-                  ? confirmation
-                    ? "Войти по коду"
-                    : "Получить SMS-код"
                   : "Войти"}
               </button>
 

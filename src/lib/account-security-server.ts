@@ -3,6 +3,8 @@ import type { DecodedIdToken } from "firebase-admin/auth";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { getAdminDb, getRawAdminAuth } from "./firebase-admin";
 import { assertAccountSession, SecurityError } from "./account-security-session";
+import { normalizeRussianPhone } from "./phone";
+import { phoneLoginAccount } from "./phone-login-server";
 import {
   assertSecurityConfigured, checkPassword, decryptSecret, digest, encryptSecret, hashPassword,
   newRecoveryCodes, newTotp, opaqueId, recoveryDigest, safeEqual, totpCounter, validPassword,
@@ -10,7 +12,7 @@ import {
 
 const CHALLENGE_MS = 5 * 60_000, ENROLL_MS = 10 * 60_000, LOCK_MS = 10 * 60_000;
 const stateRef = (uid: string) => getAdminDb().doc("accountSecurity/" + uid);
-const invalidLogin = () => new SecurityError("Проверьте почту и пароль", "auth/invalid-credential", 401);
+const invalidLogin = () => new SecurityError("Проверьте телефон или почту и пароль", "auth/invalid-credential", 401);
 const invalidCode = () => new SecurityError("Код не подошёл или уже использован. Введите новый код", "security/invalid-code");
 const expired = () => new SecurityError("Время подтверждения истекло. Войдите заново", "security/session-expired", 401);
 const tooMany = () => new SecurityError("Слишком много попыток. Повторите через 10 минут", "security/too-many-requests", 429);
@@ -112,20 +114,29 @@ async function mintSession(uid: string, epoch: string, enabled: boolean, remembe
   return { customToken: await getRawAdminAuth().createCustomToken(uid, claims) };
 }
 export async function startSecurityLogin(body: Record<string, unknown>) {
-  const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254 || !validPassword(body.password)) throw invalidLogin();
-  await securityRate("password:" + email, 12);
+  const byPhone = body.method === "phone";
+  const phone = byPhone && typeof body.phone === "string" && body.phone.length <= 64 ? normalizeRussianPhone(body.phone) : "";
+  let email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+  if (!validPassword(body.password) || (byPhone ? !phone : !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254)) throw invalidLogin();
+  if (byPhone) await securityRate("phone-password:" + phone, 12);
+  else await securityRate("password:" + email, 12);
   let user;
-  try { user = await getRawAdminAuth().getUserByEmail(email); }
+  try { user = byPhone ? await phoneLoginAccount(getAdminDb(), getRawAdminAuth(), phone) : await getRawAdminAuth().getUserByEmail(email); }
   catch (error) {
     if ((error as { code?: string }).code === "auth/user-not-found") { await hashPassword(body.password); throw invalidLogin(); }
     throw error;
   }
+  if (!user?.email) { await hashPassword(body.password); throw invalidLogin(); }
+  email = user.email.trim().toLowerCase();
+  if (byPhone) await securityRate("password:" + email, 12);
   await liveUser(user.uid);
   const state = (await stateRef(user.uid).get()).data();
   if (!state?.enabled) {
     const provider = await firebasePassword(email, body.password);
-    if (provider?.legacyMfa) return { legacyFirebaseMfa: true };
+    if (provider?.legacyMfa) {
+      if (byPhone) throw new SecurityError("Для аккаунта с прежней двухэтапной защитой войдите по почте", "security/email-required", 409);
+      return { legacyFirebaseMfa: true };
+    }
     if (!provider || provider.uid !== user.uid) throw invalidLogin();
     return mintSession(user.uid, state?.epoch || "", false);
   }

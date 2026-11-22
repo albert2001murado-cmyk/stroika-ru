@@ -9,7 +9,8 @@ export async function verificationFileRequest(
   options: { method?: string; body?: FormData } = {},
 ) {
   const controller = new AbortController(),
-    timer = setTimeout(() => controller.abort(), 60_000);
+    timer = setTimeout(() => controller.abort(), 120_000);
+  let handedOff = false;
   function sameAccount() {
     if (auth.currentUser?.uid !== user.uid)
       throw new Error("Аккаунт изменился. Откройте раздел повторно.");
@@ -33,13 +34,19 @@ export async function verificationFileRequest(
         );
       }
       sameAccount();
-      const bytes = await response.arrayBuffer();
-      sameAccount();
-      return new Response(bytes, {
-        status: response.status,
-        statusText: response.statusText,
-        headers: response.headers,
-      });
+      const read = async <T,>(consume: () => Promise<T>) => {
+        try { sameAccount(); const value = await consume(); sameAccount(); return value; }
+        catch (error) {
+          if (controller.signal.aborted) throw new Error("Передача файла заняла слишком много времени. Проверьте соединение и повторите");
+          throw error;
+        } finally { clearTimeout(timer); }
+      };
+      handedOff = true;
+      return {
+        json: () => read(() => response.json()),
+        arrayBuffer: () => read(() => response.arrayBuffer()),
+        blob: () => read(() => response.blob()),
+      };
     }
     throw new Error("Войдите в аккаунт снова.");
   } catch (error) {
@@ -49,6 +56,6 @@ export async function verificationFileRequest(
       );
     throw error;
   } finally {
-    clearTimeout(timer);
+    if (!handedOff) clearTimeout(timer);
   }
 }

@@ -13,21 +13,31 @@ type PublicationDecision = "approved" | "rejected";
 type Report = { id: string; reporterId?: string; reporterName?: string; targetType?: string; targetId?: string; targetOwnerId?: string; targetTitle?: string; reason?: string; comment?: string; source?: string; status?: ReportStatus; createdAt?: any; targetSnapshot?: { text?: string } };
 type Publication = { id: string; kind: "listing" | "request"; title?: string; description?: string; category?: string; subcategory?: string; city?: string; ownerId?: string; ownerName?: string; moderationStatus?: PublicationStatus; moderationReason?: string; createdAt?: any; updatedAt?: any };
 
-function canModerate(profile: any) { return profile?.role === "moderator" || profile?.role === "admin" || profile?.isModerator === true || profile?.isAdmin === true; }
 function reportUrl(item: Report) { if (item.targetType === "listing") return `/listing/${item.targetId}`; if (item.targetType === "profile") return `/user/${item.targetId}`; if (item.targetType === "request") return `/requests/${item.targetId}`; if (item.targetType === "chat") return `/messages/${item.targetId}`; return ""; }
 function publicationUrl(item: Publication) { return item.kind === "listing" ? `/listing/${item.id}` : `/requests/${item.id}`; }
 
 export default function ModeratorReportsPage() {
-  const { user, profile, loading } = useAuth();
+  const { user, loading } = useAuth();
+  const [moderator, setModerator] = useState(false);
+  const [checkingRole, setCheckingRole] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    setCheckingRole(true); setModerator(false);
+    if (!user) { setCheckingRole(false); return; }
+    void user.getIdTokenResult().then(token => { if (!cancelled) setModerator(token.claims.admin === true || token.claims.moderator === true); })
+      .catch(() => { if (!cancelled) setModerator(false); })
+      .finally(() => { if (!cancelled) setCheckingRole(false); });
+    return () => { cancelled = true; };
+  }, [user]);
   const [mode, setMode] = useState<"publications" | "reports">("publications");
   const [reports, setReports] = useState<Report[]>([]);
   const [publications, setPublications] = useState<Publication[]>([]);
   const [reportFilter, setReportFilter] = useState<ReportStatus>("open");
   const [publicationFilter, setPublicationFilter] = useState<PublicationStatus>("pending");
+  useEffect(() => { if (new URLSearchParams(window.location.search).get("status") === "manual_review") { setMode("publications"); setPublicationFilter("manual_review"); } }, []);
   const [loadingData, setLoadingData] = useState(true);
   const [workingId, setWorkingId] = useState("");
   const [message, setMessage] = useState("");
-  const moderator = useMemo(() => canModerate(profile), [profile]);
 
   async function load() {
     try {
@@ -91,7 +101,7 @@ export default function ModeratorReportsPage() {
     } finally { setWorkingId(""); }
   }
 
-  if (loading) return <main className="app-page">Загрузка...</main>;
+  if (loading || checkingRole) return <main className="app-page">Загрузка...</main>;
   if (!user) return <main className="app-page"><div className="empty-card"><h1>Нужно войти</h1><Link href="/auth" className="btn-primary mt-5">Войти</Link></div></main>;
   if (!moderator) return <main className="app-page"><div className="empty-card"><h1>Нет доступа</h1></div></main>;
 

@@ -62,7 +62,7 @@ export default function DeleteAccountPage() {
       <p className="mt-4 leading-7 text-slate-600">Аккаунт удалится с сайта и из приложения. После подтверждения отменить удаление и восстановить данные нельзя</p>
       <ul className="my-6 space-y-3 text-sm leading-6 text-slate-700">{ACCOUNT_DELETION_ITEMS.map(item => <li key={item} className="flex gap-3"><CheckCircle2 size={18} className="mt-1 shrink-0 text-slate-400"/>{item}</li>)}</ul>
       <p className="text-sm leading-6 text-slate-600">Сообщения других участников групп сохранятся. Если вы владелец группы, управление перейдёт оставшемуся участнику</p>
-      <p className="mt-3 text-sm leading-6 text-slate-600">Для завершения старых сеансов сервер ждёт 65 минут. Очистка продолжится после закрытия страницы. При сбое сервис повторит удаление, статус будет доступен здесь</p>
+      <p className="mt-3 text-sm leading-6 text-slate-600">Почта и телефон освобождаются при удалении учётной записи. Остальные данные очищаются в фоне. Для завершения старых сеансов сервер выдерживает 65 минут. Очистка продолжится после закрытия страницы. При сбое сервис повторит удаление, статус будет доступен здесь</p>
       {status && <div role="status" className="mt-6 rounded-2xl bg-blue-50 p-5 leading-7 text-blue-950">{DELETION_STATUS_TEXT[status]}</div>}
       {!accepted && (user ? <form onSubmit={submit} className="mt-7 space-y-5">
         {usesPassword && <label className="block text-sm font-bold">Текущий пароль<input type="password" required autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} className="mt-2 w-full rounded-xl border border-slate-300 p-3"/></label>}

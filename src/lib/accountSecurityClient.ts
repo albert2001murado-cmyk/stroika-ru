@@ -60,8 +60,9 @@ export async function acceptSecurityResult(result: SecurityResult) {
     throw error;
   }
 }
-export async function securityLogin(email: string, password: string, remember: boolean) {
-  const result = await securityRequest<{ customToken?: string; challenge?: string; legacyFirebaseMfa?: boolean }>("login", { email, password, remember }, null);
+export async function securityLogin(identifier: string, password: string, remember: boolean, method: "email" | "phone" = "email") {
+  const email = method === "email" ? identifier.trim().toLowerCase() : "";
+  const result = await securityRequest<{ customToken?: string; challenge?: string; legacyFirebaseMfa?: boolean }>("login", { method, ...(method === "phone" ? { phone: identifier } : { email }), password, remember }, null);
   if (result.legacyFirebaseMfa) { await signInWithEmailAndPassword(auth, email, password); return; }
   if (result.challenge) {
     if (!/^[a-f0-9]{48}$/.test(result.challenge)) throw deploymentError();

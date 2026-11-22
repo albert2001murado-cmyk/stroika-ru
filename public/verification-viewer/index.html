@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=5"><meta name="referrer" content="no-referrer"><title>Документ</title>
+<style>body{margin:0;background:#f5f7fb;font:16px system-ui;color:#0f172a}nav{position:sticky;top:0;display:flex;align-items:center;justify-content:center;gap:16px;padding:10px;background:#fff;border-bottom:1px solid #e2e8f0}button{min-height:44px;border:0;border-radius:12px;background:#edf4ff;color:#0057ff;padding:8px 14px;font-weight:700}button:disabled{opacity:.4}main{overflow:auto;text-align:center;padding:8px}canvas{max-width:none;background:white}#error{padding:18px;color:#b91c1c}</style></head>
+<body><nav><button id="back" aria-label="Предыдущая страница">←</button><span id="count">Загружаем документ</span><button id="next" aria-label="Следующая страница">→</button><button id="zoom" aria-label="Изменить масштаб">＋</button></nav><div id="error" role="alert"></div><main><canvas></canvas></main>
+<script type="module">
+import * as pdfjs from './pdf.mjs';
+pdfjs.GlobalWorkerOptions.workerSrc = './pdf.worker.mjs';
+let pdf, page = 1, zoom = 1, render, generation = 0;
+const canvas = document.querySelector('canvas'), error = document.querySelector('#error');
+const post = message => window.ReactNativeWebView?.postMessage(message);
+async function show() {
+  const run = ++generation;
+  render?.cancel();
+  try {
+    const item = await pdf.getPage(page);
+    if (run !== generation) return;
+    const normal = item.getViewport({ scale: 1 });
+    const scale = Math.min(2, devicePixelRatio || 1) * zoom * Math.max(240, innerWidth - 16) / normal.width;
+    const viewport = item.getViewport({ scale });
+    canvas.width = viewport.width; canvas.height = viewport.height;
+    canvas.style.width = `${viewport.width / Math.min(2, devicePixelRatio || 1)}px`;
+    canvas.style.height = `${viewport.height / Math.min(2, devicePixelRatio || 1)}px`;
+    document.querySelector('#count').textContent = `${page} из ${pdf.numPages}`;
+    document.querySelector('#back').disabled = page === 1;
+    document.querySelector('#next').disabled = page === pdf.numPages;
+    render = item.render({ canvasContext: canvas.getContext('2d'), canvas, viewport });
+    await render.promise;
+  } catch (failure) { if (failure.name !== 'RenderingCancelledException') { error.textContent = 'Не удалось прочитать страницу'; post('error'); } }
+}
+window.strovaOpenDocument = async base64 => {
+  try {
+    pdf = await pdfjs.getDocument({ data: Uint8Array.from(atob(base64), c => c.charCodeAt(0)), isEvalSupported: false,
+      cMapUrl: './cmaps/', cMapPacked: true, standardFontDataUrl: './standard_fonts/', wasmUrl: './wasm/', enableXfa: false }).promise;
+    await show();
+  } catch { error.textContent = 'Не удалось открыть PDF. Возможно, файл повреждён или защищён паролем'; post('error'); }
+};
+document.querySelector('#back').onclick = () => { if (page > 1) { page--; void show(); } };
+document.querySelector('#next').onclick = () => { if (pdf && page < pdf.numPages) { page++; void show(); } };
+document.querySelector('#zoom').onclick = () => { zoom = zoom === 1 ? 1.6 : 1; if (pdf) void show(); };
+window.addEventListener('resize', () => { if (pdf) void show(); });
+post('ready');
+</script></body></html>
