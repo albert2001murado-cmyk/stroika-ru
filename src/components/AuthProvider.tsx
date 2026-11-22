@@ -3,6 +3,7 @@ import { usePathname } from "next/navigation";
 
 import { ContactRequestError, contactRequest } from "@/lib/contact-request";
 import { checkAccountSession, securityLogin, securityRequest } from "@/lib/accountSecurityClient";
+import { observeAccountSession, type SessionIssue } from "@/lib/accountSessionObserver";
 import { auth, db } from "@/lib/firebase";
 import type { AccountType, UserProfile } from "@/types";
 import {
@@ -54,8 +55,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const pathname = usePathname();
-  const [sessionProblem, setSessionProblem] = useState("");
-  const [sessionRetry, setSessionRetry] = useState(0);
+  const [sessionIssue, setSessionIssue] = useState<SessionIssue | null>(null);
+  const retryRef = useRef<() => void>(() => undefined);
 
   const pendingRegistration = useRef<{ user: User; email: string } | null>(null);
 
@@ -105,63 +106,64 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function logout() {
-    if (auth.currentUser) await securityRequest("logout", {}, auth.currentUser).catch(() => undefined);
+    if (auth.currentUser) await securityRequest("logout", {}, auth.currentUser, { timeoutMs: 5_000 }).catch(() => undefined);
     await signOut(auth);
     setUser(null);
     setProfile(null);
   }
 
   useEffect(() => {
-    let unsubscribeProfile: (() => void) | undefined;
-
-    let generation = 0, mounted = true, acceptedUid = "";
-    const unsubscribeAuth = onIdTokenChanged(auth, async (currentUser) => {
-      const run = ++generation;
-      unsubscribeProfile?.(); unsubscribeProfile = undefined;
-      // A refresh of the same account is not a logout. Keep its last verified
-      // profile until the new token is checked; clear immediately on UID change.
-      if (!currentUser || acceptedUid !== currentUser.uid) { setUser(null); setProfile(null); }
-      setLoading(true); setSessionProblem("");
-      if (!currentUser) { acceptedUid = ""; setLoading(false); return; }
-      try { await checkAccountSession(currentUser); }
-      catch (error) {
-        if (mounted && run === generation) {
-          acceptedUid = ""; setUser(null); setProfile(null); setLoading(false);
-          setSessionProblem((error as Error).message || "Не удалось проверить вход. Повторите попытку");
-        }
-        return;
-      }
-      if (!mounted || run !== generation) return;
-      acceptedUid = currentUser.uid; setUser(currentUser);
-
-      unsubscribeProfile = onSnapshot(
-        doc(db, "users", currentUser.uid),
-        (snapshot) => {
-          if (!mounted || run !== generation) return;
-          setProfile(snapshot.exists() ? (snapshot.data() as UserProfile) : null);
-          setLoading(false);
-        },
-        (error) => {
-          if (!mounted || run !== generation) return;
-          console.error("Profile realtime error:", error);
-          setProfile(null);
-          setLoading(false);
-        }
-      );
+    const observer = observeAccountSession<User, UserProfile>({
+      verify: async (currentUser, _forceRefresh, signal) => { await checkAccountSession(currentUser, { signal }); },
+      isCurrent: currentUser => auth.currentUser === currentUser,
+      clearPrivateCaches: () => undefined,
+      publish: state => {
+        setUser(state.user); setProfile(state.profile); setSessionIssue(state.sessionIssue);
+        setLoading(state.loading || Boolean(state.user && !state.profileReady));
+      },
+      watchProfile: (currentUser, next, fail) => onSnapshot(doc(db, "users", currentUser.uid),
+        { includeMetadataChanges: true },
+        snapshot => next(snapshot.exists() ? { ...snapshot.data(), uid: snapshot.id } as UserProfile : null, snapshot.metadata.fromCache),
+        error => fail(error.code === "permission-denied" || error.code === "unauthenticated")),
     });
-
+    retryRef.current = () => { void observer.retry(); };
+    const unsubscribeAuth = onIdTokenChanged(auth, currentUser => observer.onUser(currentUser));
+    const resume = () => { if (document.visibilityState === "visible") observer.resume(); };
+    const online = () => observer.resume();
+    window.addEventListener("focus", resume);
+    window.addEventListener("online", online);
+    document.addEventListener("visibilitychange", resume);
+    const retry = window.setInterval(() => {
+      if (document.visibilityState === "visible") observer.retryUnavailable();
+    }, 20_000);
     return () => {
-      mounted = false; generation++; unsubscribeAuth();
-      if (unsubscribeProfile) unsubscribeProfile();
+      unsubscribeAuth(); observer.dispose(); retryRef.current = () => undefined;
+      window.clearInterval(retry);
+      window.removeEventListener("focus", resume); window.removeEventListener("online", online);
+      document.removeEventListener("visibilitychange", resume);
     };
-  }, [sessionRetry]);
+  }, []);
 
   const value = useMemo<AuthContextValue>(
     () => ({ user, profile, loading, register, login, resetPassword, logout }),
     [user, profile, loading]
   );
 
-  return <AuthContext.Provider value={value}>{sessionProblem && pathname !== "/delete-account" ? <main className="mx-auto max-w-md px-5 py-20"><h1 className="text-2xl font-black">Подтвердите вход</h1><p role="alert" className="mt-4 leading-7 text-slate-600">{sessionProblem}</p><button onClick={() => setSessionRetry(v => v + 1)} className="mt-6 rounded-2xl bg-blue-600 px-5 py-4 font-bold text-white">Повторить проверку</button><button onClick={() => void signOut(auth).then(() => { window.location.assign("/auth"); })} className="mt-3 block p-3 font-bold text-blue-600">Войти заново</button></main> : children}</AuthContext.Provider>;
+  const blocked = sessionIssue === "blocked";
+  const reauthenticate = sessionIssue === "reauthenticate";
+  const showNotice = Boolean(sessionIssue && !user && pathname !== "/delete-account");
+  return <AuthContext.Provider value={value}>{showNotice ? (
+    <main className="mx-auto max-w-md px-5 py-20">
+      <h1 className="text-2xl font-black">{blocked ? "Доступ к аккаунту ограничен" : reauthenticate ? "Нужно войти заново" : "Не удалось проверить сохранённый вход"}</h1>
+      <p role="alert" className="mt-4 leading-7 text-slate-600">{blocked ? "Обратитесь в поддержку, если считаете, что это ошибка" : reauthenticate ? "Срок действия сессии истёк или она была отозвана" : "Сервис временно не отвечает. Сохранённый вход не удалён. Повторим проверку автоматически"}</p>
+      {!blocked && !reauthenticate ? <button onClick={() => retryRef.current()} className="mt-6 rounded-2xl bg-blue-600 px-5 py-4 font-bold text-white">Повторить проверку</button> : null}
+      <button onClick={() => void logout().then(() => window.location.assign("/auth"))} className="mt-3 block p-3 font-bold text-blue-600">{reauthenticate ? "Войти заново" : "Сменить аккаунт"}</button>
+    </main>
+  ) : <>
+    {sessionIssue === "unavailable" && user ? <div role="status" className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm text-slate-700">Не удалось обновить вход. Повторим проверку автоматически <button onClick={() => retryRef.current()} className="ml-2 font-bold text-blue-600">Повторить</button></div> : null}
+    {children}
+  </>}</AuthContext.Provider>;
+
 }
 
 export function useAuth() {
