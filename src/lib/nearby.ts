@@ -1,3 +1,4 @@
+import { matchesVatPayment } from "./vat";
 import { canonicalCatalogFields } from "../data/catalogUpdates";
 import { publicationCatalogSelection, normalizeCatalogText } from "./catalogSelection";
 import { matchesOfferSelection, type SearchableListingFields } from "./listingOffer";
@@ -11,6 +12,7 @@ export type NearbyAudience = "contractors" | "customers" | "all";
 export type NearbySort = "nearest" | "newest" | "priceAsc" | "priceDesc";
 export type NearbyPublication = SearchableListingFields & {
   id: string;
+  acceptsVat?: boolean;
   kind: "contractor" | "request";
   title?: string;
   name?: string;
@@ -79,6 +81,7 @@ export type NearbyFilters = {
   priceMin: string;
   priceMax: string;
   onlyVerified: boolean;
+  onlyVat?: boolean;
   onlyUrgent: boolean;
   withPhoto: boolean;
   sort: NearbySort;
@@ -249,6 +252,7 @@ export function filterNearbyPublications(entries: IndexedNearbyPublication[], fi
     if (city && !locationMatchesFilter(entry.city, filters.city)) return false;
     if (filters.radius !== null && filters.hasOrigin && (distance === null || distance > filters.radius)) return false;
     if (filters.onlyVerified && !entry.verified) return false;
+    if (!matchesVatPayment(item, filters.onlyVat === true)) return false;
     if (filters.onlyUrgent && !entry.urgent) return false;
     if (filters.withPhoto && !entry.image) return false;
     // Стоимость заявки — диапазон: достаточно его пересечения с фильтром.

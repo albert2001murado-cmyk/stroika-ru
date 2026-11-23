@@ -1,4 +1,5 @@
 "use client";
+import { VatBadge } from "./VatPayment";
 
 import FavoriteButton from "@/components/FavoriteButton";
 import ListingAuthorVerifiedBadge from "@/components/ListingAuthorVerifiedBadge";
@@ -88,6 +89,7 @@ function ListingCard({ listing }: ListingCardProps) {
 
           </div>
 
+            <VatBadge publication={listing} />
           <h3 className="mt-3 line-clamp-2 text-lg font-black leading-tight text-gray-950 sm:text-xl">
             {listing.title}
           </h3>

@@ -29,6 +29,7 @@ export type UserProfile = {
 };
 
 export type Listing = {
+  acceptsVat?: boolean;
   id: string;
   title: string;
   description: string;
@@ -138,6 +139,7 @@ export type AvailabilityDay = {
 };
 
 export type CustomerRequest = {
+  acceptsVat?: boolean;
   id: string;
   customerId: string;
   customerName?: string;

@@ -1,4 +1,5 @@
 "use client";
+import { VatPaymentOption } from "@/components/VatPayment";
 import { accountRequest } from "@/lib/accountClient";
 import { canonicalCatalogFields } from "@/data/catalogUpdates";
 import { uploadAuthHeaders } from "@/lib/uploadAuth";
@@ -109,6 +110,7 @@ export default function EditCustomerRequestPage() {
   const [catalogMetadata, setCatalogMetadata] = useState<CatalogConsistencyInput>({});
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [acceptsVat, setAcceptsVat] = useState(false);
   const [category, setCategory] = useState(REQUEST_CATEGORIES[0]);
   const [city, setCity] = useState("");
   const [address, setAddress] = useState("");
@@ -146,6 +148,7 @@ export default function EditCustomerRequestPage() {
         setCatalogMetadata(currentCatalog);
         setTitle(data.title || "");
         setDescription(data.description || "");
+        setAcceptsVat(data.acceptsVat === true);
         setCategory(currentCatalog.category || REQUEST_CATEGORIES[0]);
         setCity(data.city || "");
         setAddress(String(snapshot.data().address || ""));
@@ -266,6 +269,7 @@ export default function EditCustomerRequestPage() {
       await accountRequest("/api/publications/edit", { kind: "request", id: requestId, publication: {
         title: title.trim(),
         description: description.trim(),
+        acceptsVat,
         category,
         moderationStatus: "pending",
         moderationReason: "",
@@ -364,6 +368,7 @@ export default function EditCustomerRequestPage() {
               </select>
             </label>
 
+              <VatPaymentOption checked={acceptsVat} onChange={setAcceptsVat} />
             <label className="md:col-span-2">
               <span className="mb-2 block text-sm font-black text-gray-700">Описание</span>
               <textarea className="input min-h-40 resize-none" value={description} onChange={(event) => setDescription(event.target.value)} />

@@ -1,4 +1,5 @@
 "use client";
+import { VatBadge } from "./VatPayment";
 
 import ListingAuthorVerifiedBadge from "./ListingAuthorVerifiedBadge";
 import type { CustomerRequest } from "@/types";
@@ -69,6 +70,7 @@ function CustomerRequestCard({ request }: CustomerRequestCardProps) {
               <p className="text-xs font-black uppercase tracking-[0.12em] text-[#0057ff]">
                 Заказчик ищет исполнителя
               </p>
+            <VatBadge publication={request} />
               <h3 className="mt-2 line-clamp-2 text-lg font-black leading-tight text-gray-950 sm:text-xl">
                 {request.title}
               </h3>

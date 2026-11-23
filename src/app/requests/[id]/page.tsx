@@ -1,4 +1,5 @@
 "use client";
+import { VatBadge } from "@/components/VatPayment";
 import ListingAuthorVerifiedBadge from "@/components/ListingAuthorVerifiedBadge";
 import { isPublicationExpired } from "@/lib/publication-lifetime";
 import { usePublicationClock } from "@/lib/usePublicationExpiry";
@@ -441,6 +442,7 @@ export default function CustomerRequestPage() {
                 </span>
               </div>
 
+              <VatBadge publication={request} />
               <h1 className="mt-5 max-w-4xl text-3xl font-black leading-[1.06] tracking-[-0.035em] sm:mt-6 sm:text-5xl lg:text-6xl">
                 {request.title}
               </h1>

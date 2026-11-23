@@ -1,4 +1,5 @@
 "use client";
+import { VatPaymentOption } from "@/components/VatPayment";
 import FreePlacementDialog from "@/components/FreePlacementDialog";
 import { useFreePlacement } from "@/lib/useFreePlacement";
 import { createAccountPublication, newAccountRequestId } from "@/lib/accountClient";
@@ -168,6 +169,7 @@ export default function NewListingPage() {
   const [publicationRequestId, setPublicationRequestId] = useState(newAccountRequestId);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [acceptsVat, setAcceptsVat] = useState(false);
   const [catalogSection, setCatalogSection] = useState(
     defaultCatalogPath.catalogSection
   );
@@ -434,6 +436,7 @@ export default function NewListingPage() {
       const listingRef = await createAccountPublication("listing", {
         title: title.trim(),
         description: description.trim(),
+        acceptsVat,
         category,
         subcategory,
         city: city.trim(),
@@ -839,6 +842,7 @@ export default function NewListingPage() {
             </section>
 
 
+          <VatPaymentOption checked={acceptsVat} onChange={setAcceptsVat} />
           <PublicationTerm />
             <button
               type="submit"

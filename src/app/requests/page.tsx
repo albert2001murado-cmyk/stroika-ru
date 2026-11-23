@@ -1,5 +1,7 @@
 "use client";
-import { usePublicationExpiry } from "../lib/usePublicationExpiry";
+import { VatPaymentOption } from "@/components/VatPayment";
+import { matchesVatPayment } from "@/lib/vat";
+import { usePublicationExpiry } from "@/lib/usePublicationExpiry";
 import {
   publicationSearchRelevanceScore,
 } from "@/lib/searchKeywords";
@@ -353,6 +355,7 @@ export default function HomePage() {
   const [verifiedOnly, setVerifiedOnly] = useState(false);
   const [urgentOnly, setUrgentOnly] = useState(false);
   const [withPhotosOnly, setWithPhotosOnly] = useState(false);
+  const [onlyVat, setOnlyVat] = useState(false);
   const [selectedOfferAction, setSelectedOfferAction] = useState("");
   const [requiredOfferFeatures, setRequiredOfferFeatures] = useState<string[]>([]);
   const [sourceMaterial, setSourceMaterial] = useState("");
@@ -460,7 +463,7 @@ export default function HomePage() {
     const hasSearch = Boolean(deferredSearch.trim());
     const relevanceScores = new Map<SearchableListing, number>();
     const result = listings.filter((listing) => {
-      if (!isPublicationApproved(listing)) return false;
+      if (!isPublicationApproved(listing) || !matchesVatPayment(listing, onlyVat)) return false;
       if (hasSearch) {
         const relevance = publicationSearchRelevanceScore(listing, deferredSearch, catalogSection);
         if (relevance < 0) return false;
@@ -522,6 +525,7 @@ export default function HomePage() {
     paymentMethod,
     verifiedOnly,
     withPhotosOnly,
+    onlyVat,
     selectedCatalogCategory,
   ]);
 
@@ -537,7 +541,7 @@ export default function HomePage() {
           catalogSection,
           catalogCategoryId
         );
-        if (!baseMatches) return false;
+        if (!baseMatches || !matchesVatPayment(request, onlyVat)) return false;
         if (hasSearch) {
           const relevance = publicationSearchRelevanceScore(request, deferredSearch, catalogSection);
           if (relevance < 0) return false;
@@ -582,6 +586,7 @@ export default function HomePage() {
       priceTo,
       urgentOnly,
       withPhotosOnly,
+    onlyVat,
       selectedCatalogCategory,
     ]
   );
@@ -596,7 +601,7 @@ export default function HomePage() {
     Number(Boolean(subcategory)) +
     Number(Boolean(city)) +
     Number(priceFilterActive) +
-    Number(withPhotosOnly) +
+    Number(withPhotosOnly) + Number(onlyVat) +
     (feedMode === "contractors"
       ? Number(Boolean(selectedOfferAction)) +
         Number(requiredOfferFeatures.length > 0) +
@@ -650,6 +655,7 @@ export default function HomePage() {
     setVerifiedOnly(false);
     setUrgentOnly(false);
     setWithPhotosOnly(false);
+    setOnlyVat(false);
     setSelectedOfferAction("");
     setRequiredOfferFeatures([]);
     setSourceMaterial("");
@@ -683,6 +689,7 @@ export default function HomePage() {
     setVerifiedOnly(false);
     setUrgentOnly(false);
     setWithPhotosOnly(false);
+    setOnlyVat(false);
     setSelectedOfferAction("");
     setRequiredOfferFeatures([]);
     setSourceMaterial("");
@@ -1056,6 +1063,7 @@ export default function HomePage() {
                     Дополнительные параметры
                   </p>
 
+                  <VatPaymentOption checked={onlyVat} onChange={setOnlyVat} filter />
                   {feedMode === "contractors" ? (
                     <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                       <label className="group flex cursor-pointer items-center gap-3 rounded-2xl bg-white p-3.5 shadow-sm ring-1 ring-gray-200 transition hover:-translate-y-0.5 hover:ring-blue-200">
@@ -1357,3 +1365,4 @@ export default function HomePage() {
     </main>
   );
 }
+

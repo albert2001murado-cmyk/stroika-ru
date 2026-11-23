@@ -125,6 +125,7 @@ export type ListingLocation = {
 };
 
 export type Listing = {
+  acceptsVat?: boolean;
   id: string;
   title: string;
   description?: string;
@@ -189,6 +190,7 @@ export type CustomerRequestUrgency = "urgent" | "normal";
 export type CustomerRequestContactPreference = "both" | "messages" | "calls";
 
 export type CustomerRequest = {
+  acceptsVat?: boolean;
   id: string;
   customerId: string;
   customerName?: string;

@@ -1,4 +1,5 @@
 "use client";
+import { VatPaymentOption } from "@/components/VatPayment";
 import { createAccountPublication, newAccountRequestId } from "@/lib/accountClient";
 import PublicationTerm from "@/components/PublicationTerm";
 import { uploadAuthHeaders } from "@/lib/uploadAuth";
@@ -78,6 +79,7 @@ export default function NewRequestPage() {
   const [publicationRequestId] = useState(newAccountRequestId);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [acceptsVat, setAcceptsVat] = useState(false);
   const [catalogPath, setCatalogPath] = useState(defaultCatalogPath);
   const [city, setCity] = useState("");
   const [address, setAddress] = useState("");
@@ -210,6 +212,7 @@ export default function NewRequestPage() {
         customerPhone: normalizeRussianPhone(customerPhone),
         title: title.trim(),
         description: description.trim(),
+        acceptsVat,
         category: catalogPath.category,
         subcategory: catalogPath.subcategory,
         catalogSection: catalogPath.catalogSection,
@@ -331,6 +334,7 @@ export default function NewRequestPage() {
               <PublicationLocationPicker city={city} address={address} onCity={setCity} onAddress={setAddress} onLocation={setPickedLocation} onBusy={setLocationBusy} />
 
 
+              <VatPaymentOption checked={acceptsVat} onChange={setAcceptsVat} />
             <label className="md:col-span-2">
               <span className="mb-2 block text-sm font-black text-gray-700">
                 Описание

@@ -1,4 +1,6 @@
 "use client";
+import ListingVatEditor from "@/components/ListingVatEditor";
+import { VatBadge } from "@/components/VatPayment";
 import { isPublicationExpired } from "@/lib/publication-lifetime";
 import { usePublicationClock } from "@/lib/usePublicationExpiry";
 import PublicationTerm from "@/components/PublicationTerm";
@@ -488,6 +490,8 @@ export default function ListingPage() {
                 {catalogCategoryLabel(listing)} · {catalogLabel(listing.subcategory, listing)}
               </p>
 
+            <ListingVatEditor listing={listing} onSaved={value => setListing(current => current ? { ...current, acceptsVat: value, moderationStatus: "pending" } : current)} />
+              <VatBadge publication={listing} />
               <h1 className="mt-3 text-3xl font-black text-gray-950 sm:text-4xl">
                 {listing.title}
               </h1>

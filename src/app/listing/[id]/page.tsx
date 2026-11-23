@@ -1,4 +1,5 @@
 "use client";
+import { VatBadge } from "@/components/VatPayment";
 import CompareListingButton from "@/components/CompareListingButton";
 import ListingAuthorVerifiedBadge from "@/components/ListingAuthorVerifiedBadge";
 import { isPublicationExpired } from "@/lib/publication-lifetime";
@@ -490,6 +491,7 @@ export default function ListingPage() {
                 {catalogCategoryLabel(listing)} · {catalogLabel(listing.subcategory, listing)}
               </p>
 
+              <VatBadge publication={listing} />
               <h1 className="mt-3 text-3xl font-black text-gray-950 sm:text-4xl">
                 {listing.title}
               </h1>

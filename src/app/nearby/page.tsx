@@ -1,4 +1,5 @@
 "use client";
+import { VatBadge } from "@/components/VatPayment";
 import { usePublicationClock } from "@/lib/usePublicationExpiry";
 import { getPublicProfile } from "@/lib/publicProfiles";
 
@@ -154,6 +155,7 @@ export default function NearbyPage() {
   const [onlyUrgent, setOnlyUrgent] = useState(false);
   const [onlyVerified, setOnlyVerified] = useState(false);
   const [withPhoto, setWithPhoto] = useState(false);
+  const [onlyVat, setOnlyVat] = useState(false);
   const [sort, setSort] = useState<NearbySort>("nearest");
   const [searchText, setSearchText] = useState("");
   const deferredSearch = useDeferredValue(searchText);
@@ -306,8 +308,8 @@ export default function NearbyPage() {
   const filteredItems = useMemo(() => filterNearbyPublications(indexedItems, {
     audience, section: catalogSection, categoryId, subcategory, search: deferredSearch, city,
     radius, hasOrigin: Boolean(userCoords), mainActions, features, priceMin, priceMax,
-    onlyVerified, onlyUrgent, withPhoto, sort,
-  }), [publicationNow, indexedItems, audience, catalogSection, categoryId, subcategory, deferredSearch, city, radius, userCoords, mainActions, features, priceMin, priceMax, onlyVerified, onlyUrgent, withPhoto, sort]);
+    onlyVerified, onlyUrgent, onlyVat, withPhoto, sort,
+  }), [publicationNow, indexedItems, audience, catalogSection, categoryId, subcategory, deferredSearch, city, radius, userCoords, mainActions, features, priceMin, priceMax, onlyVerified, onlyUrgent, onlyVat, withPhoto, sort]);
   const mapItems = useMemo(() => filteredItems.filter(entry => entry.coords), [filteredItems]);
   const activeItem = filteredItems.find(entry => entry.key === activeKey) || null;
   const clusterItems = filteredItems.filter(entry => clusterKeys.includes(entry.key));
@@ -322,14 +324,14 @@ export default function NearbyPage() {
   const actionOptions = offerGroups.flatMap(group => getOfferActions(group));
   const featureOptions = [...new Map(offerGroups.flatMap(group => getOfferFeatures(group)).map(feature => [feature.id, feature])).values()];
   const filterCount = [catalogSection, categoryId, subcategory, city, radius !== null,
-    mainActions.length > 0, features.length > 0, priceMin || priceMax, onlyVerified, onlyUrgent, withPhoto].filter(Boolean).length;
+    mainActions.length > 0, features.length > 0, priceMin || priceMax, onlyVerified, onlyUrgent, onlyVat, withPhoto].filter(Boolean).length;
   const invalidPriceRange = priceNumber(priceMin) !== null && priceNumber(priceMax) !== null && priceNumber(priceMin)! > priceNumber(priceMax)!;
   const mapSignature = mapItems.map(entry => `${entry.key}:${entry.coords?.lat}:${entry.coords?.lng}`).join("|");
 
   useEffect(() => {
     if (activeKey && !filteredItems.some(entry => entry.key === activeKey)) setActiveKey("");
   }, [activeKey, filteredItems]);
-  useEffect(() => { setClusterKeys([]); }, [audience, catalogSection, categoryId, subcategory, deferredSearch, city, radius, mainActions, features, onlyVerified, onlyUrgent, withPhoto, priceMin, priceMax]);
+  useEffect(() => { setClusterKeys([]); }, [audience, catalogSection, categoryId, subcategory, deferredSearch, city, radius, mainActions, features, onlyVerified, onlyUrgent, onlyVat, withPhoto, priceMin, priceMax]);
 
   const selectMapItem = useCallback((key: string) => {
     focusUserRef.current = false;
@@ -473,7 +475,7 @@ export default function NearbyPage() {
   function resetFilters() {
     setCatalogSection(""); setCategoryId(""); setSubcategory(""); setMainActions([]); setFeatures([]);
     setCity(""); setRadius(null); setPriceMin(""); setPriceMax(""); setSearchText("");
-    setOnlyUrgent(false); setOnlyVerified(false); setWithPhoto(false); setSort("nearest"); setActiveKey(""); setClusterKeys([]);
+    setOnlyUrgent(false); setOnlyVerified(false); setOnlyVat(false); setWithPhoto(false); setSort("nearest"); setActiveKey(""); setClusterKeys([]);
     focusUserRef.current = false;
   }
 
@@ -529,6 +531,7 @@ export default function NearbyPage() {
           {subcategory && <button type="button" className={styles.scopeChip} onClick={() => setSubcategory("")}>{subcategory}<X size={13} /></button>}
           {city && <button type="button" className={styles.scopeChip} onClick={() => setCity("")}><MapPin size={14} />{city}<X size={13} /></button>}
           {radius !== null && <button type="button" className={styles.scopeChip} data-pending={!userCoords} onClick={() => selectRadius(null)}><LocateFixed size={14} />{radius} км{!userCoords && " · нужна геопозиция"}<X size={13} /></button>}
+          {onlyVat && <button type="button" className={styles.scopeChip} onClick={() => setOnlyVat(false)}>С НДС<X size={13} /></button>}
           {onlyVerified && <button type="button" className={styles.scopeChip} onClick={() => setOnlyVerified(false)}><BadgeCheck size={14} />Проверенные<X size={13} /></button>}
           {onlyUrgent && <button type="button" className={styles.scopeChip} onClick={() => setOnlyUrgent(false)}><Zap size={14} />Срочные<X size={13} /></button>}
           {withPhoto && <button type="button" className={styles.scopeChip} onClick={() => setWithPhoto(false)}><ImageIcon size={14} />С фото<X size={13} /></button>}
@@ -566,6 +569,7 @@ export default function NearbyPage() {
                 <ResultImage entry={entry} />
                 <div className={styles.resultBody}>
                   <div className={styles.resultMeta}><span className={styles.roleLabel} data-kind={entry.item.kind}>{entry.item.kind === "request" ? "Заказчик" : "Исполнитель"}</span>{entry.verified && <BadgeCheck size={14} aria-label="Проверен" />}{entry.urgent && <span className={styles.urgentLabel}><Zap size={11} />Срочно</span>}</div>
+                  <VatBadge publication={entry.item} />
                   <h3>{entry.item.title || entry.item.name || "Объявление"}</h3>
                   <p>{publicationAuthor(entry.item)}</p>
                   <div className={styles.resultBottom}><strong>{priceLabel(entry.item)}</strong><span><MapPin size={11} />{entry.distance !== null ? distanceLabel(entry.distance).replace(" от вас", "") : entry.item.city || "Город не указан"}</span></div>
@@ -638,7 +642,7 @@ export default function NearbyPage() {
         <fieldset className={styles.filterSection}><legend>Цена или бюджет, ₽</legend><div className={styles.priceFields}><label>От<input inputMode="decimal" value={priceMin} onChange={event => setPriceMin(event.target.value)} placeholder="Любая" aria-invalid={invalidPriceRange} /></label><span>—</span><label>До<input inputMode="decimal" value={priceMax} onChange={event => setPriceMax(event.target.value)} placeholder="Без лимита" aria-invalid={invalidPriceRange} /></label></div>{invalidPriceRange && <p className={styles.validationError} role="alert">Цена «от» не должна быть больше цены «до».</p>}</fieldset>
 
         <fieldset className={styles.filterSection}><legend>Дополнительно</legend>
-          {[{ label: "Только проверенные", help: "Профиль прошёл проверку", checked: onlyVerified, change: setOnlyVerified, Icon: BadgeCheck }, { label: "Только срочные", help: "В объявлении отмечена срочность", checked: onlyUrgent, change: setOnlyUrgent, Icon: Zap }, { label: "Только с фотографией", help: "Можно сразу увидеть предложение", checked: withPhoto, change: setWithPhoto, Icon: ImageIcon }].map(({ label, help, checked, change, Icon }) => <label key={label} className={styles.toggleRow}><Icon size={20} /><span><b>{label}</b><small>{help}</small></span><input type="checkbox" checked={checked} onChange={event => change(event.target.checked)} /><i className={styles.toggleTrack} /></label>)}
+          {[{ label: "Оплата с НДС", help: "Автор указал возможность оплаты с НДС", checked: onlyVat, change: setOnlyVat, Icon: BadgeCheck }, { label: "Только проверенные", help: "Профиль прошёл проверку", checked: onlyVerified, change: setOnlyVerified, Icon: BadgeCheck }, { label: "Только срочные", help: "В объявлении отмечена срочность", checked: onlyUrgent, change: setOnlyUrgent, Icon: Zap }, { label: "Только с фотографией", help: "Можно сразу увидеть предложение", checked: withPhoto, change: setWithPhoto, Icon: ImageIcon }].map(({ label, help, checked, change, Icon }) => <label key={label} className={styles.toggleRow}><Icon size={20} /><span><b>{label}</b><small>{help}</small></span><input type="checkbox" checked={checked} onChange={event => change(event.target.checked)} /><i className={styles.toggleTrack} /></label>)}
         </fieldset>
       </div>
       <div className={styles.filterFooter}><button type="button" className={styles.secondaryButton} onClick={resetFilters}><RotateCcw size={16} />Сбросить</button><button type="button" className={styles.primaryButton} onClick={closeFilters} disabled={invalidPriceRange}>Показать {filteredItems.length}<ArrowRight size={17} /></button></div>

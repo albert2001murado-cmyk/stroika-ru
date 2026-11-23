@@ -37,7 +37,9 @@ function payloadFor(kind: "listing" | "request", body: DocumentData, profile: Do
   }) : imageUrls.map(url => ({ type: "image", url }));
   const lat = body.location?.lat ?? body.lat, lng = body.location?.lng ?? body.lng;
   const hasLocation = typeof lat === "number" && typeof lng === "number" && Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180;
+  if (body.acceptsVat !== undefined && typeof body.acceptsVat !== "boolean") throw new AccountApiError("Проверьте отметку оплаты с НДС");
   const common = {
+    acceptsVat: body.acceptsVat === true,
     title, description, city, address: text(body.address, 600), ...catalog,
     location: hasLocation ? { lat, lng, address: text(body.location?.address || body.geocodedAddress, 600) } : null,
     lat: hasLocation ? lat : null, lng: hasLocation ? lng : null,
