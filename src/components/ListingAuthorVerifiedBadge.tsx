@@ -4,7 +4,7 @@ import { getPublicProfile } from "@/lib/publicProfiles";
 
 import { db } from "@/lib/firebase";
 import { BadgeCheck } from "lucide-react";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc } from "@/lib/database/client";
 import { useEffect, useMemo, useState } from "react";
 
 type ListingAuthorVerifiedBadgeProps = {

@@ -21,7 +21,7 @@ import { canAccountPublish } from "@/lib/accountVerification";
 import { useAuth } from "@/components/AuthProvider";
 import { db } from "@/lib/firebase";
 import type { CustomerRequest, CustomerRequestStatus } from "@/types";
-import { doc, getDoc, serverTimestamp, updateDoc } from "firebase/firestore";
+import { doc, getDoc, serverTimestamp, updateDoc } from "@/lib/database/client";
 import {
   ArrowLeft,
   CalendarDays,

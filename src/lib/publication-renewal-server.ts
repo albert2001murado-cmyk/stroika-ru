@@ -1,4 +1,4 @@
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { FieldValue, Timestamp } from "@/lib/database/admin-values";
 import { FREE_LIMIT, canRenewFree } from "./free-placement";
 import { freePlacementRef, recordFreePlacement } from "./free-placement-server";
 import { publicationHash, publicationCatalogPath, ownPublications, assertPublicationSlot } from "./publication-slot-server";

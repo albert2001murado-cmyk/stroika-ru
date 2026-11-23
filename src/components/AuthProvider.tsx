@@ -17,7 +17,7 @@ import {
   setPersistence,
   signOut,
 } from "firebase/auth";
-import { doc, onSnapshot } from "firebase/firestore";
+import { doc, onSnapshot } from "@/lib/database/client";
 import {
   createContext,
   ReactNode,

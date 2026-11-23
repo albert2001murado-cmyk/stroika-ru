@@ -25,7 +25,7 @@ import {
   serverTimestamp,
   setDoc,
   where,
-} from "firebase/firestore";
+} from "@/lib/database/client";
 import {
   BadgeCheck,
   Building2,

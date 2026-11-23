@@ -1,4 +1,4 @@
-import { doc, serverTimestamp, writeBatch } from "firebase/firestore";
+import { doc, serverTimestamp, writeBatch } from "@/lib/database/client";
 import { auth, db } from "./firebase";
 import { CALENDAR_STATUSES, calendarDate, type CalendarStatus } from "./availability-calendar";
 

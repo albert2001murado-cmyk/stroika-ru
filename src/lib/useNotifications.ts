@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { collection, limit, onSnapshot, orderBy, query, type Timestamp } from "firebase/firestore";
+import { collection, limit, onSnapshot, orderBy, query, type Timestamp } from "@/lib/database/client";
 import { db } from "@/lib/firebase";
 import { serviceNotificationText } from "./brand";
 

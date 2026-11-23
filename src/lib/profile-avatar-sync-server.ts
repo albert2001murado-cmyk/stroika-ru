@@ -1,5 +1,5 @@
 import { createHash } from "crypto";
-import { FieldPath, FieldValue, type DocumentData } from "firebase-admin/firestore";
+import { FieldPath, FieldValue, type DocumentData } from "@/lib/database/admin-values";
 import { getAdminDb } from "./firebase-admin";
 
 const JOBS = "profileAvatarSyncJobs";

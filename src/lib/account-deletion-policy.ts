@@ -1,4 +1,4 @@
-import type { DocumentData } from 'firebase-admin/firestore';
+import type { DocumentData } from '@/lib/database/admin-values';
 
 export const DELETION_ROOTS = [
   'listings', 'customerRequests', 'portfolio', 'reviews', 'chats', 'users', 'listingAnalytics', 'requestAnalytics',

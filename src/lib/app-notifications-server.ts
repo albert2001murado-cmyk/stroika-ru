@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue } from "@/lib/database/admin-values";
 import { getAdminDb } from "./firebase-admin";
 import { AccountApiError } from "./account-api-server";
 import { validExpoPushToken } from "./security-policy";

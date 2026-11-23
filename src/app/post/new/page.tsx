@@ -33,7 +33,7 @@ import {
   legacyCapabilitiesFromOffer,
 } from "@/lib/listingOffer";
 import type { ListingMedia } from "@/types";
-import { addDoc, collection, serverTimestamp } from "firebase/firestore";
+import { addDoc, collection, serverTimestamp } from "@/lib/database/client";
 import {
   ArrowLeft,
   Camera,

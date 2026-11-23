@@ -1,4 +1,4 @@
-import { FieldPath, FieldValue } from "firebase-admin/firestore";
+import { FieldPath, FieldValue } from "@/lib/database/admin-values";
 import { getAdminAuth, getAdminDb } from "./firebase-admin";
 import { hasModeratorClaim, isDocumentId } from "./security-policy";
 

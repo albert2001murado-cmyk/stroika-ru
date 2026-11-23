@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import { collection, onSnapshot } from "firebase/firestore";
+import { collection, onSnapshot } from "@/lib/database/client";
 import { db } from "./firebase";
 import { normalizeAvailabilityDay, type AvailabilityDays } from "./availability-calendar";
 

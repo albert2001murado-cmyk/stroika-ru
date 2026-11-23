@@ -1,4 +1,4 @@
-import type { Timestamp } from "firebase/firestore";
+import type { Timestamp } from "@/lib/database/client";
 
 export type ChatParticipant = {
   uid?: string;

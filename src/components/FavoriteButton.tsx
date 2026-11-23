@@ -10,7 +10,7 @@ import {
   serverTimestamp,
   setDoc,
   updateDoc,
-} from "firebase/firestore";
+} from "@/lib/database/client";
 import { Heart, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { MouseEvent, useEffect, useState } from "react";

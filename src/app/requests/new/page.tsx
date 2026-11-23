@@ -24,7 +24,7 @@ import { requestPublicationModeration } from "@/lib/publicationModerationClient"
 import { normalizeRussianPhone, russianPhoneError } from "@/lib/phone";
 import { geocodePublicationLocation } from "@/lib/publication-location-client";
 import type { ContactPreference } from "@/lib/contactPreference";
-import { addDoc, collection, serverTimestamp } from "firebase/firestore";
+import { addDoc, collection, serverTimestamp } from "@/lib/database/client";
 import {
   ArrowLeft,
   CalendarDays,

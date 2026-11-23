@@ -38,7 +38,7 @@ import {
 } from "@/lib/listingOffer";
 import type { CustomerRequest, Listing } from "@/types";
 import { firestoreDateToMillis } from "@/types";
-import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
+import { collection, onSnapshot, orderBy, query } from "@/lib/database/client";
 import {
   BadgeCheck,
   Banknote,

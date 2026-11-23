@@ -1,4 +1,4 @@
-import { FieldValue, Timestamp, type DocumentData } from "firebase-admin/firestore";
+import { FieldValue, Timestamp, type DocumentData } from "@/lib/database/admin-values";
 import { timingSafeEqual, randomUUID } from "node:crypto";
 import { getAdminDb } from "./firebase-admin";
 import { AccountApiError } from "./account-api-server";

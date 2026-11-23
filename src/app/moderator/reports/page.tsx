@@ -2,7 +2,7 @@
 
 import { useAuth } from "@/components/AuthProvider";
 import { db } from "@/lib/firebase";
-import { collection, doc, getDocs, orderBy, query, serverTimestamp, updateDoc } from "firebase/firestore";
+import { collection, doc, getDocs, orderBy, query, serverTimestamp, updateDoc } from "@/lib/database/client";
 import { AlertCircle, ArrowLeft, Ban, CheckCircle2, Clock3, Flag, Loader2, RefreshCcw, ShieldCheck, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";

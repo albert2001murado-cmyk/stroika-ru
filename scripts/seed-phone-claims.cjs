@@ -31,7 +31,7 @@ async function main() {
   require('@next/env').loadEnvConfig(process.cwd());
   const { cert, getApps, initializeApp } = require('firebase-admin/app');
   const { getAuth } = require('firebase-admin/auth');
-  const { getFirestore, FieldValue, FieldPath } = require('firebase-admin/firestore');
+  const { getCliDatabase } = require('./postgres/cli-database.cjs');
   const apply = process.argv.includes('--apply');
   const projectId = process.env.FIREBASE_ADMIN_PROJECT_ID;
   const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL;
@@ -44,7 +44,7 @@ async function main() {
       initializeApp({ projectId, credential: cert({ projectId, clientEmail, privateKey }) });
     }
   }
-  const db = getFirestore(), auth = getAuth(), gate = db.doc('identityGuards/phones');
+  const {db,FieldValue,FieldPath} = getCliDatabase(), auth = getAuth(), gate = db.doc('identityGuards/phones');
   if (apply) await gate.set({ ready: false, version: 1, updatedAt: FieldValue.serverTimestamp() });
   const profiles = [], authUsers = [];
   let cursor;

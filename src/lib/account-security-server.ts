@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import type { DecodedIdToken } from "firebase-admin/auth";
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { FieldValue, Timestamp } from "@/lib/database/admin-values";
 import { getAdminDb, getRawAdminAuth } from "./firebase-admin";
 import { assertAccountSession, SecurityError } from "./account-security-session";
 import { normalizeRussianPhone } from "./phone";

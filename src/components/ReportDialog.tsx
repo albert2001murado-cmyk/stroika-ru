@@ -2,7 +2,7 @@
 
 import { useAuth } from "@/components/AuthProvider";
 import { db } from "@/lib/firebase";
-import { addDoc, collection, serverTimestamp } from "firebase/firestore";
+import { addDoc, collection, serverTimestamp } from "@/lib/database/client";
 import { Flag, Loader2, X } from "lucide-react";
 import { useState } from "react";
 

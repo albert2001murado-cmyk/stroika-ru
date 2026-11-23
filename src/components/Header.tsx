@@ -2,7 +2,7 @@
 
 import { auth, db } from "@/lib/firebase";
 import { signOut } from "firebase/auth";
-import { collection, onSnapshot, query, where } from "firebase/firestore";
+import { collection, onSnapshot, query, where } from "@/lib/database/client";
 import {
   BadgeCheck,
   Bell,

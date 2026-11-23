@@ -1,5 +1,5 @@
 import type { Auth, UserRecord } from "firebase-admin/auth";
-import type { Firestore } from "firebase-admin/firestore";
+import type { Firestore } from "@/lib/database/admin-values";
 import { normalizeRussianPhone } from "./phone";
 import { PHONE_CLAIMS, phoneIndexReady } from "./unique-phone-server";
 

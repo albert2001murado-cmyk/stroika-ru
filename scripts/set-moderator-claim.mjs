@@ -2,7 +2,7 @@
 import nextEnv from '@next/env';
 import { cert, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
-import { getFirestore } from 'firebase-admin/firestore';
+import database from './postgres/cli-database.cjs';
 
 nextEnv.loadEnvConfig(process.cwd(), false, { info() {}, error() { console.error('Не удалось прочитать окружение сайта. Проверьте формат .env.local.'); } });
 const [uid, role = 'check'] = process.argv.slice(2);
@@ -19,7 +19,7 @@ async function run() {
   initializeApp({ credential: cert({ projectId, clientEmail, privateKey: privateKey.replace(/\\n/g, '\n') }), projectId });
   const auth = getAuth();
   const account = await auth.getUser(uid);
-  const db = getFirestore();
+  const { db } = database.getCliDatabase();
   const profile = db.collection('users').doc(uid);
   const snapshot = await profile.get();
   if (!snapshot.exists) throw new Error('profile-not-found');

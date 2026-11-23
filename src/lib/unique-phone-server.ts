@@ -1,5 +1,5 @@
 import type { Auth, UserRecord } from "firebase-admin/auth";
-import { FieldValue, type Firestore, type Transaction } from "firebase-admin/firestore";
+import { FieldValue, type Firestore, type Transaction } from "@/lib/database/admin-values";
 import { normalizeRussianPhone } from "./phone";
 
 export const PHONE_INDEX_CONFIG = "identityGuards/phones";

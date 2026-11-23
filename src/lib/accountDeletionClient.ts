@@ -1,5 +1,5 @@
 "use client";
-import { collection, doc } from 'firebase/firestore';
+import { collection, doc } from '@/lib/database/client';
 import { auth, db } from './firebase';
 import { getApiUrl } from './getApiUrl';
 

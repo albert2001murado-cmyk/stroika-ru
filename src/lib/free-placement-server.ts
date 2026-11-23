@@ -1,4 +1,4 @@
-import { FieldValue, type DocumentData, type Transaction } from "firebase-admin/firestore";
+import { FieldValue, type DocumentData, type Transaction } from "@/lib/database/admin-values";
 import { AccountApiError } from "./account-api-server";
 import { canAccountPublish } from "./accountVerification";
 import { getAdminDb } from "./firebase-admin";

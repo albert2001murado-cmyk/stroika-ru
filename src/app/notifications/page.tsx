@@ -22,7 +22,7 @@ import {
   serverTimestamp,
   updateDoc,
   writeBatch,
-} from "firebase/firestore";
+} from "@/lib/database/client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";

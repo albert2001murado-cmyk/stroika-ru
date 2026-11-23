@@ -47,7 +47,7 @@ import {
   serverTimestamp,
   setDoc,
   where,
-} from "firebase/firestore";
+} from "@/lib/database/client";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useState } from "react";

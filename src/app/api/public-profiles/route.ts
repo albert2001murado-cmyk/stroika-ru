@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { FieldPath } from "firebase-admin/firestore";
+import { FieldPath } from "@/lib/database/admin-values";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { limitRequests } from "@/lib/api-guard";
 import { isDocumentId } from "@/lib/security-policy";

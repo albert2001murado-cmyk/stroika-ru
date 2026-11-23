@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { FieldValue, type DocumentData } from "firebase-admin/firestore";
+import { FieldValue, type DocumentData } from "@/lib/database/admin-values";
 import type { DecodedIdToken } from "firebase-admin/auth";
 import { getAdminDb } from "./firebase-admin";
 import { hasModeratorClaim, isDocumentId } from "./security-policy";

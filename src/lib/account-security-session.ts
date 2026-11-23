@@ -1,5 +1,5 @@
 import type { DecodedIdToken } from "firebase-admin/auth";
-import type { Firestore } from "firebase-admin/firestore";
+import type { Firestore } from "@/lib/database/admin-values";
 
 export class SecurityError extends Error {
   constructor(message: string, public code: string, public status = 400) { super(message); }

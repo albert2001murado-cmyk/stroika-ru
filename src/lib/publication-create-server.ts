@@ -1,4 +1,4 @@
-import { FieldValue, Timestamp, type DocumentData } from "firebase-admin/firestore";
+import { FieldValue, Timestamp, type DocumentData } from "@/lib/database/admin-values";
 import { getAdminDb } from "./firebase-admin";
 import { AccountApiError } from "./account-api-server";
 import { publicationVerificationFields } from "./accountVerification";

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { collection, FieldPath, onSnapshot, query, where } from "firebase/firestore";
+import { collection, FieldPath, onSnapshot, query, where } from "@/lib/database/client";
 import { db } from "./firebase";
 import type { Chat } from "./chatList";
 

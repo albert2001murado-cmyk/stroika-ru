@@ -29,7 +29,7 @@ import {
   setDoc,
   query,
   where,
-} from "firebase/firestore";
+} from "@/lib/database/client";
 import {
   ArrowLeft,
   BadgeCheck,

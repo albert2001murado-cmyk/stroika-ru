@@ -1,4 +1,4 @@
-import type { DocumentData } from "firebase/firestore";
+import type { DocumentData } from "@/lib/database/client";
 import { getApiUrl } from "./getApiUrl";
 
 export type PublicProfileSnapshot = {

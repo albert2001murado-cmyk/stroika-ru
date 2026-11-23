@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { FieldPath, FieldValue, Timestamp, type Firestore, type DocumentReference } from 'firebase-admin/firestore';
+import { FieldPath, FieldValue, Timestamp, type Firestore, type DocumentReference } from '@/lib/database/admin-values';
 import type { Auth } from 'firebase-admin/auth';
 import { getAdminDb, getRawAdminAuth } from './firebase-admin';
 import { accountMediaKey, mediaId, mediaKeys, purgeAccountMedia } from './account-deletion-media';

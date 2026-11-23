@@ -1,6 +1,7 @@
 import { cert, getApps, initializeApp, type App } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
-import { getFirestore } from "firebase-admin/firestore";
+import { getFirestore } from "@/lib/database/admin-values";
+import { databaseBackend, getPostgresDb } from "./database/postgres";
 import { assertAccountSession } from "./account-security-session";
 
 let adminApp: App | null = null;
@@ -35,7 +36,7 @@ export function getFirebaseAdminApp(): App {
   return adminApp;
 }
 
-/** Only the security bootstrap endpoints may use unverified-first-factor tokens. */
+/** Raw verification must be followed by assertAccountSession before private data access. */
 export function getRawAdminAuth() {
   return getAuth(getFirebaseAdminApp());
 }
@@ -60,5 +61,5 @@ export function getAdminAuth() {
 }
 
 export function getAdminDb() {
-  return getFirestore(getFirebaseAdminApp());
+  return databaseBackend() === "postgres" ? getPostgresDb() : getFirestore(getFirebaseAdminApp());
 }

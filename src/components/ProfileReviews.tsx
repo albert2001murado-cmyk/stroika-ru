@@ -3,7 +3,7 @@
 import { db } from "@/lib/firebase";
 import { isReviewApproved } from "@/lib/moderation";
 import { firestoreDateToMillis, type Review } from "@/types";
-import { collection, getDocs, query, where } from "firebase/firestore";
+import { collection, getDocs, query, where } from "@/lib/database/client";
 import { ArrowRight, MessageSquareText, Star, UserRound } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";

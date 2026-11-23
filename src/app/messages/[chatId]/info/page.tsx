@@ -4,8 +4,8 @@ import { uploadAuthHeaders } from "@/lib/uploadAuth";
 
 import { useAuth } from "@/components/AuthProvider";
 import { db } from "@/lib/firebase";
-import type { Timestamp } from "firebase/firestore";
-import { collection, doc, onSnapshot, orderBy, query } from "firebase/firestore";
+import type { Timestamp } from "@/lib/database/client";
+import { collection, doc, onSnapshot, orderBy, query } from "@/lib/database/client";
 import {
   ArrowLeft,
   Camera,

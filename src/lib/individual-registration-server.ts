@@ -1,4 +1,4 @@
-import { FieldValue, type Firestore } from "firebase-admin/firestore";
+import { FieldValue, type Firestore } from "@/lib/database/admin-values";
 import type { Auth, UserRecord } from "firebase-admin/auth";
 import { ContactError, contactPhone, preparePhoneChange } from "./unique-phone-server";
 import { normalizeRussianPhone } from "./phone";

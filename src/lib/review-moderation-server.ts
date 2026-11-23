@@ -1,6 +1,6 @@
 import { randomUUID, createHash } from "crypto";
 import { reviewDecision, REVIEW_POLICY_VERSION } from "./review-content-policy";
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { FieldValue, Timestamp } from "@/lib/database/admin-values";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { deliverServerNotification } from "@/lib/server-notifications";
 

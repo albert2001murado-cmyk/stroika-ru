@@ -6,7 +6,7 @@ import {
   FieldPath,
   Timestamp,
   type DocumentData,
-} from "firebase-admin/firestore";
+} from "@/lib/database/admin-values";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { canAccountPublish, publicationVerificationFields } from "./accountVerification";
 import {

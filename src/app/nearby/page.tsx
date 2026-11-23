@@ -23,7 +23,7 @@ import {
   SlidersHorizontal, Truck, UserRound, Wrench, X, Zap,
 } from "lucide-react";
 import Link from "next/link";
-import { collection, doc, getDoc, limit, onSnapshot, query } from "firebase/firestore";
+import { collection, doc, getDoc, limit, onSnapshot, query } from "@/lib/database/client";
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import styles from "./nearby.module.css";
 

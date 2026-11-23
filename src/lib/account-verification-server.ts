@@ -3,7 +3,7 @@ import {
   FieldValue,
   type DocumentData,
   type QueryDocumentSnapshot,
-} from "firebase-admin/firestore";
+} from "@/lib/database/admin-values";
 import { getAdminDb } from "./firebase-admin";
 import { isDocumentId } from "./security-policy";
 import { normalizeRussianPhone } from "./phone";

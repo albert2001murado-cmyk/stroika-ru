@@ -2,7 +2,7 @@
 
 import { useAuth } from "@/components/AuthProvider";
 import { db } from "@/lib/firebase";
-import { deleteDoc, doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
+import { deleteDoc, doc, getDoc, serverTimestamp, setDoc } from "@/lib/database/client";
 import { Ban, Loader2, ShieldOff } from "lucide-react";
 import { useEffect, useState } from "react";
 

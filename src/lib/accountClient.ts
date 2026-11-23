@@ -1,5 +1,5 @@
 import { auth, db } from "./firebase";
-import { collection, doc } from "firebase/firestore";
+import { collection, doc } from "@/lib/database/client";
 import { getApiUrl } from "./getApiUrl";
 export class AccountRequestError extends Error {
   constructor(message: string, readonly status: number, readonly code = "") { super(message); }

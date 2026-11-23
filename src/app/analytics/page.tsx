@@ -8,7 +8,7 @@ import {
   onSnapshot,
   query,
   where,
-} from "firebase/firestore";
+} from "@/lib/database/client";
 import { ArrowLeft, BarChart3, Eye, MessageCircle, Phone } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";

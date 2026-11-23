@@ -6,7 +6,7 @@ import { limitRequests, activeProfileGuard } from "@/lib/api-guard";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase-admin";
 import { lookupCompanyByInn } from "@/lib/company-registry-server";
 import type { AccountType } from "@/types";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue } from "@/lib/database/admin-values";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";

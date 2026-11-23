@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { DeleteObjectCommand, DeleteObjectsCommand, HeadObjectCommand, ListObjectVersionsCommand, S3Client } from '@aws-sdk/client-s3';
 import { getAdminAuth, getAdminDb } from './firebase-admin';
-import { FieldValue } from 'firebase-admin/firestore';
+import { FieldValue } from '@/lib/database/admin-values';
 
 export const mediaId = (key: string) => createHash('sha256').update(key).digest('hex');
 export function accountMediaKey(value: unknown, bucket = process.env.YANDEX_S3_BUCKET || ''): string | null {

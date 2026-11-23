@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { DocumentData, Transaction } from "firebase-admin/firestore";
+import type { DocumentData, Transaction } from "@/lib/database/admin-values";
 import { getAdminDb } from "./firebase-admin";
 import { AccountApiError } from "./account-api-server";
 import { isPublicationExpired } from "./publication-lifetime";

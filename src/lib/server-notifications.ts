@@ -1,5 +1,5 @@
 import { createHash } from "crypto";
-import { FieldValue, type Transaction } from "firebase-admin/firestore";
+import { FieldValue, type Transaction } from "@/lib/database/admin-values";
 import { getAdminDb } from "@/lib/firebase-admin";
 
 export type ServerNotificationInput = {

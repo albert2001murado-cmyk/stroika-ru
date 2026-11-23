@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { FieldPath, FieldValue, Timestamp, type DocumentData } from "firebase-admin/firestore";
+import { FieldPath, FieldValue, Timestamp, type DocumentData } from "@/lib/database/admin-values";
 import { getAdminDb, getRawAdminAuth } from "./firebase-admin";
 import { hasModeratorClaim } from "./security-policy";
 import { deliverServerNotification } from "./server-notifications";

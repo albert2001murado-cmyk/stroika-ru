@@ -2,7 +2,7 @@ import { limitRequests, activeProfileGuard } from "@/lib/api-guard";
 import { readJsonObject, RequestBodyError } from "@/lib/request-body";
 import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue } from "@/lib/database/admin-values";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase-admin";
 
 export const runtime = "nodejs";

@@ -34,7 +34,7 @@ import {
   serverTimestamp,
   updateDoc,
   where,
-} from "firebase/firestore";
+} from "@/lib/database/client";
 import Link from "next/link";
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 

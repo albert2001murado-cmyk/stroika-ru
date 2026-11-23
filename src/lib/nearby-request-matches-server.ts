@@ -1,4 +1,4 @@
-import { FieldPath } from "firebase-admin/firestore";
+import { FieldPath } from "@/lib/database/admin-values";
 import { getAdminDb } from "./firebase-admin";
 import { deliverServerNotification } from "./server-notifications";
 import { resolveNearbyPoint } from "./nearby-geocode-server";

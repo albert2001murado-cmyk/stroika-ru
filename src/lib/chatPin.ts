@@ -1,4 +1,4 @@
-import { arrayRemove, arrayUnion, doc, FieldPath, updateDoc } from "firebase/firestore";
+import { arrayRemove, arrayUnion, doc, FieldPath, updateDoc } from "@/lib/database/client";
 import { db } from "./firebase";
 import type { Chat } from "./chatList";
 

@@ -1,4 +1,4 @@
-import { collection, doc, getDoc, getDocs, onSnapshot, query, runTransaction, serverTimestamp, where } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, onSnapshot, query, runTransaction, serverTimestamp, where } from "@/lib/database/client";
 import { auth, db } from "./firebase";
 import { getApiUrl } from "./getApiUrl";
 import { isPublicationApproved, isReviewApproved } from "./moderation";
